@@ -334,6 +334,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .print-kpis { grid-template-columns: repeat(5,1fr); }
 .print-section.print-first { page-break-before:auto; }
 
+
+/* Final mapped PDF report structure */
+.print-kpis.kpi-seven { grid-template-columns: repeat(7, 1fr); gap:7px; }
+.print-kpis.kpi-seven .print-kpi { padding:8px; }
+.print-kpis.kpi-seven .print-kpi .value { font-size:17px; }
+.print-section h3 { color:#1B2F5B; font-size:13px; margin:12px 0 6px; }
+.print-section.print-first { page-break-before:auto; }
+@media print {
+  .print-kpis.kpi-seven { grid-template-columns: repeat(7, 1fr); }
+}
+
 </style>
 </head>
 
@@ -2324,50 +2335,47 @@ const App = {
     const exits = this.data.exits.filter(e => e.quarter === q);
     const b = this.data.bundles[q] || {};
     const status = (this.bundleStatus(q) || 'incomplete').replaceAll('_',' ');
-    const priorQ = this.priorQuarter(q);
-    const priorScope = priorQ ? this.reportScope(priorQ) : {};
     const movement = this.programMovement(q);
 
     const totalServedYtd = this.calcPersonsYtd(q);
     const personsQuarter = Number(r.persons_quarter || 0);
-    const newIntakes = Number(s.newIntakes || 0);
-    const bedsAtEnd = Number(s.activeResidents || 0);
+    const activeStart = Number(movement.start || 0);
+    const newIntakes = Number(movement.intakes || s.newIntakes || 0);
+    const exitsQuarter = Number(movement.exits || 0);
+    const activeEnd = Number(movement.end || s.activeResidents || 0);
     const capacity = Number(this.program?.bed_capacity || 20);
+
+    const bedNightOcc = Number(s.bedNightsOcc || 0);
+    const bedNightAvail = Number(s.bedNightsAvail || 0);
+    const occupancyRate = this.percent(bedNightOcc, bedNightAvail);
+
     const serviceDenominator = Number(s.residentsServed || r.persons_quarter || 0);
     const serviceNumerator = Number(s.suppServicesEngaged || 0);
-    const serviceRateNum = serviceDenominator ? Math.round((serviceNumerator / serviceDenominator) * 100) : null;
-    const serviceRate = serviceRateNum !== null ? serviceRateNum + '%' : '—';
-    const occupancyRate = capacity ? Math.round((bedsAtEnd / capacity) * 100) : null;
-    const occupancyRateText = occupancyRate !== null ? occupancyRate + '%' : '—';
-    const bedNightOccupancy = this.percent(s.bedNightsOcc, s.bedNightsAvail);
-    const phYtd = Number(this.calcScopeYtd(q,'phExits') || 0);
+    const serviceRate = serviceDenominator ? Math.round((serviceNumerator / serviceDenominator) * 100) + '%' : '—';
+
     const phQuarter = Number(s.phExits || 0);
     const nonPhQuarter = Number(s.exitsTemp || 0) + Number(s.exitsInstitutional || 0) + Number(s.exitsHomeless || 0) + Number(s.exitsUnknown || 0);
+    const phYtd = Number(this.calcScopeYtd(q,'phExits') || 0);
     const nonPhYtd = ['exitsTemp','exitsInstitutional','exitsHomeless','exitsUnknown'].reduce((sum,key)=>sum+Number(this.calcScopeYtd(q,key)||0),0);
-    const totalExitsQuarter = phQuarter + nonPhQuarter;
     const totalExitsYtd = phYtd + nonPhYtd;
-    const satisfactionRate = Number(s.satTotal || 0) ? Math.round((Number(s.satSatisfied || 0) / Number(s.satTotal || 0)) * 100) + '%' : '—';
-    const incomeTotal = Number(s.incomeIncrease || 0) + Number(s.incomeMaintained || 0);
-    const incomeRate = serviceDenominator ? Math.round((incomeTotal / serviceDenominator) * 100) + '%' : '—';
-    const phExitRate = totalServedYtd ? Math.round((phYtd / totalServedYtd) * 100) + '%' : '—';
 
-    const bar = (pct, label='') => {
-      const n = Math.max(0, Math.min(100, Number(pct || 0)));
-      return `<div style="display:flex;align-items:center;gap:8px;"><div style="height:8px;background:#E0DDD5;border-radius:8px;overflow:hidden;min-width:110px;flex:1;"><div style="height:100%;width:${n}%;background:#C9A24A;border-radius:8px;"></div></div><span style="font-size:10px;font-weight:700;color:#1B2F5B;">${label || n + '%'}</span></div>`;
-    };
-    const changeCell = (current, previous) => {
-      if (previous === null || previous === undefined || previous === '') return '—';
-      const diff = Number(current || 0) - Number(previous || 0);
-      if (diff === 0) return 'No change';
-      return `${diff > 0 ? '+' : ''}${diff}`;
-    };
+    const kpiCards = [
+      ['YTD People Served', totalServedYtd, 'Unduplicated'],
+      ['Active at Start', activeStart, 'Residents'],
+      ['New Intakes', newIntakes, 'This quarter'],
+      ['Exits', exitsQuarter, `${phQuarter} PH · ${nonPhQuarter} non-PH`],
+      ['Active at End', activeEnd, `${capacity} bed capacity`],
+      ['Occupancy Rate', occupancyRate, 'Based on bed nights'],
+      ['Service Participation', serviceRate, `${serviceNumerator} of ${serviceDenominator}`]
+    ].map(([label,value,sub]) => `<div class="print-kpi"><div class="label">${label}</div><div class="value">${value}</div><div class="label">${sub}</div></div>`).join('');
 
-    const executiveSummary = [
-      `${this.escape(this.programName())} served ${personsQuarter || 0} people during ${q} and ${totalServedYtd || 0} people year-to-date.`,
-      `At the end of the quarter, ${bedsAtEnd || 0} of ${capacity || 20} beds were occupied (${occupancyRateText}).`,
-      `The program recorded ${totalExitsQuarter || 0} exit${totalExitsQuarter===1?'':'s'} this quarter and ${totalExitsYtd || 0} exit${totalExitsYtd===1?'':'s'} year-to-date, including ${phYtd || 0} permanent housing exit${phYtd===1?'':'s'}.`,
-      `Supportive service participation was ${serviceRate}, based on ${serviceNumerator || 0} of ${serviceDenominator || 0} people served during the quarter.`
-    ];
+    const executiveSummary = `
+      <p style="font-size:12px;line-height:1.65;margin:0 0 8px;">
+        During ${q}, the ${this.escape(this.programName())} served ${personsQuarter || 0} people and had ${activeEnd || 0} active residents at the end of the quarter. The program began the quarter with ${activeStart || 0} active residents, recorded ${newIntakes || 0} new intake${newIntakes===1?'':'s'}, and had ${exitsQuarter || 0} exit${exitsQuarter===1?'':'s'} during the reporting period.
+      </p>
+      <p style="font-size:12px;line-height:1.65;margin:0;">
+        Year-to-date, the program has served ${totalServedYtd || 0} unduplicated people and recorded ${totalExitsYtd || 0} total exit${totalExitsYtd===1?'':'s'}, including ${phYtd || 0} permanent housing exit${phYtd===1?'':'s'} and ${nonPhYtd || 0} non-permanent exit${nonPhYtd===1?'':'s'}. Bed-night occupancy for the quarter was ${occupancyRate}, and service participation was ${serviceRate}.
+      </p>`;
 
     const ageRowsBase = this.ageBands.map(age => {
       const row = r.demographics_age_gender?.[age] || {male:0,female:0,nb:0,unk:0};
@@ -2376,78 +2384,53 @@ const App = {
     }).join('');
     const ageTotals = this.demographicTotals(q);
     const ageRows = ageRowsBase + `<tr class="print-total-row"><td>Grand Total</td><td colspan="4"></td><td>${ageTotals.qAge}</td><td>${this.calcPersonsYtd(q)}</td></tr>`;
+
     const eth = this.normalizeEthnicity(r.demographics_ethnicity || {});
     const ethQTotal = Object.values(eth).reduce((a,b)=>a+Number(b||0),0);
     const ethYTotal = this.ethnicityKeys.reduce((sum,k)=>sum+Number(this.calcSimpleDemoYtd(q,'demographics_ethnicity',k,eth[k]||0)||0),0);
     const ethRows = this.ethnicityKeys.map(k => `<tr><td>${this.escape(k)}</td><td>${eth[k]||0}</td><td class="print-ytd-cell">${this.calcSimpleDemoYtd(q,'demographics_ethnicity',k,eth[k]||0)}</td></tr>`).join('') + `<tr class="print-total-row"><td>Grand Total</td><td>${ethQTotal}</td><td>${ethYTotal}</td></tr>`;
+
     const lang = this.normalizeLanguage(r.demographics_language || {});
     const langQTotal = Object.values(lang).reduce((a,b)=>a+Number(b||0),0);
     const langYTotal = this.languageKeys.reduce((sum,k)=>sum+Number(this.calcSimpleDemoYtd(q,'demographics_language',k,lang[k]||0)||0),0);
     const langRows = this.languageKeys.map(k => `<tr><td>${this.escape(k)}</td><td>${lang[k]||0}</td><td class="print-ytd-cell">${this.calcSimpleDemoYtd(q,'demographics_language',k,lang[k]||0)}</td></tr>`).join('') + `<tr class="print-total-row"><td>Grand Total</td><td>${langQTotal}</td><td>${langYTotal}</td></tr>`;
 
-    const exitTypes = [
-      ['Permanent Housing', phQuarter, phYtd],
-      ['Temporary / Interim Housing', Number(s.exitsTemp || 0), this.calcScopeYtd(q,'exitsTemp')],
-      ['Institutional Setting', Number(s.exitsInstitutional || 0), this.calcScopeYtd(q,'exitsInstitutional')],
-      ['Returned to Homelessness', Number(s.exitsHomeless || 0), this.calcScopeYtd(q,'exitsHomeless')],
-      ['Unknown / Left Program', Number(s.exitsUnknown || 0), this.calcScopeYtd(q,'exitsUnknown')]
-    ];
-    const exitDistributionRows = exitTypes.map(([label, qtr, ytd]) => {
-      const pct = totalExitsQuarter ? Math.round((Number(qtr||0) / totalExitsQuarter) * 100) : 0;
-      return `<tr><td>${label}</td><td>${qtr}</td><td>${pct}%</td><td>${bar(pct, pct + '%')}</td><td class="print-ytd-cell">${ytd || 0}</td></tr>`;
-    }).join('');
+    const scopeRows = `
+      <tr class="print-subhead"><td colspan="3">Current Quarter Activity</td></tr>
+      <tr><td>New Intakes</td><td>${newIntakes || 0}</td><td>This quarter</td></tr>
+      <tr><td>Exits During Quarter</td><td>${exitsQuarter || 0}</td><td>${phQuarter || 0} permanent · ${nonPhQuarter || 0} non-permanent</td></tr>
+      <tr><td>Supportive Services Engaged</td><td>${serviceNumerator || 0}</td><td>${serviceRate} participation rate</td></tr>
+      <tr><td>Income Increased</td><td>${s.incomeIncrease ?? '—'}</td><td>This quarter</td></tr>
+      <tr><td>Income Maintained</td><td>${s.incomeMaintained ?? '—'}</td><td>This quarter</td></tr>
+      <tr><td>Satisfied Responses</td><td>${s.satSatisfied ?? '—'} of ${s.satTotal ?? '—'}</td><td>This quarter</td></tr>
+      <tr class="print-subhead"><td colspan="3">Current Program Snapshot</td></tr>
+      <tr><td>Active Residents at Start of Quarter</td><td>${activeStart}</td><td>Quarter movement baseline</td></tr>
+      <tr><td>Active Residents at End of Quarter</td><td>${activeEnd}</td><td>${capacity} bed capacity</td></tr>
+      <tr><td>Bed Nights Occupied</td><td>${bedNightOcc || 0} of ${bedNightAvail || 0}</td><td>${occupancyRate}</td></tr>
+      <tr class="print-subhead"><td colspan="3">Contract Year Progress</td></tr>
+      <tr><td>Unduplicated People Served YTD</td><td class="print-ytd-cell">${totalServedYtd}</td><td>Contract year-to-date</td></tr>
+      <tr><td>Permanent Housing Exits YTD</td><td>${phYtd}</td><td>Contract year-to-date</td></tr>
+      <tr><td>Non-Permanent Exits YTD</td><td>${nonPhYtd}</td><td>Contract year-to-date</td></tr>
+      <tr><td>Total Exits YTD</td><td class="print-ytd-cell">${totalExitsYtd}</td><td>All exit destinations</td></tr>`;
 
-    const priorExitTotal = priorQ ? this.quarterExitTotal(priorQ) : null;
-    const comparisonRows = [
-      ['Beds occupied at end of quarter', priorScope.activeResidents ?? '—', bedsAtEnd || 0],
-      ['New intakes', priorScope.newIntakes ?? '—', newIntakes || 0],
-      ['Total exits', priorExitTotal ?? '—', totalExitsQuarter || 0],
-      ['Supportive services engaged', priorScope.suppServicesEngaged ?? '—', serviceNumerator || 0],
-      ['Income increased or maintained', (Number(priorScope.incomeIncrease || 0) + Number(priorScope.incomeMaintained || 0)) || '—', incomeTotal || 0],
-      ['Permanent housing exits', priorScope.phExits ?? '—', phQuarter || 0]
-    ].map(([label, prev, curr]) => `<tr><td>${label}</td><td>${prev}</td><td>${curr}</td><td>${changeCell(curr, prev)}</td></tr>`).join('');
+    const exitSummaryRows = `
+      <tr><td>Permanent Housing</td><td>${phQuarter}</td><td>${phYtd}</td></tr>
+      <tr><td>Temporary / Interim Housing</td><td>${s.exitsTemp || 0}</td><td>${this.calcScopeYtd(q,'exitsTemp') || 0}</td></tr>
+      <tr><td>Institutional Setting</td><td>${s.exitsInstitutional || 0}</td><td>${this.calcScopeYtd(q,'exitsInstitutional') || 0}</td></tr>
+      <tr><td>Returned to Homelessness</td><td>${s.exitsHomeless || 0}</td><td>${this.calcScopeYtd(q,'exitsHomeless') || 0}</td></tr>
+      <tr><td>Unknown / Left Program</td><td>${s.exitsUnknown || 0}</td><td>${this.calcScopeYtd(q,'exitsUnknown') || 0}</td></tr>
+      <tr class="print-total-row"><td>Total Exits</td><td>${exitsQuarter}</td><td>${totalExitsYtd}</td></tr>`;
 
-    const visualsRows = `
-      <tr><td>End-of-Quarter Occupancy</td><td>${bedsAtEnd || 0} of ${capacity || 20} beds</td><td>${bar(occupancyRate || 0, occupancyRateText)}</td></tr>
-      <tr><td>Service Participation</td><td>${serviceNumerator || 0} of ${serviceDenominator || 0} people served</td><td>${bar(serviceRateNum || 0, serviceRate)}</td></tr>
-      <tr><td>Permanent Housing Exit Share</td><td>${phYtd || 0} of ${totalExitsYtd || 0} YTD exits</td><td>${bar(totalExitsYtd ? Math.round((phYtd / totalExitsYtd) * 100) : 0, totalExitsYtd ? Math.round((phYtd / totalExitsYtd) * 100) + '%' : '—')}</td></tr>
-      <tr><td>Bed-Night Occupancy</td><td>${s.bedNightsOcc || 0} of ${s.bedNightsAvail || 0} bed nights</td><td>${bar(Number(s.bedNightsAvail || 0) ? Math.round((Number(s.bedNightsOcc || 0) / Number(s.bedNightsAvail || 0)) * 100) : 0, bedNightOccupancy)}</td></tr>
-    `;
-
-    const scopeSections = {
-      'Current Quarter Activity': [
-        ['New Intakes', newIntakes || 0, 'Current quarter'],
-        ['Total Exits', totalExitsQuarter || 0, 'Current quarter'],
-        ['Supportive Services Engaged', serviceNumerator || 0, serviceRate],
-        ['Income Increased or Maintained', incomeTotal || 0, incomeRate],
-        ['Satisfied Responses', s.satSatisfied ?? '—', satisfactionRate]
-      ],
-      'Current Program Snapshot': [
-        ['Active Residents / Beds Occupied at End of Quarter', bedsAtEnd || 0, `${capacity || 20} bed capacity`],
-        ['Occupancy Rate', occupancyRateText, 'End-of-quarter snapshot'],
-        ['Bed-Night Occupancy', bedNightOccupancy, `${s.bedNightsOcc || 0} / ${s.bedNightsAvail || 0}`]
-      ],
-      'Contract Year Progress': [
-        ['Total People Served YTD', totalServedYtd || 0, 'Unduplicated'],
-        ['Permanent Housing Exits YTD', phYtd || 0, phExitRate],
-        ['Non-Permanent Exits YTD', nonPhYtd || 0, 'YTD'],
-        ['Total Exits YTD', totalExitsYtd || 0, 'All destinations']
-      ]
-    };
-    const scopeRows = Object.entries(scopeSections).map(([section, rows]) =>
-      `<tr class="print-subhead"><td colspan="3">${section}</td></tr>` +
-      rows.map(([label, val, context]) => `<tr><td>${label}</td><td>${val}</td><td>${context}</td></tr>`).join('')
-    ).join('');
-
-    const exitVoluntary = exits.reduce((acc,e) => {
+    const voluntaryCounts = exits.reduce((acc,e) => {
       const key = e.voluntary_involuntary || 'Unknown';
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {});
-    const exitThemes = Object.entries(exitVoluntary).map(([k,v]) => `${this.escape(k)}: ${v}`).join(' · ') || 'No detailed exit rows recorded.';
+    const voluntarySummary = Object.entries(voluntaryCounts).map(([k,v]) => `${this.escape(k)}: ${v}`).join(' · ') || 'No detailed exit rows recorded.';
 
     document.getElementById('print-report').innerHTML = `
       <div class="print-page-header"><strong>${this.escape(this.programName())}</strong> · ${this.escape(CONFIG.FISCAL_YEAR_LABEL)} · Generated ${new Date().toLocaleDateString()}</div>
+
       <div class="print-cover">
         <div class="print-brand">
           <img class="print-logo" src="https://www.governmentjobs.com/AgencyPages/weho/agencyImages/download/weho_white_on_blue.jpg" alt="City of West Hollywood logo" />
@@ -2462,131 +2445,50 @@ const App = {
         </div>
       </div>
 
-      <div class="print-section print-first"><h2>Executive Summary</h2>
-        <div class="print-summary-strip" style="margin:0 0 14px;">
-          <span><strong>Data Status:</strong> ${this.dataChecks(q).every(c=>c.ok) ? 'Data verified' : 'Review needed'}</span>
-          <span><strong>Reporting Period:</strong> ${this.quarters[q].period}</span>
-          <span><strong>Status:</strong> ${this.escape(status)}</span>
-        </div>
-        <ul style="font-size:12px;line-height:1.7;margin-left:18px;">${executiveSummary.map(x=>`<li>${x}</li>`).join('')}</ul>
-      </div>
+      <div class="print-section print-first"><h2>Executive Summary</h2>${executiveSummary}</div>
 
-      <div class="print-kpis">
-        <div class="print-kpi"><div class="label">Total People Served YTD</div><div class="value">${totalServedYtd}</div><div class="label">Unduplicated this contract year</div></div>
-        <div class="print-kpi"><div class="label">New Intakes</div><div class="value">${newIntakes}</div><div class="label">This quarter</div></div>
-        <div class="print-kpi"><div class="label">Beds Occupied</div><div class="value">${bedsAtEnd}</div><div class="label">At end of quarter</div></div>
-        <div class="print-kpi"><div class="label">Service Participation</div><div class="value">${serviceRate}</div><div class="label">${serviceNumerator} of ${serviceDenominator} served</div></div>
-        <div class="print-kpi"><div class="label">Total Exits YTD</div><div class="value">${totalExitsYtd}</div><div class="label">PH ${phYtd} · Non-PH ${nonPhYtd}</div></div>
-      </div>
+      <div class="print-kpis kpi-seven">${kpiCards}</div>
 
-      <div class="print-section"><h2>Program Snapshot</h2>
-        <table class="print-table"><thead><tr><th>Measure</th><th>Value</th><th>Context</th></tr></thead><tbody>
-          <tr><td>Capacity</td><td>${capacity || 20}</td><td>Available program beds</td></tr>
-          <tr><td>End-of-Quarter Occupancy</td><td>${bedsAtEnd || 0}</td><td>${occupancyRateText} of capacity</td></tr>
-          <tr><td>Total Served YTD</td><td class="print-ytd-cell">${totalServedYtd}</td><td>Unduplicated people served during contract year</td></tr>
-          <tr><td>New Intakes</td><td>${newIntakes}</td><td>This quarter</td></tr>
-          <tr><td>Total Exits YTD</td><td class="print-ytd-cell">${totalExitsYtd}</td><td>${phYtd} permanent · ${nonPhYtd} non-permanent</td></tr>
-          <tr><td>Service Participation</td><td>${serviceRate}</td><td>${serviceNumerator} of ${serviceDenominator} people served during quarter</td></tr>
-        </tbody></table>
-      </div>
-
-      <div class="print-section page-break"><h2>Data Check Summary</h2>
-        <p style="font-size:11px;color:#555;margin-bottom:8px;">Validation checks are elevated here so reviewers can confirm whether the report is internally consistent before reviewing detailed tables.</p>
-        <table class="print-table"><thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead><tbody>${this.dataChecks(q).map(c=>`<tr><td>${this.escape(c.label)}</td><td>${c.ok ? 'Clear' : 'Review Needed'}</td><td>${this.escape(c.detail)}</td></tr>`).join('')}</tbody></table>
-      </div>
-
-      <div class="print-section"><h2>Performance Interpretation</h2>
-        <table class="print-table"><thead><tr><th>Metric</th><th>Raw Value</th><th>Rate / Interpretation</th></tr></thead><tbody>
-          <tr><td>Occupancy Rate</td><td>${bedsAtEnd || 0} of ${capacity || 20} beds occupied</td><td>${occupancyRateText}</td></tr>
-          <tr><td>Service Participation Rate</td><td>${serviceNumerator || 0} of ${serviceDenominator || 0} served</td><td>${serviceRate}</td></tr>
-          <tr><td>Exit Distribution</td><td>${totalExitsQuarter || 0} exits this quarter</td><td>${phQuarter || 0} PH · ${nonPhQuarter || 0} non-PH</td></tr>
-          <tr><td>Satisfaction Rate</td><td>${s.satSatisfied || 0} of ${s.satTotal || 0} responses</td><td>${satisfactionRate}</td></tr>
-          <tr><td>Income / Benefit Stability</td><td>${incomeTotal || 0} participants</td><td>${incomeRate}</td></tr>
-        </tbody></table>
-      </div>
-
-      <div class="print-section"><h2>Visual Indicators</h2>
-        <table class="print-table"><thead><tr><th>Indicator</th><th>Value</th><th>Visual</th></tr></thead><tbody>${visualsRows}</tbody></table>
-      </div>
-
-      <div class="print-section page-break"><h2>Quarter-to-Quarter Comparison</h2>
-        <p style="font-size:11px;color:#555;margin-bottom:8px;">This section compares selected recurring metrics from ${priorQ || 'the prior quarter'} to ${q}. A dash indicates no prior-quarter data is available.</p>
-        <table class="print-table"><thead><tr><th>Metric</th><th>${priorQ || 'Prior Quarter'}</th><th>${q}</th><th>Change</th></tr></thead><tbody>${comparisonRows}</tbody></table>
-      </div>
-
-      <div class="print-section"><h2>Scope of Services</h2>
-        <p style="font-size:11px;color:#555;margin-bottom:8px;">Metrics are grouped by whether they describe current-quarter activity, an end-of-quarter snapshot, or contract-year progress.</p>
-        <table class="print-table"><thead><tr><th>Metric</th><th>Value</th><th>Period / Interpretation</th></tr></thead><tbody>${scopeRows}</tbody></table>
-      </div>
-
-      <div class="print-section page-break"><h2>Quarterly Program Movement</h2>
-        <p style="font-size:11px;color:#555;margin-bottom:8px;">This section describes movement through the 20-bed Holloway program during the selected quarter. It reconciles people physically in the program, which is separate from the total unduplicated people served year-to-date.</p>
+      <div class="print-section"><h2>Quarterly Program Movement</h2>
         <table class="print-table"><thead><tr><th>Movement Measure</th><th>Count / Status</th></tr></thead><tbody>
-          <tr><td>Roster Period</td><td>${this.formatDate(roster.period_start)} – ${this.formatDate(roster.period_end)}</td></tr>
-          <tr><td>People in Program at Start of Quarter</td><td>${movement.start}</td></tr>
-          <tr><td>Intakes During Quarter</td><td>${movement.intakes}</td></tr>
-          <tr><td>Exits During Quarter</td><td>${movement.exits}</td></tr>
-          <tr class="print-total-row"><td>People in Program at End of Quarter</td><td>${movement.end}</td></tr>
+          <tr><td>Active Residents at Start of Quarter</td><td>${activeStart}</td></tr>
+          <tr><td>New Intakes</td><td>${newIntakes}</td></tr>
+          <tr><td>Exits During Quarter</td><td>${exitsQuarter}</td></tr>
+          <tr class="print-total-row"><td>Active Residents at End of Quarter</td><td>${activeEnd}</td></tr>
           <tr><td>Movement Reconciliation</td><td>${movement.ties ? '✓ Movement ties out' : '⚠ Review movement totals'} (${movement.formula})</td></tr>
           <tr><td>Prior Quarter End Check</td><td>${movement.priorQ ? (movement.crossQuarterTies ? '✓ ' : '⚠ ') + movement.priorQ + ' ended with ' + movement.priorEnd + '; ' + q + ' starts with ' + movement.start + '.' : 'Not applicable for first quarter.'}</td></tr>
-          <tr><td>Notes</td><td>${this.escape(roster.notes || '')}</td></tr>
         </tbody></table>
       </div>
 
-      <div class="print-section"><h2>YTD Program Activity Summary</h2>
-        <p style="font-size:11px;color:#555;margin-bottom:8px;">These figures summarize cumulative program reach and exits year-to-date. They are separate from the number of people physically in the program at the end of the quarter.</p>
-        <table class="print-table"><thead><tr><th>Measure</th><th>YTD Count</th><th>Context</th></tr></thead><tbody>
-          <tr><td>Total People Served YTD</td><td class="print-ytd-cell">${totalServedYtd}</td><td>Unduplicated program reach</td></tr>
-          <tr><td>Total Exits YTD</td><td class="print-ytd-cell">${totalExitsYtd}</td><td>All exit destinations</td></tr>
-          <tr><td>Permanent Housing Exits</td><td>${phYtd}</td><td>${phExitRate} of people served YTD</td></tr>
-          <tr><td>Non-Permanent Exits</td><td>${nonPhYtd}</td><td>Non-permanent destinations or unknown</td></tr>
-          <tr><td>Active / Beds Occupied at End of Quarter</td><td>${bedsAtEnd}</td><td>End-of-quarter snapshot</td></tr>
-        </tbody></table>
+      <div class="print-section page-break"><h2>Scope of Services</h2>
+        <table class="print-table"><thead><tr><th>Metric</th><th>Value</th><th>Period / Note</th></tr></thead><tbody>${scopeRows}</tbody></table>
       </div>
 
-      <div class="print-section page-break"><h2>Demographics</h2>
-        <p style="font-size:11px;color:#555;margin-bottom:8px;">Demographic totals should align across age/gender, ethnicity, language, and the reported number of people served during the quarter.</p>
-        <h3>Age & Gender</h3><table class="print-table"><thead><tr><th>Age</th><th>Qtr Male</th><th>Qtr Female</th><th>Qtr NB/GNC</th><th>Qtr Unknown</th><th>Qtr Total</th><th>YTD Total</th></tr></thead><tbody>${ageRows}</tbody></table>
-        <h3>Ethnicity</h3><table class="print-table"><thead><tr><th>Category</th><th>Qtr</th><th>YTD</th></tr></thead><tbody>${ethRows}</tbody></table>
-        <h3>Language</h3><table class="print-table"><thead><tr><th>Category</th><th>Qtr</th><th>YTD</th></tr></thead><tbody>${langRows}</tbody></table>
+      <div class="print-section"><h2>Demographics</h2>
+        <h3>Age & Gender</h3>
+        <table class="print-table"><thead><tr><th>Age</th><th>Qtr Male</th><th>Qtr Female</th><th>Qtr NB/GNC</th><th>Qtr Unknown</th><th>Qtr Total</th><th>YTD Total</th></tr></thead><tbody>${ageRows}</tbody></table>
+        <h3>Ethnicity</h3>
+        <table class="print-table"><thead><tr><th>Category</th><th>Quarter</th><th>YTD</th></tr></thead><tbody>${ethRows}</tbody></table>
+        <h3>Language</h3>
+        <table class="print-table"><thead><tr><th>Category</th><th>Quarter</th><th>YTD</th></tr></thead><tbody>${langRows}</tbody></table>
       </div>
 
-      <div class="print-section page-break"><h2>Exit Data Interpretation</h2>
-        <p style="font-size:11px;color:#555;margin-bottom:8px;">Exit information is summarized to help reviewers understand program movement, destination patterns, and whether exits were permanent or non-permanent.</p>
-        <table class="print-table"><thead><tr><th>Exit Type</th><th>This Quarter</th><th>Quarter Share</th><th>Visual</th><th>YTD</th></tr></thead><tbody>${exitDistributionRows}</tbody></table>
-        <p style="font-size:11px;color:#555;margin-top:8px;"><strong>Voluntary / involuntary detail:</strong> ${exitThemes}</p>
+      <div class="print-section page-break"><h2>Exit Summary</h2>
+        <table class="print-table"><thead><tr><th>Exit Type</th><th>This Quarter</th><th>YTD</th></tr></thead><tbody>${exitSummaryRows}</tbody></table>
+        <p style="font-size:11px;color:#555;margin-top:8px;"><strong>Voluntary / Involuntary Summary:</strong> ${voluntarySummary}</p>
       </div>
 
       <div class="print-section"><h2>Non-Permanent Exit Detail</h2>
         <table class="print-table"><thead><tr><th>#</th><th>Type</th><th>Vol/Invol</th><th>Reason</th><th>Follow-up</th></tr></thead><tbody>${exits.map((e,i)=>`<tr><td>${i+1}</td><td>${this.escape(e.exit_type)}</td><td>${this.escape(e.voluntary_involuntary)}</td><td>${this.escape(e.reason_for_exit)}</td><td>${this.escape(e.staff_followup)}</td></tr>`).join('') || '<tr><td colspan="5">No exits recorded.</td></tr>'}</tbody></table>
       </div>
 
-      <div class="print-section page-break"><h2>Narrative Summary</h2>
+      <div class="print-section"><h2>Narrative Summary</h2>
         <p style="font-size:11px;color:#555;margin-bottom:8px;">${this.wordCount(r.narrative_text || '')} words · Suggested length: approximately 500–700 words.</p>
-        <table class="print-table"><thead><tr><th>Suggested Reporting Category</th><th>Purpose</th></tr></thead><tbody>
-          <tr><td>Operations</td><td>Staffing, occupancy, program flow, and day-to-day implementation.</td></tr>
-          <tr><td>Housing Outcomes</td><td>Progress toward permanent housing, document readiness, and placement barriers.</td></tr>
-          <tr><td>Service Engagement</td><td>Participant engagement in supportive services and coordination with partners.</td></tr>
-          <tr><td>Income / Benefits</td><td>Benefits, income, employment, or document support progress.</td></tr>
-          <tr><td>Client Movement</td><td>Intakes, exits, acuity, and notable movement patterns.</td></tr>
-          <tr><td>Challenges / Barriers</td><td>Operational or system barriers affecting outcomes.</td></tr>
-        </tbody></table>
-        <p style="margin-top:12px;white-space:pre-wrap;">${this.escape(r.narrative_text || 'No narrative provided.')}</p>
-      </div>
-
-      <div class="print-section"><h2>Definitions and Context Notes</h2>
-        <table class="print-table"><thead><tr><th>Term / Metric</th><th>Definition or Context</th></tr></thead><tbody>
-          <tr><td>Unduplicated Persons Served</td><td>Each participant is counted once during the reporting period, even if they received multiple services.</td></tr>
-          <tr><td>Permanent Housing Exit</td><td>An exit to a permanent housing destination, including permanent supportive housing or another stable permanent housing placement.</td></tr>
-          <tr><td>Non-Permanent Exit</td><td>An exit to a temporary, institutional, unknown, or non-permanent destination.</td></tr>
-          <tr><td>Bed Nights Occupied</td><td>Total nights during the reporting period when a program bed was occupied.</td></tr>
-          <tr><td>Supportive Services Engaged</td><td>Participants who engaged in case management, housing navigation, benefits support, wellness, or other supportive services.</td></tr>
-          <tr><td>Permanent Housing Timing</td><td>Permanent housing placements may take time because participants often need documentation, benefits, housing matching, inspections, and lease-up coordination.</td></tr>
-          <tr><td>Occupancy Fluctuation</td><td>Occupancy may fluctuate due to intakes, exits, participant readiness, unit turnover, or operational timing.</td></tr>
-        </tbody></table>
+        <p style="white-space:pre-wrap;">${this.escape(r.narrative_text || 'No narrative provided.')}</p>
       </div>
 
       <div class="print-section"><h2>City Review</h2><p>${this.escape(b.city_review_notes || 'No City review notes.')}</p></div>
+
       <div class="print-footer"><img class="print-footer-logo" src="https://www.governmentjobs.com/AgencyPages/weho/agencyImages/download/weho_white_on_blue.jpg" alt="City of West Hollywood logo" />Prepared for City of West Hollywood Human Services Division · ${this.escape(this.programName())} Reporting Portal</div>`;
     window.print();
   },
