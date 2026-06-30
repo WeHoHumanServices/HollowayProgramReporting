@@ -435,13 +435,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
           <div class="sidebar-item" data-view="services"><span class="si-icon" aria-hidden="true">🤝</span>Services</div>
           <div class="sidebar-item" data-view="client-exits"><span class="si-icon" aria-hidden="true">🚪</span>Exits</div>
           <div class="sidebar-item" data-view="housing-followups"><span class="si-icon" aria-hidden="true">🔁</span>Housing Follow-Ups</div>
-          <div class="sidebar-item" data-view="quarter"><span class="si-icon" aria-hidden="true">📊</span>Quarterly Report</div>
+          <div class="sidebar-item" data-view="quarter"><span class="si-icon" aria-hidden="true">📊</span>Review & Submit</div>
           <div class="sidebar-item" id="nav-review" data-view="admin-review" style="display:none;"><span class="si-icon" aria-hidden="true">✅</span>Review Queue</div>
           <div class="sidebar-item" id="nav-access" data-view="access" style="display:none;"><span class="si-icon" aria-hidden="true">🔐</span>Access Management</div>
         </div>
         <div class="sidebar-section">
           <div class="sidebar-label">Reports</div>
-          <div class="sidebar-item" data-action="quarterly"><span class="si-icon" aria-hidden="true">📝</span>Narrative & Certification</div>
+          <div class="sidebar-item" data-view="quarterly-narrative"><span class="si-icon" aria-hidden="true">📝</span>Quarterly Narrative</div>
         </div>
       </nav>
     </aside>
@@ -453,6 +453,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
       <section id="view-services" class="view-section"></section>
       <section id="view-client-exits" class="view-section"></section>
       <section id="view-housing-followups" class="view-section"></section>
+      <section id="view-quarterly-narrative" class="view-section"></section>
       <section id="view-quarter" class="view-section"></section>
       <section id="view-admin-review" class="view-section"></section>
       <section id="view-access" class="view-section"></section>
@@ -465,7 +466,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   <div class="form-modal wide">
     <div class="form-modal-header">
       <div>
-        <div class="form-modal-title" id="qr-title">Quarterly Program Report</div>
+        <div class="form-modal-title" id="qr-title">Quarterly Narrative & Certification</div>
         <div class="form-modal-meta" id="qr-meta"></div>
       </div>
       <button class="form-close-btn" data-close="quarterly">✕</button>
@@ -1354,7 +1355,7 @@ const App = {
           ${item.action && (this.canEditQuarter() || this.isAdmin()) ? `<button class="btn btn-ghost btn-sm" data-open="${item.action}">Open</button>` : ''}
         </div>`).join('')}
         ${this.canSign() ? `<button class="btn btn-gold" id="btn-submit-bundle" data-action="submit-bundle" data-quarter="${q}" ${allGreen && !this.quarterLocked(q) ? '' : 'disabled'}>Submit Quarter to City</button>` : `<span class="field-hint">Only an authorized signer can submit the quarter to the City.</span>`}
-        ${!allGreen ? `<p class="field-hint" style="margin-top:8px;">Complete all three reporting components before submitting the quarter.</p>` : ''}
+        ${!allGreen ? `<p class="field-hint" style="margin-top:8px;">Complete the required client records and quarterly narrative before submitting the quarter.</p>` : ''}
       </div></div>`;
   },
 
@@ -1526,7 +1527,7 @@ const App = {
     const q = this.currentQuarter;
     el.innerHTML = `
       <div class="page-header">
-        <div><div class="page-title">Quarter Detail</div><div class="page-subtitle">Review or manage details for the selected quarter.</div></div>
+        <div><div class="page-title">Review & Submit</div><div class="page-subtitle">Review or manage details for the selected quarter.</div></div>
         <button class="btn btn-ghost btn-sm" id="btn-print-quarter">Print / Save PDF</button>
       </div>
       ${this.renderQuarterButtons()}
@@ -2955,6 +2956,130 @@ const App = {
     const {error}=await this.sb.from('holloway_housing_followups').upsert(payload,{onConflict:'id'});
     if(error){ document.getElementById('followup-save-state').textContent='Save failed: '+error.message; return; }
     document.getElementById('followup-save-state').textContent='Saved.'; await this.loadAll(); this.closeForm('followup'); this.showView('housing-followups');
+  };
+})();
+
+
+// ---------- Quarterly narrative streamlining ----------
+(function(){
+  App.narrativeSectionLabels = {
+    program_summary: 'Program Summary',
+    program_successes: 'Program Successes',
+    program_challenges: 'Challenges',
+    program_trends: 'Notable Trends',
+    planned_improvements: 'Planned Improvements',
+    success_story: 'Quarterly Success Story'
+  };
+
+  App.parseNarrativeSections = function(text){
+    const labels = this.narrativeSectionLabels;
+    const out = { program_summary:'', program_successes:'', program_challenges:'', program_trends:'', planned_improvements:'', success_story:'' };
+    if (!text) return out;
+    const entries = Object.entries(labels);
+    const escaped = entries.map(([,label]) => label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const re = new RegExp(`(^|\\n)(${escaped}):\\s*`, 'g');
+    let matches = [], m;
+    while ((m = re.exec(text)) !== null) matches.push({ index:m.index + (m[1] ? 1 : 0), label:m[2], contentStart:re.lastIndex });
+    if (!matches.length) { out.program_summary = text.trim(); return out; }
+    matches.forEach((match, idx) => {
+      const end = idx + 1 < matches.length ? matches[idx+1].index : text.length;
+      const key = entries.find(([,label]) => label === match.label)?.[0];
+      if (key) out[key] = text.slice(match.contentStart, end).trim();
+    });
+    return out;
+  };
+
+  App.composeNarrativeSections = function(sections){
+    const labels = this.narrativeSectionLabels;
+    return Object.keys(labels).map(k => `${labels[k]}:\n${(sections[k] || '').trim()}`).join('\n\n');
+  };
+
+  App.quarterSummaryMetrics = function(q){
+    const s = (this.data.clients||[]).length ? this.generatedScopeFromClients(q) : this.reportScope(q);
+    return [
+      ['Clients Served', s.residentsServed ?? 0],
+      ['Admissions', s.newIntakes ?? 0],
+      ['PH Exits', s.phExits ?? 0],
+      ['Occupancy', this.percent(s.bedNightsOcc, s.bedNightsAvail)],
+      ['Avg. Days to PH', s.avgDaysToPH ?? '—'],
+      ['Services', s.suppServicesEngaged ?? 0]
+    ];
+  };
+
+  App.renderQuarterlyNarrativePage = function(){
+    const q = this.currentQuarter;
+    const r = this.data.reports[q] || {};
+    const sections = this.parseNarrativeSections(r.narrative_text || '');
+    const metrics = this.quarterSummaryMetrics(q);
+    const el = document.getElementById('view-quarterly-narrative');
+    el.innerHTML = `<div class="page-header"><div><div class="page-title">Quarterly Narrative</div><div class="page-subtitle">${this.escape(q)} · ${this.escape(this.quarters[q].period)} · Complete the qualitative context and success story for the quarter.</div></div><div style="display:flex;gap:10px;"><button class="btn btn-ghost" id="btn-narrative-open-review">Review & Submit</button><button class="btn btn-gold" id="btn-narrative-save">Save Narrative</button></div></div>
+      ${this.renderQuarterButtons()}
+      <div class="notice navy"><div aria-hidden="true">✍️</div><div><strong>Narrative guidance</strong><br>Use the auto-generated quarter summary below to explain context behind the numbers. Please include a success story from the quarter. Client names should not be included in City-facing narratives unless expressly authorized and appropriate.</div></div>
+      <div class="generated-metric-grid" style="grid-template-columns:repeat(3,1fr);">${metrics.map(m=>`<div class="generated-metric"><div class="label">${this.escape(m[0])}</div><div class="value">${this.escape(m[1])}</div></div>`).join('')}</div>
+      <div class="card"><div class="card-header"><div><div class="card-title">Narrative Sections</div><div class="field-hint">These sections will be combined into the quarterly report narrative.</div></div></div><div class="card-body">
+        <div class="form-row"><div class="field-group"><label class="field-label required" for="narr-program-summary">Program Summary</label><textarea id="narr-program-summary" class="field-textarea" required placeholder="Summarize overall program operations during this reporting period.">${this.escape(sections.program_summary)}</textarea></div><div class="field-group"><label class="field-label required" for="narr-program-successes">Program Successes</label><textarea id="narr-program-successes" class="field-textarea" required placeholder="Describe significant accomplishments, partnerships, or notable progress.">${this.escape(sections.program_successes)}</textarea></div></div>
+        <div class="form-row"><div class="field-group"><label class="field-label required" for="narr-program-challenges">Challenges</label><textarea id="narr-program-challenges" class="field-textarea" required placeholder="Describe barriers such as housing availability, documentation, staffing, engagement, or other challenges.">${this.escape(sections.program_challenges)}</textarea></div><div class="field-group"><label class="field-label" for="narr-program-trends">Notable Trends</label><textarea id="narr-program-trends" class="field-textarea" placeholder="Describe emerging needs, resident trends, or patterns observed this quarter.">${this.escape(sections.program_trends)}</textarea></div></div>
+        <div class="form-row"><div class="field-group"><label class="field-label" for="narr-planned-improvements">Planned Improvements</label><textarea id="narr-planned-improvements" class="field-textarea" placeholder="Describe planned operational improvements for the upcoming quarter.">${this.escape(sections.planned_improvements)}</textarea></div><div class="field-group"><label class="field-label required" for="narr-success-story">Success Story from the Quarter</label><textarea id="narr-success-story" class="field-textarea" required placeholder="Share one brief de-identified success story that illustrates client progress or program impact.">${this.escape(sections.success_story)}</textarea></div></div>
+        <div class="form-row"><div class="field-group"><label class="field-label required" for="narr-submitted-by">Prepared By</label><input id="narr-submitted-by" class="field-input" required value="${this.escape(r.narrative_submitted_by || r.signatory_name || this.defaultSignatory())}"></div><div class="field-group"><label class="field-label required" for="narr-date">Date</label><input type="date" id="narr-date" class="field-input" required value="${r.narrative_date || ''}"></div></div>
+        <div id="narrative-page-save-state" class="field-hint">Not saved this session.</div>
+      </div></div>`;
+    this.bindQuarterButtons(el);
+    document.getElementById('btn-narrative-save')?.addEventListener('click', () => this.saveNarrativePage());
+    document.getElementById('btn-narrative-open-review')?.addEventListener('click', () => this.showView('quarter'));
+  };
+
+  App.collectNarrativePageSections = function(){
+    return {
+      program_summary: document.getElementById('narr-program-summary')?.value || '',
+      program_successes: document.getElementById('narr-program-successes')?.value || '',
+      program_challenges: document.getElementById('narr-program-challenges')?.value || '',
+      program_trends: document.getElementById('narr-program-trends')?.value || '',
+      planned_improvements: document.getElementById('narr-planned-improvements')?.value || '',
+      success_story: document.getElementById('narr-success-story')?.value || ''
+    };
+  };
+
+  App.saveNarrativePage = async function(){
+    const q = this.currentQuarter;
+    const state = document.getElementById('narrative-page-save-state');
+    const required = ['narr-program-summary','narr-program-successes','narr-program-challenges','narr-success-story','narr-submitted-by','narr-date'];
+    const missing = required.filter(id => !(document.getElementById(id)?.value || '').trim());
+    if (missing.length) { if (state) state.textContent = 'Please complete all required narrative fields before saving.'; return; }
+    if (state) state.textContent = 'Saving...';
+    const narrative_text = this.composeNarrativeSections(this.collectNarrativePageSections());
+    const payload = {
+      program_id: this.program.id,
+      fiscal_year: this.fiscalYear,
+      quarter: q,
+      status: this.data.reports[q]?.status || 'draft',
+      narrative_text,
+      narrative_submitted_by: document.getElementById('narr-submitted-by')?.value || null,
+      narrative_date: document.getElementById('narr-date')?.value || null,
+      updated_at: new Date().toISOString()
+    };
+    const { data, error } = await this.sb.from('quarterly_reports').upsert(payload, { onConflict:'program_id,quarter,fiscal_year' }).select().single();
+    if (error) { if (state) state.textContent = 'Save failed: ' + error.message; console.error(error); return; }
+    this.data.reports[q] = { ...(this.data.reports[q]||{}), ...data };
+    if (state) state.textContent = 'Saved just now.';
+    this.toast?.('Quarterly narrative saved.');
+  };
+
+  // Replace the narrative tab in the legacy modal with the same structured fields.
+  const oldRenderNarrativeForm2 = App.renderNarrativeForm;
+  App.renderNarrativeForm = function(q){
+    const r = this.data.reports[q] || {};
+    const sections = this.parseNarrativeSections(r.narrative_text || '');
+    document.getElementById('qr-narrative-body').innerHTML = `<div class="form-section"><div class="form-section-title">Quarterly Narrative</div><div class="notice navy"><div aria-hidden="true">✍️</div><div><strong>Complete the narrative sections.</strong><br>Include context for the quarter, challenges, planned improvements, and one de-identified success story.</div></div>
+      <div class="field-group" data-field-group="qr-narrative-text"><label class="field-label required" for="qr-narrative-text">Combined Narrative</label><textarea class="field-textarea" id="qr-narrative-text" required style="min-height:220px;line-height:1.65;">${this.escape(r.narrative_text || '')}</textarea><span class="field-error">Narrative is required before submission.</span></div>
+      <div class="form-row"><div class="field-group"><label class="field-label required" for="qr-narrative-name">Submitted By</label><input class="field-input" id="qr-narrative-name" required value="${this.escape(r.narrative_submitted_by || r.signatory_name || this.defaultSignatory())}"></div><div class="field-group"><label class="field-label required" for="qr-narrative-date">Date</label><input type="date" class="field-input" id="qr-narrative-date" required value="${r.narrative_date || ''}"></div></div>
+      <div class="notice amber"><div>💡</div><div>For easier editing, use the dedicated <strong>Quarterly Narrative</strong> page in the left navigation. This tab stores the combined report narrative.</div></div>
+    </div>`;
+  };
+
+  const oldShowView2 = App.showView;
+  App.showView = function(view){
+    oldShowView2.call(this, view);
+    if (view === 'quarterly-narrative') this.renderQuarterlyNarrativePage();
   };
 })();
 
