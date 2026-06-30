@@ -258,6 +258,32 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .print-progress-fill { height:100%; background:#C9A24A; border-radius:8px; }
 
 
+
+/* Client-based program management additions */
+.client-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.client-table-wrap{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:auto}
+.client-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.client-table th{background:var(--navy);color:white;text-align:left;padding:9px 10px;font-size:11px;letter-spacing:.03em;text-transform:uppercase}
+.client-table td{padding:9px 10px;border-bottom:1px solid var(--gray-100);vertical-align:top}
+.client-table tbody tr:nth-child(even) td{background:#FBFAF7}
+.client-actions{display:flex;gap:6px;flex-wrap:wrap}
+.room-board{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:12px}
+.room-card{border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px;background:var(--white);box-shadow:var(--shadow);min-height:98px}
+.room-card.occupied{border-left:4px solid var(--green)}
+.room-card.vacant{border-left:4px solid var(--gold);background:#fffdf7}
+.room-card.pending{border-left:4px solid var(--amber)}
+.room-num{font-size:11px;font-weight:900;color:var(--gray-400);text-transform:uppercase;letter-spacing:.06em}
+.room-name{font-weight:800;color:var(--navy);margin-top:5px}
+.room-meta{font-size:11.5px;color:var(--gray-600);margin-top:4px}
+.client-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.client-form-grid .full{grid-column:1/-1}
+.generated-metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.generated-metric{border:1px solid var(--border);border-left:3px solid var(--navy);border-radius:var(--radius-lg);background:white;padding:14px;box-shadow:var(--shadow)}
+.generated-metric .label{font-size:10.5px;color:var(--gray-400);font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.generated-metric .value{font-size:28px;color:var(--navy);font-weight:800;margin-top:2px}
+@media(max-width:980px){.room-board{grid-template-columns:repeat(2,1fr)}.generated-metric-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:620px){.room-board,.generated-metric-grid,.client-form-grid{grid-template-columns:1fr}}
+
 @media (max-width: 800px) {
   .weho-logo-header { max-width: 112px; max-height: 26px; }
   .brand-program { font-size: 13.5px; }
@@ -269,6 +295,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .content-grid { grid-template-columns: 1fr; }
   .form-row, .form-row.three { grid-template-columns: 1fr; }
 }
+
 @media (max-width: 800px) {
   .sidebar { display:none; }
   .main { padding:20px; }
@@ -345,6 +372,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .print-kpis.kpi-seven { grid-template-columns: repeat(7, 1fr); }
 }
 
+
+
+/* Usability / program-management additions */
+.today-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
+.today-card{background:white;border:1px solid var(--border);border-left:4px solid var(--gold);border-radius:var(--radius-lg);padding:14px;box-shadow:var(--shadow)}
+.today-card .label{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);font-weight:800}.today-card .value{font-size:26px;font-weight:800;color:var(--navy);line-height:1.1;margin-top:4px}.today-card .sub{font-size:11.5px;color:var(--gray-600);margin-top:3px}.quick-service-bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}.quick-chip{border:1px solid var(--border);background:white;color:var(--navy);border-radius:999px;padding:7px 12px;font-weight:800;font-size:12px;cursor:pointer}.quick-chip:hover{background:#EEF2FA;border-color:var(--navy)}.task-list{display:grid;gap:8px}.task-row{display:flex;justify-content:space-between;gap:12px;align-items:center;border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;background:white}.task-row:nth-child(even){background:#FBFAF7}.progress-pill{height:9px;background:var(--gray-200);border-radius:99px;overflow:hidden;min-width:110px}.progress-pill span{display:block;height:100%;background:var(--gold);border-radius:99px}.readiness-check{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);background:white;margin-bottom:7px}.followup-status{font-size:11px;border-radius:999px;padding:2px 8px;font-weight:800}.followup-status.due{background:var(--amber-light);color:var(--amber)}.followup-status.overdue{background:var(--red-light);color:var(--red)}.followup-status.complete{background:var(--green-light);color:var(--green)}@media(max-width:980px){.today-grid{grid-template-columns:1fr 1fr}.today-card .value{font-size:22px}}@media(max-width:620px){.today-grid{grid-template-columns:1fr}}
+
 </style>
 </head>
 
@@ -396,21 +430,31 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
         <div class="sidebar-section">
           <div class="sidebar-label" id="role-nav-label">Workspace</div>
           <div class="sidebar-item active" data-view="dashboard"><span class="si-icon" aria-hidden="true">⊞</span>Dashboard</div>
-          <div class="sidebar-item" data-view="quarter"><span class="si-icon" aria-hidden="true">📊</span>Quarter Detail</div>
+          <div class="sidebar-item" data-view="clients"><span class="si-icon" aria-hidden="true">👤</span>Clients</div>
+          <div class="sidebar-item" data-view="residents"><span class="si-icon" aria-hidden="true">🏠</span>Current Residents</div>
+          <div class="sidebar-item" data-view="services"><span class="si-icon" aria-hidden="true">🤝</span>Services</div>
+          <div class="sidebar-item" data-view="client-exits"><span class="si-icon" aria-hidden="true">🚪</span>Exits</div>
+          <div class="sidebar-item" data-view="housing-followups"><span class="si-icon" aria-hidden="true">🔁</span>Housing Follow-Ups</div>
+          <div class="sidebar-item" data-view="quarter"><span class="si-icon" aria-hidden="true">📊</span>Generated Report</div>
           <div class="sidebar-item" id="nav-review" data-view="admin-review" style="display:none;"><span class="si-icon" aria-hidden="true">✅</span>Review Queue</div>
           <div class="sidebar-item" id="nav-access" data-view="access" style="display:none;"><span class="si-icon" aria-hidden="true">🔐</span>Access Management</div>
         </div>
         <div class="sidebar-section">
-          <div class="sidebar-label">Forms</div>
-          <div class="sidebar-item" data-action="quarterly"><span class="si-icon" aria-hidden="true">📋</span>Quarterly Report</div>
-          <div class="sidebar-item" data-action="roster"><span class="si-icon" aria-hidden="true">👥</span>Client Roster</div>
-          <div class="sidebar-item" data-action="exits"><span class="si-icon" aria-hidden="true">🚪</span>Exit Detail</div>
+          <div class="sidebar-label">Quarterly Workflow</div>
+          <div class="sidebar-item" data-action="quarterly"><span class="si-icon" aria-hidden="true">📝</span>Narrative & Certification</div>
+          <div class="sidebar-item" data-action="roster"><span class="si-icon" aria-hidden="true">📦</span>Legacy Aggregate Roster</div>
+          <div class="sidebar-item" data-action="exits"><span class="si-icon" aria-hidden="true">📦</span>Legacy Exit Detail</div>
         </div>
       </nav>
     </aside>
 
     <main class="main">
       <section id="view-dashboard" class="view-section active"></section>
+      <section id="view-clients" class="view-section"></section>
+      <section id="view-residents" class="view-section"></section>
+      <section id="view-services" class="view-section"></section>
+      <section id="view-client-exits" class="view-section"></section>
+      <section id="view-housing-followups" class="view-section"></section>
       <section id="view-quarter" class="view-section"></section>
       <section id="view-admin-review" class="view-section"></section>
       <section id="view-access" class="view-section"></section>
@@ -491,6 +535,69 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
         <button class="btn btn-ghost" id="btn-add-exit">Add Exit Row</button>
         <button class="btn btn-gold" id="btn-save-exits">Save Exit Detail</button>
       </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Client Modal -->
+<div id="modal-client" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="client-title">
+  <div class="form-modal wide">
+    <div class="form-modal-header">
+      <div>
+        <div class="form-modal-title" id="client-title">Client Record</div>
+        <div class="form-modal-meta">Client-based reporting source record</div>
+      </div>
+      <button class="form-close-btn" data-close="client">✕</button>
+    </div>
+    <div class="form-gold-bar"></div>
+    <div class="form-body" id="client-body"></div>
+    <div class="form-footer">
+      <div class="save-state" id="client-save-state">Not saved this session</div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-ghost" data-close="client">Close</button>
+        <button class="btn btn-gold" id="btn-save-client">Save Client</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Service Modal -->
+<div id="modal-service" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="service-title">
+  <div class="form-modal">
+    <div class="form-modal-header">
+      <div>
+        <div class="form-modal-title" id="service-title">Service Entry</div>
+        <div class="form-modal-meta">Individual service/contact record</div>
+      </div>
+      <button class="form-close-btn" data-close="service">✕</button>
+    </div>
+    <div class="form-gold-bar"></div>
+    <div class="form-body" id="service-body"></div>
+    <div class="form-footer">
+      <div class="save-state" id="service-save-state">Not saved this session</div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-ghost" data-close="service">Close</button>
+        <button class="btn btn-gold" id="btn-save-service">Save Service</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- Housing Follow-Up Modal -->
+<div id="modal-followup" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="followup-title">
+  <div class="form-modal">
+    <div class="form-modal-header">
+      <div><div class="form-modal-title" id="followup-title">Housing Follow-Up</div><div class="form-modal-meta">6-month / 12-month permanent housing follow-up</div></div>
+      <button class="form-close-btn" data-close="followup">✕</button>
+    </div>
+    <div class="form-gold-bar"></div>
+    <div class="form-body" id="followup-body"></div>
+    <div class="form-footer">
+      <div class="save-state" id="followup-save-state">Not saved this session</div>
+      <div style="display:flex;gap:10px;"><button class="btn btn-ghost" data-close="followup">Close</button><button class="btn btn-gold" id="btn-save-followup">Save Follow-Up</button></div>
     </div>
   </div>
 </div>
@@ -643,7 +750,10 @@ const App = {
     bundles: {},
     exits: [],
     approvedUsers: [],
-    activity: []
+    activity: [],
+    clients: [],
+    clientServices: [],
+    clientUpdates: []
   },
   saveTimers: {},
   dirty: { quarterly:false, roster:false, exits:false },
@@ -667,6 +777,8 @@ const App = {
   rosterTotal: 0,
   reviewFilters: { quarter:'all', status:'all', agency:'' },
   reviewSort: { field:'submitted_at', dir:'desc' },
+  currentClientId: null,
+  currentServiceId: null,
 
   init() {
     this.sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -705,6 +817,9 @@ const App = {
     document.getElementById('btn-save-roster').addEventListener('click', () => this.saveRoster('manual'));
     document.getElementById('btn-add-exit').addEventListener('click', () => this.addExitDraftRow());
     document.getElementById('btn-save-exits').addEventListener('click', () => this.saveExits('manual'));
+    document.getElementById('btn-save-client').addEventListener('click', () => this.saveClient());
+    document.getElementById('btn-save-followup')?.addEventListener('click', () => this.saveFollowUp());
+    document.getElementById('btn-save-service').addEventListener('click', () => this.saveService());
     document.getElementById('error-chip').addEventListener('click', () => this.scrollToFirstError());
     document.getElementById('confirm-cancel').addEventListener('click', () => this.closeConfirm());
 
@@ -811,25 +926,13 @@ const App = {
     if (!email) { errorEl.textContent = 'Please enter your email address.'; return; }
     errorEl.textContent = '';
 
-    const { data: approved, error: approvedError } = await this.sb
-      .from('approved_users')
-      .select('*')
-      .eq('email', email)
-      .eq('active', true)
-      .maybeSingle();
-
-    if (approvedError || !approved) {
-      errorEl.textContent = 'This email address is not approved for access.';
-      return;
-    }
-
     const { error } = await this.sb.auth.signInWithOtp({
       email,
       options: {
         shouldCreateUser: true,
         // Dynamic — always returns the user to whichever URL the app is
         // currently served from (production, staging, or localhost).
-        emailRedirectTo: 'https://wehohumanservices.github.io/HollowayProgramReporting/'
+        emailRedirectTo: window.location.origin + window.location.pathname
       }
     });
 
@@ -928,13 +1031,16 @@ const App = {
   async loadAll() {
     const pid = this.program.id;
 
-    const [reports, rosters, bundles, exits, approved, activity] = await Promise.all([
+    const [reports, rosters, bundles, exits, approved, activity, clients, clientServices, clientUpdates] = await Promise.all([
       this.sb.from('quarterly_reports').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear),
       this.sb.from('client_rosters').select('*', { count: 'exact' }).eq('program_id', pid).eq('fiscal_year', this.fiscalYear).range(this.rosterPage * CONFIG.ROSTER_PAGE_SIZE, (this.rosterPage + 1) * CONFIG.ROSTER_PAGE_SIZE - 1),
       this.sb.from('submission_bundles').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('quarter'),
       this.sb.from('non_permanent_exits').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('quarter').order('exit_number'),
       this.isAdmin() ? this.sb.from('approved_users').select('*').order('email') : Promise.resolve({data:[]}),
-      this.sb.from('bundle_status_log').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('created_at', { ascending: false }).then(r => r).catch(() => ({data:[]}))
+      this.sb.from('bundle_status_log').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('created_at', { ascending: false }).then(r => r).catch(() => ({data:[]})),
+      this.sb.from('holloway_clients').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('entry_date', { ascending: false }).then(r => r).catch(err => ({data:[], error:err})),
+      this.sb.from('holloway_client_services').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('service_date', { ascending: false }).then(r => r).catch(err => ({data:[], error:err})),
+      this.sb.from('holloway_client_quarterly_updates').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).then(r => r).catch(err => ({data:[], error:err}))
     ]);
 
     if (reports.error) console.warn('reports', reports.error);
@@ -949,6 +1055,9 @@ const App = {
     this.data.exits = exits.data || [];
     this.data.approvedUsers = approved.data || [];
     this.data.activity = activity.data || [];
+    this.data.clients = clients?.data || [];
+    this.data.clientServices = clientServices?.data || [];
+    this.data.clientUpdates = clientUpdates?.data || [];
 
     await this.ensureBundlesExist();
   },
@@ -1001,6 +1110,10 @@ const App = {
     document.querySelectorAll('.sidebar-item[data-view]').forEach(i => i.classList.toggle('active', i.dataset.view === view));
     if (view === 'dashboard') this.renderDashboard();
     if (view === 'quarter') this.renderQuarterDetail();
+    if (view === 'clients') this.renderClients();
+    if (view === 'residents') this.renderCurrentResidents();
+    if (view === 'services') this.renderServices();
+    if (view === 'client-exits') this.renderClientExits();
     if (view === 'admin-review') this.renderAdminReview();
     if (view === 'access') this.renderAccessManagement();
   },
@@ -1078,6 +1191,83 @@ const App = {
     chip.textContent = days >= 0 ? `${q} due in ${days} day${days===1?'':'s'}` : `${q} overdue`;
   },
 
+
+  // ---------- Client-based reporting model ----------
+  qRange(q=this.currentQuarter) {
+    const map = { Q1:['2025-10-01','2025-12-31'], Q2:['2026-01-01','2026-03-31'], Q3:['2026-04-01','2026-06-30'], Q4:['2026-07-01','2026-09-30'] };
+    return { start: map[q]?.[0] || '2025-10-01', end: map[q]?.[1] || '2026-09-30', label: this.quarters[q]?.period || '' };
+  },
+  dateOnly(v){ return v ? String(v).slice(0,10) : ''; },
+  dateMax(a,b){ return a > b ? a : b; },
+  dateMin(a,b){ return a < b ? a : b; },
+  daysInclusive(start,end){ if(!start||!end) return 0; const a=new Date(start+'T00:00:00'), b=new Date(end+'T00:00:00'); return Math.max(0, Math.floor((b-a)/86400000)+1); },
+  clientName(c) { return this.isAdmin() ? 'Agency-visible only' : (c.client_name || '—'); },
+  clientStatus(c, onDate=null) { const today = onDate || new Date().toISOString().slice(0,10); if (c.exit_date && this.dateOnly(c.exit_date) <= today) return 'Exited'; if (c.entry_date && this.dateOnly(c.entry_date) <= today) return 'Active'; return 'Pending'; },
+  clientOverlaps(c,start,end) { const entry=this.dateOnly(c.entry_date); if(!entry) return false; const exit=this.dateOnly(c.exit_date) || end; return entry <= end && exit >= start; },
+  clientBedNights(c,start,end) { if(!this.clientOverlaps(c,start,end)) return 0; const s=this.dateMax(this.dateOnly(c.entry_date), start); const e=this.dateMin(this.dateOnly(c.exit_date)||end, end); return this.daysInclusive(s,e); },
+  exitDestinationOptions() { return [
+    'Permanent Housing - Rental Housing with Client Lease',
+    'Permanent Housing - Rental Housing with Subsidy',
+    'Permanent Supportive Housing',
+    'Homeownership',
+    'Permanent Reunification - Documented Housing',
+    'Temporary / Interim Housing',
+    'Emergency Shelter',
+    'Institutional Setting',
+    'Hotel / Motel',
+    'Returned to Homelessness',
+    'Moved in with Family/Friends - No Lease',
+    'Moved in with Spouse/Partner - No Lease',
+    'Unknown / Left Program',
+    'Other Non-Permanent Exit'
+  ]; },
+  exitReasonOptions() { return ['Successful housing placement','Family reunification','Partner / spouse reunification','Client choice','Program rule violation','Incarceration','Hospitalization','Deceased','Unknown / lost contact','Other']; },
+  isPermanentExit(c) { const t=String(c.exit_destination_type||'').toLowerCase(); return t.includes('permanent') || t.includes('lease') || t.includes('supportive housing') || t.includes('homeownership'); },
+  isPositiveNonPermanentExit(c) { const t=String(c.exit_destination_type||'').toLowerCase(); return t.includes('family/friends') || t.includes('spouse/partner'); },
+  exitStability(c) {
+    if (c.exit_housing_stability) return c.exit_housing_stability;
+    const t=String(c.exit_destination_type||'').toLowerCase();
+    if (this.isPermanentExit(c)) return 'Stable';
+    if (this.isPositiveNonPermanentExit(c)) return 'Potentially Stable';
+    if (t.includes('temporary') || t.includes('shelter') || t.includes('institutional') || t.includes('hotel')) return 'Temporary';
+    if (t.includes('homeless') || t.includes('unknown')) return 'Unstable';
+    return c.exit_date ? 'Unspecified' : '';
+  },
+  exitOutcomeBand(c) {
+    if (this.isPermanentExit(c)) return 'Permanent Housing';
+    if (this.isPositiveNonPermanentExit(c)) return 'Positive Non-Permanent';
+    const st=this.exitStability(c);
+    if (st==='Temporary') return 'Temporary / Institutional';
+    if (st==='Unstable') return 'Unstable / Unknown';
+    return c.exit_date ? 'Other Non-Permanent' : '';
+  },
+  clientMetrics(q=this.currentQuarter) { const {start,end}=this.qRange(q); const clients=this.data.clients||[]; const served=clients.filter(c=>this.clientOverlaps(c,start,end)); const activeAtEnd=clients.filter(c=>this.clientStatus(c,end)==='Active'); const intakes=clients.filter(c=>this.dateOnly(c.entry_date)>=start && this.dateOnly(c.entry_date)<=end); const exits=clients.filter(c=>this.dateOnly(c.exit_date)>=start && this.dateOnly(c.exit_date)<=end); const phExits=exits.filter(c=>this.isPermanentExit(c)); const positiveNonPermanent=exits.filter(c=>this.isPositiveNonPermanentExit(c)); const occupied=clients.reduce((sum,c)=>sum+this.clientBedNights(c,start,end),0); const available=20*this.daysInclusive(start,end); const losVals=served.map(c=>this.clientBedNights(c, this.dateOnly(c.entry_date), this.dateOnly(c.exit_date)||end)).filter(v=>v>0); const avgLos=losVals.length ? Math.round(losVals.reduce((a,b)=>a+b,0)/losVals.length) : 0; const services=(this.data.clientServices||[]).filter(s=>this.dateOnly(s.service_date)>=start && this.dateOnly(s.service_date)<=end); return {served, activeAtEnd, intakes, exits, phExits, positiveNonPermanent, occupied, available, avgLos, services}; },
+  generatedScopeFromClients(q=this.currentQuarter) { const m=this.clientMetrics(q); return { activeResidents:m.activeAtEnd.length, residentsServed:m.served.length, unduplicatedYTD:this.ytdClientsServed(q).length, newIntakes:m.intakes.length, bedNightsAvail:m.available, bedNightsOcc:m.occupied, phExits:m.phExits.length, avgDaysToPH:m.avgLos, suppServicesEngaged:new Set(m.services.map(s=>s.client_id)).size, incomeIncrease:this.countQuarterUpdates(q,'income_change','Increased'), incomeMaintained:this.countQuarterUpdates(q,'income_change','Maintained'), satSatisfied:0, satTotal:0, exitsTemp:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Temporary') || String(c.exit_destination_type||'').includes('Emergency Shelter') || String(c.exit_destination_type||'').includes('Hotel')).length, exitsInstitutional:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Institutional')).length, exitsHomeless:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Homeless')).length, exitsUnknown:m.exits.filter(c=>!c.exit_destination_type || String(c.exit_destination_type||'').includes('Unknown')).length, exitsFamilyFriends:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Family/Friends')).length, exitsPartner:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Spouse/Partner')).length, positiveNonPermanent:m.positiveNonPermanent.length }; },
+  outcomeSummary(q=this.currentQuarter) { const exits=this.clientMetrics(q).exits; const labels=['Permanent Housing','Positive Non-Permanent','Temporary / Institutional','Unstable / Unknown','Other Non-Permanent']; const stability=['Stable','Potentially Stable','Temporary','Unstable','Unspecified']; const byBand=Object.fromEntries(labels.map(x=>[x,0])); const byStability=Object.fromEntries(stability.map(x=>[x,0])); exits.forEach(c=>{ const b=this.exitOutcomeBand(c)||'Other Non-Permanent'; byBand[b]=(byBand[b]||0)+1; const st=this.exitStability(c)||'Unspecified'; byStability[st]=(byStability[st]||0)+1; }); return {exits, byBand, byStability}; },
+  renderOutcomeSummary(q=this.currentQuarter) { const o=this.outcomeSummary(q); const bands=Object.entries(o.byBand).map(([k,v])=>`<tr><td>${this.escape(k)}</td><td style="text-align:right;font-weight:800;">${v}</td></tr>`).join(''); const st=Object.entries(o.byStability).map(([k,v])=>`<tr><td>${this.escape(k)}</td><td style="text-align:right;font-weight:800;">${v}</td></tr>`).join(''); return `<div class="card" style="margin-top:16px;"><div class="card-header"><div class="card-title">Housing Outcomes</div></div><div class="card-body"><p class="field-hint" style="margin-bottom:12px;">Permanent housing remains the official contract outcome. Positive non-permanent exits, such as moving in with family or a partner without a lease, are tracked separately.</p><div class="content-grid" style="grid-template-columns:1fr 1fr;"><table class="svc-table"><thead><tr><th>Outcome Band</th><th>Count</th></tr></thead><tbody>${bands}</tbody></table><table class="svc-table"><thead><tr><th>Expected Stability</th><th>Count</th></tr></thead><tbody>${st}</tbody></table></div></div></div>`; },
+  ytdClientsServed(q=this.currentQuarter) { const order=['Q1','Q2','Q3','Q4']; const idx=Math.max(0,order.indexOf(q)); const end=this.qRange(order[idx]).end; return (this.data.clients||[]).filter(c=>this.dateOnly(c.entry_date)<=end && (!this.dateOnly(c.exit_date) || this.dateOnly(c.exit_date)>='2025-10-01')); },
+  countQuarterUpdates(q,field,value){ return (this.data.clientUpdates||[]).filter(u=>u.quarter===q && String(u[field]||'')===value).length; },
+  clientOptionList(selected='') { return (this.data.clients||[]).map(c=>`<option value="${this.escape(c.id)}" ${c.id===selected?'selected':''}>${this.escape(c.agency_client_id||c.id)}${this.isAdmin()?'':' · '+this.escape(c.client_name||'')}</option>`).join(''); },
+
+  renderClients() { const el=document.getElementById('view-clients'); const rows=(this.data.clients||[]).map(c=>`<tr><td><strong>${this.escape(c.agency_client_id||'—')}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.statusBadge(this.clientStatus(c).toLowerCase())}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.formatDate(c.exit_date)}</td><td>${this.escape(c.room_number||'—')}</td><td>${this.escape(c.exit_destination||'—')}</td><td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button><button class="btn btn-ghost btn-sm" data-add-service="${c.id}">Add Service</button></div></td></tr>`).join('') || '<tr><td colspan="8" class="field-hint" style="text-align:center;padding:24px;">No client records entered yet.</td></tr>'; el.innerHTML=`<div class="page-header"><div><div class="page-title">Clients</div><div class="page-subtitle">Client-level source records. Agency names are hidden from City/admin reporting views.</div></div><button class="btn btn-gold" id="btn-new-client">+ Add Client</button></div><div class="notice navy"><div>🔒</div><div><strong>Privacy design:</strong> City-facing summaries use Agency Client ID. Client name is intended for agency use only and should not appear in generated City reports.</div></div><div class="client-table-wrap"><table class="client-table"><thead><tr><th>Agency Client ID</th><th>Name</th><th>Status</th><th>Entry</th><th>Exit</th><th>Room</th><th>Exit Destination</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`; el.querySelector('#btn-new-client').addEventListener('click',()=>this.openClientForm()); el.querySelectorAll('[data-edit-client]').forEach(b=>b.addEventListener('click',()=>this.openClientForm(b.dataset.editClient))); el.querySelectorAll('[data-add-service]').forEach(b=>b.addEventListener('click',()=>this.openServiceForm(null,b.dataset.addService))); },
+
+  renderCurrentResidents() { const el=document.getElementById('view-residents'); const active=(this.data.clients||[]).filter(c=>this.clientStatus(c)==='Active'); const byRoom=new Map(active.map(c=>[String(c.room_number||'Unassigned'),c])); const rooms=[]; for(let i=1;i<=20;i++){ const rn=String(i).padStart(2,'0'); const c=byRoom.get(rn)||byRoom.get(String(i)); rooms.push(`<div class="room-card ${c?'occupied':'vacant'}"><div class="room-num">Room ${rn}</div>${c?`<div class="room-name">${this.escape(this.isAdmin() ? (c.agency_client_id||'Client') : (c.client_name||c.agency_client_id||'Client'))}</div><div class="room-meta">ID: ${this.escape(c.agency_client_id||'—')}<br>LOS: ${this.daysInclusive(this.dateOnly(c.entry_date), new Date().toISOString().slice(0,10))} days<br>Housing plan: ${this.escape(c.housing_plan_status||'—')}</div>`:`<div class="room-name">Vacant</div><div class="room-meta">Available for admission</div>`}</div>`); } el.innerHTML=`<div class="page-header"><div><div class="page-title">Current Residents</div><div class="page-subtitle">Live census and 20-room occupancy board.</div></div><button class="btn btn-ghost btn-sm" id="btn-print-residents">Print / Save PDF</button></div><div class="kpi-row"><div class="kpi-card green"><div class="kpi-label">Current Occupancy</div><div class="kpi-value">${active.length}/20</div><div class="kpi-sub">${this.percent(active.length,20)} occupied</div></div><div class="kpi-card gold"><div class="kpi-label">Vacant Rooms</div><div class="kpi-value">${20-active.length}</div><div class="kpi-sub">Based on active client records</div></div><div class="kpi-card"><div class="kpi-label">Average LOS</div><div class="kpi-value">${this.clientMetrics().avgLos}</div><div class="kpi-sub">Days among served clients</div></div><div class="kpi-card amber"><div class="kpi-label">Pending / Upcoming Exits</div><div class="kpi-value">${active.filter(c=>c.expected_exit_date).length}</div><div class="kpi-sub">Expected exit date recorded</div></div></div><div class="room-board">${rooms.join('')}</div>`;
+    el.querySelector('#btn-print-residents').addEventListener('click', () => this.printReport(this.currentQuarter));
+  },
+
+  renderServices() { const el=document.getElementById('view-services'); const q=this.currentQuarter; const {start,end}=this.qRange(q); const services=(this.data.clientServices||[]).filter(s=>this.dateOnly(s.service_date)>=start && this.dateOnly(s.service_date)<=end); const clientMap=new Map((this.data.clients||[]).map(c=>[c.id,c])); const rows=services.map(s=>{const c=clientMap.get(s.client_id)||{};return `<tr><td>${this.formatDate(s.service_date)}</td><td>${this.escape(c.agency_client_id||'—')}</td><td>${this.escape(this.isAdmin()?'Agency-visible only':(c.client_name||'—'))}</td><td>${this.escape(s.service_type||'—')}</td><td>${s.duration_minutes||0}</td><td>${this.escape(s.staff_name||'—')}</td><td>${this.escape(s.notes||'')}</td></tr>`}).join('') || '<tr><td colspan="7" class="field-hint" style="text-align:center;padding:24px;">No services entered for this quarter.</td></tr>'; const byType={}; services.forEach(s=>{byType[s.service_type||'Other']=(byType[s.service_type||'Other']||0)+1}); el.innerHTML=`<div class="page-header"><div><div class="page-title">Services</div><div class="page-subtitle">Individual service contacts generate service tallies automatically.</div></div><button class="btn btn-gold" id="btn-new-service">+ Add Service</button></div>${this.renderQuarterButtons()}<div class="generated-metric-grid"><div class="generated-metric"><div class="label">Service Contacts</div><div class="value">${services.length}</div></div><div class="generated-metric"><div class="label">Clients Engaged</div><div class="value">${new Set(services.map(s=>s.client_id)).size}</div></div><div class="generated-metric"><div class="label">Minutes</div><div class="value">${services.reduce((a,b)=>a+Number(b.duration_minutes||0),0)}</div></div><div class="generated-metric"><div class="label">Service Types</div><div class="value">${Object.keys(byType).length}</div></div></div><div class="client-table-wrap"><table class="client-table"><thead><tr><th>Date</th><th>Client ID</th><th>Name</th><th>Service Type</th><th>Minutes</th><th>Staff</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table></div>`; this.bindQuarterButtons(el); el.querySelector('#btn-new-service').addEventListener('click',()=>this.openServiceForm()); },
+
+  renderClientExits() { const el=document.getElementById('view-client-exits'); const exits=(this.data.clients||[]).filter(c=>c.exit_date); const rows=exits.map(c=>`<tr><td><strong>${this.escape(c.agency_client_id||'—')}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.formatDate(c.exit_date)}</td><td>${this.escape(c.exit_destination_type||'—')}</td><td>${this.escape(this.exitOutcomeBand(c)||'—')}</td><td>${this.escape(this.exitStability(c)||'—')}</td><td>${this.escape(c.exit_expected_90_days||'—')}</td><td>${this.escape(c.housing_goal_achieved||'—')}</td><td><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button></td></tr>`).join('') || '<tr><td colspan="10" class="field-hint" style="text-align:center;padding:24px;">No client exits recorded yet.</td></tr>'; el.innerHTML=`<div class="page-header"><div><div class="page-title">Exits</div><div class="page-subtitle">Exit detail is part of the client record. Non-permanent positive outcomes are tracked separately from permanent housing.</div></div></div>${this.renderOutcomeSummary(this.currentQuarter)}<div class="client-table-wrap" style="margin-top:16px;"><table class="client-table"><thead><tr><th>Client ID</th><th>Name</th><th>Entry</th><th>Exit</th><th>Destination</th><th>Outcome Band</th><th>Stability</th><th>90-Day Expected</th><th>Goal Achieved</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`; el.querySelectorAll('[data-edit-client]').forEach(b=>b.addEventListener('click',()=>this.openClientForm(b.dataset.editClient))); },
+
+  openClientForm(id=null) { this.currentClientId=id; const c=id ? (this.data.clients||[]).find(x=>x.id===id) || {} : {}; const opt=(arr,val)=>arr.map(x=>`<option ${val===x?'selected':''}>${this.escape(x)}</option>`).join(''); document.getElementById('client-title').textContent = id ? `Client Record · ${this.escape(c.agency_client_id||'')}` : 'Add Client'; document.getElementById('client-body').innerHTML=`<div class="form-section"><div class="form-section-title">Client Identity</div><div class="client-form-grid"><div class="field-group"><label class="field-label required">Agency Client ID</label><input id="cf-agency-client-id" class="field-input" value="${this.escape(c.agency_client_id||'')}"></div><div class="field-group"><label class="field-label">Client Name <span class="field-hint">agency only</span></label><input id="cf-client-name" class="field-input" value="${this.escape(c.client_name||'')}"></div><div class="field-group"><label class="field-label required">Entry Date</label><input id="cf-entry-date" type="date" class="field-input" value="${this.dateOnly(c.entry_date)}"></div><div class="field-group"><label class="field-label">Room Number</label><input id="cf-room-number" class="field-input" value="${this.escape(c.room_number||'')}"></div></div></div><div class="form-section"><div class="form-section-title">Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Age</label><input id="cf-age" type="number" class="field-input" value="${c.age||''}"></div><div class="field-group"><label class="field-label">Gender</label><input id="cf-gender" class="field-input" value="${this.escape(c.gender||'')}"></div><div class="field-group"><label class="field-label">Race / Ethnicity</label><input id="cf-race" class="field-input" value="${this.escape(c.race_ethnicity||'')}"></div><div class="field-group"><label class="field-label">Veteran</label><select id="cf-veteran" class="field-select"><option></option><option ${c.veteran==='Yes'?'selected':''}>Yes</option><option ${c.veteran==='No'?'selected':''}>No</option></select></div><div class="field-group"><label class="field-label">Disability</label><select id="cf-disability" class="field-select"><option></option><option ${c.disability==='Yes'?'selected':''}>Yes</option><option ${c.disability==='No'?'selected':''}>No</option></select></div><div class="field-group"><label class="field-label">Income at Entry</label><input id="cf-income-entry" type="number" class="field-input" value="${c.income_at_entry||''}"></div></div></div><div class="form-section"><div class="form-section-title">Housing Plan</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Housing Plan Status</label><input id="cf-housing-plan" class="field-input" value="${this.escape(c.housing_plan_status||'')}"></div><div class="field-group"><label class="field-label">Expected Exit Date</label><input id="cf-expected-exit" type="date" class="field-input" value="${this.dateOnly(c.expected_exit_date)}"></div></div></div><div class="form-section"><div class="form-section-title">Exit Assessment</div><p class="field-hint" style="margin-bottom:12px;">Permanent housing requires a lease or other documentation. Family/friends and partner/spouse no-lease exits are tracked as positive non-permanent outcomes.</p><div class="client-form-grid"><div class="field-group"><label class="field-label">Exit Date</label><input id="cf-exit-date" type="date" class="field-input" value="${this.dateOnly(c.exit_date)}"></div><div class="field-group"><label class="field-label">Exit Destination</label><select id="cf-exit-type" class="field-select"><option></option>${opt(this.exitDestinationOptions(), c.exit_destination_type)}</select></div><div class="field-group"><label class="field-label">Specific Destination / Notes</label><input id="cf-exit-destination" class="field-input" value="${this.escape(c.exit_destination||'')}"></div><div class="field-group"><label class="field-label">Expected Housing Stability</label><select id="cf-exit-stability" class="field-select"><option></option>${opt(['Stable','Potentially Stable','Temporary','Unstable','Unknown'], c.exit_housing_stability)}</select></div><div class="field-group"><label class="field-label">Expected Stable ≥90 Days?</label><select id="cf-exit-90" class="field-select"><option></option>${opt(['Yes','No','Unknown'], c.exit_expected_90_days)}</select></div><div class="field-group"><label class="field-label">Housing Goal Achieved?</label><select id="cf-goal-achieved" class="field-select"><option></option>${opt(['Yes','Partially','No','Goal changed during stay','Unknown'], c.housing_goal_achieved)}</select></div><div class="field-group"><label class="field-label">Reason for Exit</label><select id="cf-exit-reason" class="field-select"><option></option>${opt(this.exitReasonOptions(), c.exit_reason)}</select></div><div class="field-group"><label class="field-label">Follow-up Planned?</label><select id="cf-follow-up" class="field-select"><option></option>${opt(['Yes','No','Unknown'], c.follow_up_planned)}</select></div><div class="field-group full"><label class="field-label">Exit Case Notes</label><textarea id="cf-exit-notes" class="field-textarea">${this.escape(c.exit_notes||'')}</textarea></div></div></div>`; this.openOverlay('client'); },
+
+  async saveClient() { const id=this.currentClientId || (crypto.randomUUID ? crypto.randomUUID() : 'client_'+Date.now()); const payload={ id, program_id:this.program.id, fiscal_year:this.fiscalYear, agency_client_id:document.getElementById('cf-agency-client-id').value.trim(), client_name:document.getElementById('cf-client-name').value.trim(), entry_date:document.getElementById('cf-entry-date').value || null, room_number:document.getElementById('cf-room-number').value.trim() || null, age:Number(document.getElementById('cf-age').value||0)||null, gender:document.getElementById('cf-gender').value.trim()||null, race_ethnicity:document.getElementById('cf-race').value.trim()||null, veteran:document.getElementById('cf-veteran').value||null, disability:document.getElementById('cf-disability').value||null, income_at_entry:Number(document.getElementById('cf-income-entry').value||0)||null, housing_plan_status:document.getElementById('cf-housing-plan').value.trim()||null, expected_exit_date:document.getElementById('cf-expected-exit').value||null, exit_date:document.getElementById('cf-exit-date').value||null, exit_destination_type:document.getElementById('cf-exit-type').value||null, exit_destination:document.getElementById('cf-exit-destination').value.trim()||null, exit_housing_stability:document.getElementById('cf-exit-stability').value||null, exit_expected_90_days:document.getElementById('cf-exit-90').value||null, housing_goal_achieved:document.getElementById('cf-goal-achieved').value||null, exit_reason:document.getElementById('cf-exit-reason').value||null, follow_up_planned:document.getElementById('cf-follow-up').value||null, exit_notes:document.getElementById('cf-exit-notes').value.trim()||null, updated_by:this.user?.email||null, updated_at:new Date().toISOString() }; if(!payload.agency_client_id || !payload.entry_date){ document.getElementById('client-save-state').textContent='Agency Client ID and Entry Date are required.'; return; } const {error}=await this.sb.from('holloway_clients').upsert(payload,{onConflict:'id'}); if(error){ document.getElementById('client-save-state').textContent='Save failed: '+error.message; return; } document.getElementById('client-save-state').textContent='Saved.'; await this.loadAll(); this.closeForm('client'); this.showView(this.view||'clients'); },
+
+  openServiceForm(id=null,clientId=null) { this.currentServiceId=id; const s=id ? (this.data.clientServices||[]).find(x=>x.id===id)||{} : {client_id:clientId||''}; document.getElementById('service-body').innerHTML=`<div class="form-section"><div class="form-section-title">Service Contact</div><div class="client-form-grid"><div class="field-group full"><label class="field-label required">Client</label><select id="sf-client" class="field-select">${this.clientOptionList(s.client_id)}</select></div><div class="field-group"><label class="field-label required">Service Date</label><input id="sf-date" type="date" class="field-input" value="${this.dateOnly(s.service_date) || new Date().toISOString().slice(0,10)}"></div><div class="field-group"><label class="field-label required">Service Type</label><select id="sf-type" class="field-select">${['Case Management','Housing Navigation','Benefits Assistance','Mental Health Referral','Medical Coordination','Employment Support','Life Skills','Landlord Coordination','Document Readiness','Other'].map(x=>`<option ${s.service_type===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field-group"><label class="field-label">Duration Minutes</label><input id="sf-minutes" type="number" class="field-input" value="${s.duration_minutes||30}"></div><div class="field-group"><label class="field-label">Staff</label><input id="sf-staff" class="field-input" value="${this.escape(s.staff_name||'')}"></div><div class="field-group full"><label class="field-label">Notes</label><textarea id="sf-notes" class="field-textarea">${this.escape(s.notes||'')}</textarea></div></div></div>`; this.openOverlay('service'); },
+
+  async saveService() { const id=this.currentServiceId || (crypto.randomUUID ? crypto.randomUUID() : 'svc_'+Date.now()); const payload={id, program_id:this.program.id, fiscal_year:this.fiscalYear, client_id:document.getElementById('sf-client').value, service_date:document.getElementById('sf-date').value||null, service_type:document.getElementById('sf-type').value||null, duration_minutes:Number(document.getElementById('sf-minutes').value||0)||0, staff_name:document.getElementById('sf-staff').value.trim()||null, notes:document.getElementById('sf-notes').value.trim()||null, updated_by:this.user?.email||null, updated_at:new Date().toISOString()}; const {error}=await this.sb.from('holloway_client_services').upsert(payload,{onConflict:'id'}); if(error){ document.getElementById('service-save-state').textContent='Save failed: '+error.message; return; } document.getElementById('service-save-state').textContent='Saved.'; await this.loadAll(); this.closeForm('service'); this.showView(this.view||'services'); },
+  openOverlay(name){ const m=document.getElementById('modal-'+name); if(m) m.classList.add('open'); },
+
   renderDashboard() {
     const el = document.getElementById('view-dashboard');
     const q = this.currentQuarter;
@@ -1094,7 +1284,7 @@ const App = {
       ${this.renderQuarterContext(q)}
       <div class="kpi-row">${this.renderKpis(q)}</div>
       <div class="content-grid">
-        <div>${this.renderReadinessPanel(q)}</div>
+        <div>${this.renderReadinessPanel(q)}${this.renderOutcomeSummary(q)}</div>
         <div>${this.renderGoalProgress(q)}${this.renderDataCheckPanel(q)}${this.renderActivityLog(q)}</div>
       </div>`;
     this.bindQuarterButtons(el);
@@ -1107,7 +1297,7 @@ const App = {
 
   renderQuarterContext(q) {
     const report = this.data.reports[q] || {};
-    const scope = this.reportScope(q);
+    const scope = (this.data.clients||[]).length ? this.generatedScopeFromClients(q) : this.reportScope(q);
     return `<div class="notice navy">
       <div aria-hidden="true">📌</div>
       <div><strong>${q} · ${this.quarters[q].period}</strong><br>
@@ -1119,8 +1309,8 @@ const App = {
 
   renderKpis(q) {
     const r = this.data.reports[q] || {};
-    const s = this.reportScope(q);
-    const ytd = r.persons_ytd ?? this.calcPersonsYtd(q);
+    const s = (this.data.clients||[]).length ? this.generatedScopeFromClients(q) : this.reportScope(q);
+    const ytd = (this.data.clients||[]).length ? s.unduplicatedYTD : (r.persons_ytd ?? this.calcPersonsYtd(q));
     return [
       ['Persons Served', ytd ?? '—', `${r.persons_quarter ?? '—'} this quarter`, 'gold'],
       ['Occupancy', this.percent(s.bedNightsOcc, s.bedNightsAvail), `${s.bedNightsOcc ?? '—'} / ${s.bedNightsAvail ?? '—'} bed nights`, 'green'],
@@ -1461,8 +1651,8 @@ const App = {
     const notes = document.getElementById('admin-review-notes')?.value || '';
     const b = await this.ensureBundle(q);
     const { error } = await this.sb.from('submission_bundles').update({ city_review_notes: notes }).eq('id', b.id);
-    if (error) alert(error.message);
-    else { await this.loadAll(); this.renderQuarterDetail(); }
+    if (error) { this.toast('Save failed: ' + error.message, { error:true }); return; }
+    await this.loadAll(); this.renderQuarterDetail();
   },
 
   async updateBundleStatus(q, status, incrementRevision=false) {
@@ -1481,7 +1671,7 @@ const App = {
       payload.revision_count = (b.revision_count || 0) + (incrementRevision ? 1 : 0);
     }
     const { error } = await this.sb.from('submission_bundles').update(payload).eq('id', b.id);
-    if (error) { alert(error.message); return; }
+    if (error) { this.toast(error.message, { error:true }); return; }
     await this.logStatus(q, status, notes);
     await this.loadAll();
     this.showView(this.view);
@@ -2119,7 +2309,7 @@ const App = {
     if (file) {
       const path = `${this.program.id}/${q}/${Date.now()}-${file.name}`;
       const upload = await this.sb.storage.from('hmis-rosters').upload(path, file, { upsert:true });
-      if (upload.error) { this.setSaveState('roster','Upload failed'); alert(upload.error.message); return; }
+      if (upload.error) { this.setSaveState('roster','Upload failed'); this.toast('Upload failed: ' + upload.error.message, { error:true }); return; }
       file_path = path; file_name = file.name;
     }
     const payload = {
@@ -2130,7 +2320,7 @@ const App = {
       notes:this.val('roster-notes'), status:'uploaded', uploaded_by:this.profile.id
     };
     const { data, error } = await this.sb.from('client_rosters').upsert(payload, { onConflict:'program_id,quarter,fiscal_year' }).select().single();
-    if (error) { this.setSaveState('roster','Save failed'); alert(error.message); return; }
+    if (error) { this.setSaveState('roster','Save failed'); this.toast('Save failed: ' + error.message, { error:true }); return; }
     this.data.rosters[q] = data;
     this.dirty.roster = false;
     this.lastSavedAt = Date.now();
@@ -2189,7 +2379,7 @@ const App = {
       ? { bundle_status:'resubmitted', city_review_status:'resubmitted', resubmitted_at: now }
       : { bundle_status:'submitted',   city_review_status:'submitted',   submitted_at:   now };
     const { error } = await this.sb.from('submission_bundles').update(patch).eq('id', this.data.bundles[q].id);
-    if (error) { alert('Could not submit bundle: ' + error.message); return false; }
+    if (error) { this.toast('Could not submit bundle: ' + error.message, { error:true }); return false; }
     await this.logStatus(q, patch.bundle_status, isResubmit ? 'Resubmitted after revision request' : 'Quarter submitted to City');
     await this.loadAll();
     this.showView(this.view);
@@ -2202,7 +2392,7 @@ const App = {
     if (errors.length) { this.showErrorChip(errors.length); this.scrollToFirstError(); return; }
     await this.saveQuarterly('manual');
     const { error } = await this.sb.from('quarterly_reports').update({ status:'submitted', submitted_at:new Date().toISOString(), submitted_by:this.profile.id }).eq('program_id',this.program.id).eq('quarter',this.currentQuarter).eq('fiscal_year',this.fiscalYear);
-    if (error) { alert(error.message); return; }
+    if (error) { this.toast(error.message, { error:true }); return; }
     // Delegate bundle-status write to submitBundle so the resubmit branch
     // and error handling stay in one place.
     const ok = await this.submitBundle(this.currentQuarter);
@@ -2510,8 +2700,10 @@ const App = {
     const order = ['Q1','Q2','Q3','Q4'];
     return order.slice(0, order.indexOf(q)+1);
   },
-  calcPersonsYtd(q) {
-    return this.thruQuarters(q).reduce((sum, qq) => sum + Number(this.data.reports[qq]?.persons_quarter || 0), 0);
+  calcPersonsYtd(q, currentOverride=null) {
+    const prior = this.priorQuarters(q).reduce((sum, qq) => sum + Number(this.data.reports[qq]?.persons_quarter || 0), 0);
+    const current = currentOverride !== null ? Number(currentOverride || 0) : Number(this.data.reports[q]?.persons_quarter || 0);
+    return prior + current;
   },
   calcScopeYtd(q,key,currentOverride=null) {
     const prior = this.priorQuarters(q).reduce((sum,qq) => sum + Number(this.reportScope(qq)[key] || 0),0);
@@ -2584,8 +2776,7 @@ const App = {
     out['Asian/Pacific Islander'] += Number(obj['Asian or Asian American'] || 0);
     out['American Indian / Alaska Native'] += Number(obj['American Indian, Alaska Native, or Indigenous'] || 0);
     out['Middle Eastern / North African'] += Number(obj['Other (Middle Eastern/North African)'] || 0);
-    // Keep legacy "Other" as true standalone Other, not MENA.
-    out['Other'] += Number(obj['Other'] || 0);
+    // 'Other' is already set from ethnicityKeys above; no additional += needed.
     return out;
   },
   normalizeLanguage(obj) {
@@ -2603,6 +2794,145 @@ const App = {
   escape(s) { return (s ?? '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); },
   scopeLabel(k) { return k.replace(/([A-Z])/g,' $1').replace(/^./, c => c.toUpperCase()); }
 };
+
+
+
+// ---------- Usability + follow-up enhancements ----------
+(function(){
+  const oldLoadAll = App.loadAll;
+  App.loadAll = async function(){
+    await oldLoadAll.call(this);
+    if (!this.data) this.data = {};
+    const pid = this.program?.id;
+    if (!pid) { this.data.housingFollowUps = []; return; }
+    const { data, error } = await this.sb.from('holloway_housing_followups')
+      .select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear)
+      .order('due_date', { ascending: true });
+    if (error) { console.warn('housing followups', error); this.data.housingFollowUps = []; }
+    else this.data.housingFollowUps = data || [];
+  };
+
+  const oldShowView = App.showView;
+  App.showView = function(view){
+    oldShowView.call(this, view);
+    if (view === 'housing-followups') this.renderHousingFollowUps();
+  };
+
+  App.addMonthsDate = function(dateStr, months){ const d=new Date(dateStr+'T12:00:00'); d.setMonth(d.getMonth()+months); return d.toISOString().slice(0,10); };
+  App.today = function(){ return new Date().toISOString().slice(0,10); };
+  App.daysUntil = function(dateStr){ const a=new Date(this.today()+'T00:00:00'), b=new Date(dateStr+'T00:00:00'); return Math.ceil((b-a)/86400000); };
+  App.activeClientsNow = function(){ return (this.data.clients||[]).filter(c=>this.clientStatus(c)==='Active'); };
+  App.phExitClients = function(){ return (this.data.clients||[]).filter(c=>c.exit_date && this.isPermanentExit(c)); };
+  App.followUpKey = function(clientId, type){ return clientId+'::'+type; };
+  App.followUpsForClient = function(clientId){ return (this.data.housingFollowUps||[]).filter(f=>f.client_id===clientId); };
+  App.expectedFollowUps = function(){
+    const existing = new Map((this.data.housingFollowUps||[]).map(f=>[this.followUpKey(f.client_id,f.followup_type),f]));
+    const rows=[];
+    this.phExitClients().forEach(c=>{
+      [['6-month',6],['12-month',12]].forEach(([type,months])=>{
+        const key=this.followUpKey(c.id,type);
+        const row=existing.get(key) || { id:null, program_id:this.program.id, fiscal_year:this.fiscalYear, client_id:c.id, followup_type:type, due_date:this.addMonthsDate(this.dateOnly(c.exit_date),months), status:'due' };
+        rows.push({...row, client:c});
+      });
+    });
+    return rows.sort((a,b)=>String(a.due_date).localeCompare(String(b.due_date)));
+  };
+  App.followUpStatus = function(f){ if ((f.status||'').toLowerCase()==='completed') return 'complete'; const d=this.daysUntil(f.due_date); return d < 0 ? 'overdue' : 'due'; };
+  App.followUpLabel = function(f){ const st=this.followUpStatus(f); if(st==='complete') return 'Completed'; const d=this.daysUntil(f.due_date); if(d<0) return `${Math.abs(d)} days overdue`; if(d===0) return 'Due today'; return `Due in ${d} days`; };
+  App.followUpsDueSoon = function(days=30){ return this.expectedFollowUps().filter(f=>this.followUpStatus(f)!=='complete' && this.daysUntil(f.due_date)<=days); };
+
+  App.renderTodayPanel = function(q=this.currentQuarter){
+    const active=this.activeClientsNow();
+    const due=this.followUpsDueSoon(30);
+    const today=this.today();
+    const plannedExits=active.filter(c=>c.expected_exit_date && this.dateOnly(c.expected_exit_date)<=this.addMonthsDate(today,1));
+    const stalePlans=active.filter(c=>!c.housing_plan_status || String(c.housing_plan_status).toLowerCase().includes('not'));
+    const serviceClients=new Set((this.data.clientServices||[]).filter(s=>this.daysUntil(this.dateOnly(s.service_date))>=-7).map(s=>s.client_id));
+    const noRecent=active.filter(c=>!serviceClients.has(c.id));
+    const cards=[
+      ['Current Residents', active.length, 'Live census from client records'],
+      ['Follow-Ups Due', due.length, '6- and 12-month PH checks due in 30 days'],
+      ['Planned Exits', plannedExits.length, 'Expected exits within 30 days'],
+      ['Housing Plans Needed', stalePlans.length, 'Missing or not-started housing plans'],
+      ['No Service This Week', noRecent.length, 'Active clients with no service in last 7 days']
+    ];
+    return `<div class="card" style="margin-bottom:18px;"><div class="card-header"><div><div class="card-title">Today</div><div class="field-hint">Daily work queue for program staff. These items also improve quarter-end reporting readiness.</div></div><button class="btn btn-ghost btn-sm" data-view-shortcut="housing-followups">View Follow-Ups</button></div><div class="card-body"><div class="today-grid">${cards.map(c=>`<div class="today-card"><div class="label">${this.escape(c[0])}</div><div class="value">${c[1]}</div><div class="sub">${this.escape(c[2])}</div></div>`).join('')}</div>${this.renderQuarterReadinessChecklist(q)}</div></div>`;
+  };
+
+  App.renderQuarterReadinessChecklist = function(q=this.currentQuarter){
+    const {start,end}=this.qRange(q); const clients=this.data.clients||[];
+    const active=clients.filter(c=>this.clientStatus(c,end)==='Active');
+    const exits=clients.filter(c=>this.dateOnly(c.exit_date)>=start&&this.dateOnly(c.exit_date)<=end);
+    const svcs=(this.data.clientServices||[]).filter(s=>this.dateOnly(s.service_date)>=start&&this.dateOnly(s.service_date)<=end);
+    const narrative=(this.data.reports[q]?.narrative_text||'').trim();
+    const checks=[
+      ['Admissions entered', clients.some(c=>this.dateOnly(c.entry_date)>=start&&this.dateOnly(c.entry_date)<=end)],
+      ['Active residents have housing plan status', active.every(c=>!!c.housing_plan_status)],
+      ['Services recorded this quarter', svcs.length>0],
+      ['Exits include destination and stability', exits.every(c=>!!c.exit_destination_type && !!this.exitStability(c))],
+      ['Narrative completed', narrative.split(/\s+/).filter(Boolean).length>=100]
+    ];
+    const passed=checks.filter(x=>x[1]).length;
+    return `<div style="margin-top:10px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><strong>Quarter-End Readiness</strong><span class="badge badge-${passed===checks.length?'green':'amber'}">${passed} of ${checks.length} checks</span></div>${checks.map(([label,ok])=>`<div class="readiness-check"><span>${ok?'✓':'⚠'}</span><span>${this.escape(label)}</span></div>`).join('')}</div>`;
+  };
+
+  const oldRenderDashboard = App.renderDashboard;
+  App.renderDashboard = function(){
+    oldRenderDashboard.call(this);
+    const el=document.getElementById('view-dashboard');
+    const header=el.querySelector('.page-header');
+    if(header) header.insertAdjacentHTML('afterend', this.renderTodayPanel(this.currentQuarter));
+    el.querySelectorAll('[data-view-shortcut]').forEach(b=>b.addEventListener('click',()=>this.showView(b.dataset.viewShortcut)));
+  };
+
+  const oldRenderServices = App.renderServices;
+  App.renderServices = function(){
+    oldRenderServices.call(this);
+    const el=document.getElementById('view-services');
+    const header=el.querySelector('.page-header');
+    const quick=`<div class="card" style="margin-bottom:16px;"><div class="card-header"><div><div class="card-title">One-Click Service Entry</div><div class="field-hint">Choose a service type, then select the client. Today's date and 30 minutes are filled automatically.</div></div></div><div class="card-body"><div class="quick-service-bar">${['Case Management','Housing Navigation','Benefits Assistance','Document Readiness','Landlord Coordination','Mental Health Referral'].map(t=>`<button class="quick-chip" data-quick-service="${this.escape(t)}">+ ${this.escape(t)}</button>`).join('')}</div></div></div>`;
+    if(header) header.insertAdjacentHTML('afterend',quick);
+    el.querySelectorAll('[data-quick-service]').forEach(b=>b.addEventListener('click',()=>this.openServiceForm(null,null,b.dataset.quickService)));
+  };
+
+  const oldOpenServiceForm = App.openServiceForm;
+  App.openServiceForm = function(id=null,clientId=null,serviceType=null){
+    oldOpenServiceForm.call(this,id,clientId);
+    if(serviceType){ const type=document.getElementById('sf-type'); if(type) type.value=serviceType; const min=document.getElementById('sf-minutes'); if(min) min.value=30; }
+  };
+
+  App.renderHousingFollowUps = function(){
+    const el=document.getElementById('view-housing-followups');
+    const rows=this.expectedFollowUps();
+    const due=rows.filter(f=>this.followUpStatus(f)!=='complete');
+    const complete=rows.filter(f=>this.followUpStatus(f)==='complete');
+    const html=rows.map(f=>{const c=f.client||{}; const st=this.followUpStatus(f); return `<tr><td><strong>${this.escape(c.agency_client_id||'—')}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.escape(f.followup_type)}</td><td>${this.formatDate(f.due_date)}</td><td><span class="followup-status ${st}">${this.escape(this.followUpLabel(f))}</span></td><td>${this.escape(f.housing_status||'—')}</td><td>${this.formatDate(f.completed_date)}</td><td><button class="btn btn-ghost btn-sm" data-followup-client="${c.id}" data-followup-type="${this.escape(f.followup_type)}">${st==='complete'?'Edit':'Complete'}</button></td></tr>`}).join('') || '<tr><td colspan="8" style="text-align:center;padding:24px;" class="field-hint">No permanent housing follow-ups are currently expected.</td></tr>';
+    el.innerHTML=`<div class="page-header"><div><div class="page-title">Housing Follow-Ups</div><div class="page-subtitle">Track 6-month and 12-month housing status checks for clients placed in permanent housing.</div></div></div><div class="generated-metric-grid"><div class="generated-metric"><div class="label">Open Follow-Ups</div><div class="value">${due.length}</div></div><div class="generated-metric"><div class="label">Completed</div><div class="value">${complete.length}</div></div><div class="generated-metric"><div class="label">Overdue</div><div class="value">${rows.filter(f=>this.followUpStatus(f)==='overdue').length}</div></div><div class="generated-metric"><div class="label">PH Clients</div><div class="value">${this.phExitClients().length}</div></div></div><div class="notice navy"><div>🔁</div><div><strong>Purpose:</strong> after a client exits to documented permanent housing, staff should confirm housing status at 6 months and 12 months. This helps the City understand whether placements remain stable beyond the point of exit.</div></div><div class="client-table-wrap"><table class="client-table"><thead><tr><th>Client ID</th><th>Name</th><th>Follow-Up</th><th>Due Date</th><th>Status</th><th>Housing Status</th><th>Completed</th><th></th></tr></thead><tbody>${html}</tbody></table></div>`;
+    el.querySelectorAll('[data-followup-client]').forEach(b=>b.addEventListener('click',()=>this.openFollowUpForm(b.dataset.followupClient,b.dataset.followupType)));
+  };
+
+  App.openFollowUpForm = function(clientId,type){
+    this.currentFollowUp={clientId,type};
+    const c=(this.data.clients||[]).find(x=>x.id===clientId)||{};
+    const existing=(this.data.housingFollowUps||[]).find(f=>f.client_id===clientId && f.followup_type===type)||{};
+    const months=type==='12-month'?12:6;
+    const due=existing.due_date || this.addMonthsDate(this.dateOnly(c.exit_date), months);
+    document.getElementById('followup-title').textContent=`${type} Follow-Up · ${c.agency_client_id||''}`;
+    document.getElementById('followup-body').innerHTML=`<div class="form-section"><div class="form-section-title">Housing Status Check</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Client ID</label><input class="field-input" readonly value="${this.escape(c.agency_client_id||'')}"></div><div class="field-group"><label class="field-label">Due Date</label><input id="fu-due" type="date" class="field-input" value="${this.dateOnly(due)}"></div><div class="field-group"><label class="field-label required">Completed Date</label><input id="fu-completed" type="date" class="field-input" value="${this.dateOnly(existing.completed_date)||this.today()}"></div><div class="field-group"><label class="field-label required">Current Housing Status</label><select id="fu-status" class="field-select"><option></option>${['Still in permanent housing','Moved but still housed','Temporarily housed','Returned to homelessness','Unable to contact','Unknown'].map(x=>`<option ${existing.housing_status===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field-group"><label class="field-label">Stable at Follow-Up?</label><select id="fu-stable" class="field-select"><option></option>${['Yes','No','Unknown'].map(x=>`<option ${existing.stable_at_followup===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field-group"><label class="field-label">Follow-Up Method</label><select id="fu-method" class="field-select"><option></option>${['Phone','Text','Email','In person','HMIS/partner confirmation','Other'].map(x=>`<option ${existing.contact_method===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field-group full"><label class="field-label">Notes</label><textarea id="fu-notes" class="field-textarea">${this.escape(existing.notes||'')}</textarea></div></div></div>`;
+    this.openOverlay('followup');
+  };
+
+  App.saveFollowUp = async function(){
+    const cur=this.currentFollowUp||{}; const c=(this.data.clients||[]).find(x=>x.id===cur.clientId)||{};
+    const existing=(this.data.housingFollowUps||[]).find(f=>f.client_id===cur.clientId && f.followup_type===cur.type)||{};
+    const payload={ id: existing.id || (crypto.randomUUID?crypto.randomUUID():'fu_'+Date.now()), program_id:this.program.id, fiscal_year:this.fiscalYear, client_id:cur.clientId, followup_type:cur.type, due_date:document.getElementById('fu-due').value||null, completed_date:document.getElementById('fu-completed').value||null, housing_status:document.getElementById('fu-status').value||null, stable_at_followup:document.getElementById('fu-stable').value||null, contact_method:document.getElementById('fu-method').value||null, notes:document.getElementById('fu-notes').value.trim()||null, status:'completed', updated_by:this.user?.email||null, updated_at:new Date().toISOString() };
+    if(!payload.housing_status){ document.getElementById('followup-save-state').textContent='Housing status is required.'; return; }
+    const {error}=await this.sb.from('holloway_housing_followups').upsert(payload,{onConflict:'id'});
+    if(error){ document.getElementById('followup-save-state').textContent='Save failed: '+error.message; return; }
+    document.getElementById('followup-save-state').textContent='Saved.'; await this.loadAll(); this.closeForm('followup'); this.showView('housing-followups');
+  };
+})();
+
 
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
