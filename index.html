@@ -3405,6 +3405,8 @@ const App = {
 
     const payload={
       id,
+      // Supabase has a NOT NULL hmis_unique_id column; keep it aligned with the HMIS ID used as the record id.
+      hmis_unique_id:hmis,
       program_id:this.program.id,
       fiscal_year:this.fiscalYear,
       entry_date:document.getElementById('cf-entry-date').value || null,
