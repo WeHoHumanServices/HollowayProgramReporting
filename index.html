@@ -221,7 +221,29 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .print-table tbody tr:nth-child(even) td:nth-child(even) { background:#EFEDE7; }
 .print-table .print-total-row td { background:#EEF2FA !important; color:#1B2F5B; font-weight:800; border-top:2px solid #1B2F5B; }
 .print-table .print-subhead td { background:#E8E2D2 !important; color:#1B2F5B; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
-.print-table .print-ytd-cell { font-weight:800; color:#1B2F5B; background:#EEF2FA !important; }
+.print-table .print-ytd-cell,
+.print-table .print-ytd-head,
+.print-table.print-ytd-table th:last-child,
+.print-table.print-ytd-table td:last-child {
+  font-weight:800;
+  color:#1B2F5B;
+  background:#EEF2FA !important;
+}
+.print-table .print-ytd-head {
+  background:#314875 !important;
+  color:#FFFFFF !important;
+  border-color:#314875 !important;
+}
+.print-table tbody tr:nth-child(even) td { background:#F7F6F2; }
+.print-table tbody tr:nth-child(odd) td { background:#FFFFFF; }
+.print-table tbody tr:nth-child(even) td.print-ytd-cell,
+.print-table tbody tr:nth-child(even) td:last-child.print-ytd-auto,
+.print-table.print-ytd-table tbody tr:nth-child(even) td:last-child { background:#E4EAF7 !important; }
+.print-table tbody tr:nth-child(odd) td.print-ytd-cell,
+.print-table tbody tr:nth-child(odd) td:last-child.print-ytd-auto,
+.print-table.print-ytd-table tbody tr:nth-child(odd) td:last-child { background:#EEF2FA !important; }
+.print-table .print-total-row td.print-ytd-cell,
+.print-table.print-ytd-table .print-total-row td:last-child { background:#DDE6F6 !important; }
 .page-break { page-break-before:always; break-before:page; }
 
 .print-cover { display:grid; grid-template-columns: 1.4fr .8fr; gap:18px; align-items:start; margin-bottom:18px; }
@@ -397,6 +419,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .print-demographics-table th, .print-demographics-table td { padding: 4px 4px !important; }
   .print-section.compact { margin-top: 10px !important; }
 }
+
+
+/* Final print readability: banded rows + shaded YTD columns */
+.print-table tbody tr:nth-child(even) td { background:#F7F6F2; }
+.print-table tbody tr:nth-child(odd) td { background:#FFFFFF; }
+.print-table .print-ytd-cell,
+.print-table.print-ytd-table td:last-child { background:#EEF2FA !important; color:#1B2F5B; font-weight:800; }
+.print-table tbody tr:nth-child(even) .print-ytd-cell,
+.print-table.print-ytd-table tbody tr:nth-child(even) td:last-child { background:#E4EAF7 !important; }
+.print-table .print-ytd-head { background:#314875 !important; color:#fff !important; border-color:#314875 !important; }
+.print-table .print-total-row td { background:#EEF2FA !important; }
+.print-table .print-total-row .print-ytd-cell,
+.print-table.print-ytd-table .print-total-row td:last-child { background:#DDE6F6 !important; }
 
 </style>
 </head>
@@ -2821,15 +2856,15 @@ const App = {
 
       <div class="print-section compact"><h2>Demographics</h2>
         <h3>Age & Gender</h3>
-        <table class="print-table print-demographics-table"><thead><tr><th>Age</th><th>Qtr Male</th><th>Qtr Female</th><th>Qtr NB/GNC</th><th>Qtr Unknown</th><th>Qtr Total</th><th>YTD Male</th><th>YTD Female</th><th>YTD NB/GNC</th><th>YTD Unknown</th><th>YTD Total</th></tr></thead><tbody>${ageRows}</tbody></table>
+        <table class="print-table print-demographics-table"><thead><tr><th>Age</th><th>Qtr Male</th><th>Qtr Female</th><th>Qtr NB/GNC</th><th>Qtr Unknown</th><th>Qtr Total</th><th class="print-ytd-head">YTD Male</th><th class="print-ytd-head">YTD Female</th><th class="print-ytd-head">YTD NB/GNC</th><th class="print-ytd-head">YTD Unknown</th><th class="print-ytd-head">YTD Total</th></tr></thead><tbody>${ageRows}</tbody></table>
         <h3>Ethnicity</h3>
-        <table class="print-table"><thead><tr><th>Category</th><th>Quarter</th><th>YTD</th></tr></thead><tbody>${ethRows}</tbody></table>
+        <table class="print-table print-ytd-table"><thead><tr><th>Category</th><th>Quarter</th><th class="print-ytd-head">YTD</th></tr></thead><tbody>${ethRows}</tbody></table>
         <h3>Language</h3>
-        <table class="print-table"><thead><tr><th>Category</th><th>Quarter</th><th>YTD</th></tr></thead><tbody>${langRows}</tbody></table>
+        <table class="print-table print-ytd-table"><thead><tr><th>Category</th><th>Quarter</th><th class="print-ytd-head">YTD</th></tr></thead><tbody>${langRows}</tbody></table>
       </div>
 
       <div class="print-section"><h2>Exit Summary</h2>
-        <table class="print-table"><thead><tr><th>Exit Type</th><th>This Quarter</th><th>YTD</th></tr></thead><tbody>${exitSummaryRows}</tbody></table>
+        <table class="print-table print-ytd-table"><thead><tr><th>Exit Type</th><th>This Quarter</th><th class="print-ytd-head">YTD</th></tr></thead><tbody>${exitSummaryRows}</tbody></table>
         <p style="font-size:11px;color:#555;margin-top:8px;"><strong>Voluntary / Involuntary Summary:</strong> ${voluntarySummary}</p>
       </div>
 
