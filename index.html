@@ -379,6 +379,25 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .today-card{background:white;border:1px solid var(--border);border-left:4px solid var(--gold);border-radius:var(--radius-lg);padding:14px;box-shadow:var(--shadow)}
 .today-card .label{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);font-weight:800}.today-card .value{font-size:26px;font-weight:800;color:var(--navy);line-height:1.1;margin-top:4px}.today-card .sub{font-size:11.5px;color:var(--gray-600);margin-top:3px}.quick-service-bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}.quick-chip{border:1px solid var(--border);background:white;color:var(--navy);border-radius:999px;padding:7px 12px;font-weight:800;font-size:12px;cursor:pointer}.quick-chip:hover{background:#EEF2FA;border-color:var(--navy)}.task-list{display:grid;gap:8px}.task-row{display:flex;justify-content:space-between;gap:12px;align-items:center;border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;background:white}.task-row:nth-child(even){background:#FBFAF7}.progress-pill{height:9px;background:var(--gray-200);border-radius:99px;overflow:hidden;min-width:110px}.progress-pill span{display:block;height:100%;background:var(--gold);border-radius:99px}.readiness-check{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);background:white;margin-bottom:7px}.followup-status{font-size:11px;border-radius:999px;padding:2px 8px;font-weight:800}.followup-status.due{background:var(--amber-light);color:var(--amber)}.followup-status.overdue{background:var(--red-light);color:var(--red)}.followup-status.complete{background:var(--green-light);color:var(--green)}@media(max-width:980px){.today-grid{grid-template-columns:1fr 1fr}.today-card .value{font-size:22px}}@media(max-width:620px){.today-grid{grid-template-columns:1fr}}
 
+
+
+/* Final print pagination polish: avoid awkward single-table/page breaks. */
+@media print {
+  .print-report { padding: 22px !important; }
+  .print-cover { page-break-after: auto !important; break-after: auto !important; }
+  .print-section { page-break-before: auto !important; break-before: auto !important; page-break-inside: auto !important; break-inside: auto !important; margin: 14px 0 !important; }
+  .print-section.print-first { page-break-before: auto !important; break-before: auto !important; }
+  .print-section.page-break { page-break-before: auto !important; break-before: auto !important; }
+  .print-kpis, .print-summary-strip { page-break-inside: avoid !important; break-inside: avoid !important; }
+  .print-section h2, .print-section h3 { page-break-after: avoid !important; break-after: avoid !important; }
+  .print-table { page-break-inside: auto !important; break-inside: auto !important; }
+  .print-table tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+  .print-table th, .print-table td { padding: 5px 6px; }
+  .print-demographics-table { font-size: 9.5px !important; }
+  .print-demographics-table th, .print-demographics-table td { padding: 4px 4px !important; }
+  .print-section.compact { margin-top: 10px !important; }
+}
+
 </style>
 </head>
 
@@ -498,7 +517,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   <div class="form-modal">
     <div class="form-modal-header">
       <div>
-        <div class="form-modal-title" id="roster-title">Client Roster</div>
+        <div class="form-modal-title" id="roster-title">HMIS Roster Backup Documentation</div>
         <div class="form-modal-meta" id="roster-meta"></div>
       </div>
       <button class="form-close-btn" data-close="roster">✕</button>
@@ -509,7 +528,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
       <div class="save-state" id="roster-save-state">Not saved this session</div>
       <div style="display:flex;gap:10px;">
         <button class="btn btn-ghost" data-close="roster">Close</button>
-        <button class="btn btn-gold" id="btn-save-roster">Save Roster</button>
+        <button class="btn btn-gold" id="btn-save-roster">Save HMIS Backup</button>
       </div>
     </div>
   </div>
@@ -1222,7 +1241,7 @@ const App = {
   ]; },
   exitReasonOptions() { return ['Successful housing placement','Family reunification','Partner / spouse reunification','Client choice','Program rule violation','Incarceration','Hospitalization','Deceased','Unknown / lost contact','Other']; },
   hmisRaceEthnicityOptions() { return ['American Indian, Alaska Native, or Indigenous','Asian or Asian American','Black, African American, or African','Hispanic/Latina/e/o','Middle Eastern or North African','Native Hawaiian or Pacific Islander','White','Additional Race/Ethnicity Detail','Client doesn’t know','Client prefers not to answer','Data not collected']; },
-  hmisGenderOptions() { return ['Woman (Girl, if child)','Man (Boy, if child)','Culturally Specific Identity','Transgender','Non-Binary','Questioning','Different Identity','Client doesn’t know','Client prefers not to answer','Data not collected']; },
+  hmisGenderOptions() { return ['Woman (Girl, if child)','Man (Boy, if child)','Culturally Specific Identity','Non-Binary','Questioning','Different Identity','Client doesn’t know','Client prefers not to answer','Data not collected']; },
   hmisYesNoOptions() { return ['Yes','No','Client doesn’t know','Client prefers not to answer','Data not collected']; },
   housingPlanStatusOptions() { return ['Not Started','Assessment','Document Collection','Benefits / Income','Housing Search','Application Submitted','Lease Pending','Move-In Scheduled','Permanently Housed','Inactive / On Hold']; },
   serviceTypeOptions() { return ['Case Management','Housing Navigation','Benefits Assistance','Document Readiness','Income / Employment Support','Mental Health Referral','Medical Coordination','Substance Use Services Referral','Life Skills / ADL Support','Transportation Assistance','Landlord Coordination','Move-In Support','Family / Partner Reunification Planning','Crisis Intervention','Safety Planning','Care Coordination / Case Conference','Follow-Up Contact','Other']; },
@@ -1247,6 +1266,64 @@ const App = {
   },
   clientMetrics(q=this.currentQuarter) { const {start,end}=this.qRange(q); const clients=this.data.clients||[]; const served=clients.filter(c=>this.clientOverlaps(c,start,end)); const activeAtEnd=clients.filter(c=>this.clientStatus(c,end)==='Active'); const intakes=clients.filter(c=>this.dateOnly(c.entry_date)>=start && this.dateOnly(c.entry_date)<=end); const exits=clients.filter(c=>this.dateOnly(c.exit_date)>=start && this.dateOnly(c.exit_date)<=end); const phExits=exits.filter(c=>this.isPermanentExit(c)); const positiveNonPermanent=exits.filter(c=>this.isPositiveNonPermanentExit(c)); const occupied=clients.reduce((sum,c)=>sum+this.clientBedNights(c,start,end),0); const available=20*this.daysInclusive(start,end); const losVals=served.map(c=>this.clientBedNights(c, this.dateOnly(c.entry_date), this.dateOnly(c.exit_date)||end)).filter(v=>v>0); const avgLos=losVals.length ? Math.round(losVals.reduce((a,b)=>a+b,0)/losVals.length) : 0; const services=(this.data.clientServices||[]).filter(s=>this.dateOnly(s.service_date)>=start && this.dateOnly(s.service_date)<=end); return {served, activeAtEnd, intakes, exits, phExits, positiveNonPermanent, occupied, available, avgLos, services}; },
   generatedScopeFromClients(q=this.currentQuarter) { const m=this.clientMetrics(q); return { activeResidents:m.activeAtEnd.length, residentsServed:m.served.length, unduplicatedYTD:this.ytdClientsServed(q).length, newIntakes:m.intakes.length, bedNightsAvail:m.available, bedNightsOcc:m.occupied, phExits:m.phExits.length, avgDaysToPH:m.avgLos, suppServicesEngaged:new Set(m.services.map(s=>s.client_id)).size, incomeIncrease:this.countQuarterUpdates(q,'income_change','Increased'), incomeMaintained:this.countQuarterUpdates(q,'income_change','Maintained'), satSatisfied:0, satTotal:0, exitsTemp:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Temporary') || String(c.exit_destination_type||'').includes('Emergency Shelter') || String(c.exit_destination_type||'').includes('Hotel')).length, exitsInstitutional:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Institutional')).length, exitsHomeless:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Homeless')).length, exitsUnknown:m.exits.filter(c=>!c.exit_destination_type || String(c.exit_destination_type||'').includes('Unknown')).length, exitsFamilyFriends:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Family/Friends')).length, exitsPartner:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Spouse/Partner')).length, positiveNonPermanent:m.positiveNonPermanent.length }; },
+
+  ageBandForClient(c) {
+    const age = Number(c.age || 0);
+    if (!age) return null;
+    if (age >= 18 && age <= 24) return '18–24';
+    if (age >= 25 && age <= 39) return '25–39';
+    if (age >= 40 && age <= 49) return '40–49';
+    if (age >= 50 && age <= 61) return '50–61';
+    if (age >= 62 && age <= 64) return '62–64';
+    if (age >= 65 && age <= 74) return '65–74';
+    if (age >= 75 && age <= 84) return '75–84';
+    if (age >= 85) return '85+';
+    return null;
+  },
+  genderKeyForClient(c) {
+    const g = String(c.gender || '').toLowerCase();
+    if (g.includes('man') || g.includes('boy') || g === 'male') return 'male';
+    if (g.includes('woman') || g.includes('girl') || g === 'female') return 'female';
+    if (g.includes('non-binary') || g.includes('nonbinary') || g.includes('culturally') || g.includes('different') || g.includes('questioning') || g.includes('nb')) return 'nb';
+    return 'unk';
+  },
+  ethnicityKeyForClient(c) {
+    const r = String(c.race_ethnicity || '').toLowerCase();
+    if (r.includes('american indian') || r.includes('alaska native') || r.includes('indigenous')) return 'American Indian / Alaska Native';
+    if (r.includes('asian') || r.includes('pacific islander') || r.includes('native hawaiian')) return 'Asian/Pacific Islander';
+    if (r.includes('black') || r.includes('african american') || r.includes('african')) return 'Black, African American, or African';
+    if (r.includes('hispanic') || r.includes('latina') || r.includes('latino') || r.includes('latine')) return 'Hispanic/Latina/o/e';
+    if (r.includes('middle eastern') || r.includes('north african')) return 'Middle Eastern / North African';
+    if (r.includes('white')) return 'White';
+    if (r.includes('additional') || r.includes('other') || (c.race_ethnicity_other || '').trim()) return 'Other';
+    return 'Unknown';
+  },
+  languageKeyForClient(c) {
+    const l = String(c.primary_language || c.household_language || c.language || '').toLowerCase();
+    if (!l) return 'Other';
+    if (l.includes('english')) return 'English';
+    if (l.includes('spanish')) return 'Spanish';
+    if (l.includes('russian')) return 'Russian';
+    if (l.includes('farsi') || l.includes('persian')) return 'Farsi';
+    return 'Other';
+  },
+  generatedDemographicsFromClients(q=this.currentQuarter) {
+    const clients = this.clientMetrics(q).served || [];
+    const ageGender = this.blankAgeGender();
+    const ethnicity = Object.fromEntries(this.ethnicityKeys.map(k => [k, 0]));
+    const language = Object.fromEntries(this.languageKeys.map(k => [k, 0]));
+    clients.forEach(c => {
+      const ageBand = this.ageBandForClient(c);
+      if (ageBand && ageGender[ageBand]) ageGender[ageBand][this.genderKeyForClient(c)] += 1;
+      const ethKey = this.ethnicityKeyForClient(c);
+      if (ethnicity[ethKey] === undefined) ethnicity[ethKey] = 0;
+      ethnicity[ethKey] += 1;
+      const langKey = this.languageKeyForClient(c);
+      if (language[langKey] === undefined) language[langKey] = 0;
+      language[langKey] += 1;
+    });
+    return { ageGender, ethnicity, language };
+  },
   outcomeSummary(q=this.currentQuarter) { const exits=this.clientMetrics(q).exits; const labels=['Permanent Housing','Positive Non-Permanent','Temporary / Institutional','Unstable / Unknown','Other Non-Permanent']; const stability=['Stable','Potentially Stable','Temporary','Unstable','Unspecified']; const byBand=Object.fromEntries(labels.map(x=>[x,0])); const byStability=Object.fromEntries(stability.map(x=>[x,0])); exits.forEach(c=>{ const b=this.exitOutcomeBand(c)||'Other Non-Permanent'; byBand[b]=(byBand[b]||0)+1; const st=this.exitStability(c)||'Unspecified'; byStability[st]=(byStability[st]||0)+1; }); return {exits, byBand, byStability}; },
   renderOutcomeSummary(q=this.currentQuarter) { const o=this.outcomeSummary(q); const bands=Object.entries(o.byBand).map(([k,v])=>`<tr><td>${this.escape(k)}</td><td style="text-align:right;font-weight:800;">${v}</td></tr>`).join(''); const st=Object.entries(o.byStability).map(([k,v])=>`<tr><td>${this.escape(k)}</td><td style="text-align:right;font-weight:800;">${v}</td></tr>`).join(''); return `<div class="card" style="margin-top:16px;"><div class="card-header"><div class="card-title">Housing Outcomes</div></div><div class="card-body"><p class="field-hint" style="margin-bottom:12px;">Permanent housing remains the official contract outcome. Positive non-permanent exits, such as moving in with family or a partner without a lease, are tracked separately.</p><div class="content-grid" style="grid-template-columns:1fr 1fr;"><table class="svc-table"><thead><tr><th>Outcome Band</th><th>Count</th></tr></thead><tbody>${bands}</tbody></table><table class="svc-table"><thead><tr><th>Expected Stability</th><th>Count</th></tr></thead><tbody>${st}</tbody></table></div></div></div>`; },
   ytdClientsServed(q=this.currentQuarter) { const order=['Q1','Q2','Q3','Q4']; const idx=Math.max(0,order.indexOf(q)); const end=this.qRange(order[idx]).end; return (this.data.clients||[]).filter(c=>this.dateOnly(c.entry_date)<=end && (!this.dateOnly(c.exit_date) || this.dateOnly(c.exit_date)>='2025-10-01')); },
@@ -1287,7 +1364,7 @@ const App = {
 
   openClientForm(id=null) { this.currentClientId=id; const c=id ? (this.data.clients||[]).find(x=>x.id===id) || {} : {}; const opt=(arr,val)=>arr.map(x=>`<option value="${this.escape(x)}" ${val===x?'selected':''}>${this.escape(x)}</option>`).join(''); document.getElementById('client-title').textContent = id ? `Client Record · ${this.escape(c.agency_client_id||'')}` : 'Add Client'; document.getElementById('client-body').innerHTML=`<div class="notice navy"><div>ℹ️</div><div><strong>Streamlined client entry:</strong> Enter the core client record once. Quarterly reports, census, exits, and service tallies are generated from these client records.</div></div><div class="form-section"><div class="form-section-title">Client Identity</div><div class="client-form-grid"><div class="field-group"><label class="field-label required">Agency Client ID</label><input id="cf-agency-client-id" class="field-input" value="${this.escape(c.agency_client_id||'')}"></div><div class="field-group"><label class="field-label">HMIS Unique Identifier</label><input id="cf-hmis-id" class="field-input" value="${this.escape(c.hmis_unique_identifier||'')}" placeholder="HMIS Unique Identifier"></div><div class="field-group"><label class="field-label">Client Name <span class="field-hint">Ascencia only</span></label><input id="cf-client-name" class="field-input" value="${this.escape(c.client_name||'')}"></div><div class="field-group"><label class="field-label required">Entry Date</label><input id="cf-entry-date" type="date" class="field-input" value="${this.dateOnly(c.entry_date)}"></div><div class="field-group"><label class="field-label">Room / Bed Assignment</label><input id="cf-room-number" class="field-input" value="${this.escape(c.room_number||'')}" placeholder="e.g., Room 7, 102, Bed A, Unassigned"></div></div></div><div class="form-section"><div class="form-section-title">Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Age</label><input id="cf-age" type="number" class="field-input" value="${c.age||''}"></div><div class="field-group"><label class="field-label">Gender</label><select id="cf-gender" class="field-select"><option></option>${opt(this.hmisGenderOptions(), c.gender)}</select></div><div class="field-group"><label class="field-label">Race / Ethnicity</label><select id="cf-race" class="field-select"><option></option>${opt(this.hmisRaceEthnicityOptions(), c.race_ethnicity)}</select></div><div class="field-group"><label class="field-label">Veteran Status</label><select id="cf-veteran" class="field-select"><option></option>${opt(this.hmisYesNoOptions(), c.veteran)}</select></div><div class="field-group"><label class="field-label">Disability Status</label><select id="cf-disability" class="field-select"><option></option>${opt(this.hmisYesNoOptions(), c.disability)}</select></div><div class="field-group"><label class="field-label">Income at Entry</label><input id="cf-income-entry" type="number" class="field-input" value="${c.income_at_entry||''}"></div></div></div><div class="form-section"><div class="form-section-title">Housing Plan</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Housing Plan Status</label><select id="cf-housing-plan" class="field-select"><option></option>${opt(this.housingPlanStatusOptions(), c.housing_plan_status)}</select></div><div class="field-group"><label class="field-label">Expected Exit Date</label><input id="cf-expected-exit" type="date" class="field-input" value="${this.dateOnly(c.expected_exit_date)}"></div></div></div><div class="form-section"><div class="form-section-title">Exit Assessment</div><p class="field-hint" style="margin-bottom:12px;">Permanent housing requires a lease or other documentation. Family/friends and partner/spouse no-lease exits are tracked as positive non-permanent outcomes.</p><div class="client-form-grid"><div class="field-group"><label class="field-label">Exit Date</label><input id="cf-exit-date" type="date" class="field-input" value="${this.dateOnly(c.exit_date)}"></div><div class="field-group"><label class="field-label">Exit Destination</label><select id="cf-exit-type" class="field-select"><option></option>${opt(this.exitDestinationOptions(), c.exit_destination_type)}</select></div><div class="field-group"><label class="field-label">Specific Destination / Notes</label><input id="cf-exit-destination" class="field-input" value="${this.escape(c.exit_destination||'')}"></div><div class="field-group"><label class="field-label">Expected Housing Stability</label><select id="cf-exit-stability" class="field-select"><option></option>${opt(['Stable','Potentially Stable','Temporary','Unstable','Unknown'], c.exit_housing_stability)}</select></div><div class="field-group"><label class="field-label">Expected Stable ≥90 Days?</label><select id="cf-exit-90" class="field-select"><option></option>${opt(['Yes','No','Unknown'], c.exit_expected_90_days)}</select></div><div class="field-group"><label class="field-label">Housing Goal Achieved?</label><select id="cf-goal-achieved" class="field-select"><option></option>${opt(['Yes','Partially','No','Goal changed during stay','Unknown'], c.housing_goal_achieved)}</select></div><div class="field-group"><label class="field-label">Reason for Exit</label><select id="cf-exit-reason" class="field-select"><option></option>${opt(this.exitReasonOptions(), c.exit_reason)}</select></div><div class="field-group"><label class="field-label">Follow-up Planned?</label><select id="cf-follow-up" class="field-select"><option></option>${opt(['Yes','No','Unknown'], c.follow_up_planned)}</select></div><div class="field-group full"><label class="field-label">Exit Case Notes</label><textarea id="cf-exit-notes" class="field-textarea">${this.escape(c.exit_notes||'')}</textarea></div></div></div>`; this.openOverlay('client'); },
 
-  async saveClient() { const id=this.currentClientId || (crypto.randomUUID ? crypto.randomUUID() : 'client_'+Date.now()); const payload={ id, program_id:this.program.id, fiscal_year:this.fiscalYear, agency_client_id:document.getElementById('cf-agency-client-id').value.trim(), hmis_unique_identifier:document.getElementById('cf-hmis-id').value.trim()||null, client_name:document.getElementById('cf-client-name').value.trim(), entry_date:document.getElementById('cf-entry-date').value || null, room_number:document.getElementById('cf-room-number').value.trim() || null, age:Number(document.getElementById('cf-age').value||0)||null, gender:document.getElementById('cf-gender').value||null, race_ethnicity:document.getElementById('cf-race').value||null, veteran:document.getElementById('cf-veteran').value||null, disability:document.getElementById('cf-disability').value||null, income_at_entry:Number(document.getElementById('cf-income-entry').value||0)||null, housing_plan_status:document.getElementById('cf-housing-plan').value||null, expected_exit_date:document.getElementById('cf-expected-exit').value||null, exit_date:document.getElementById('cf-exit-date').value||null, exit_destination_type:document.getElementById('cf-exit-type').value||null, exit_destination:document.getElementById('cf-exit-destination').value.trim()||null, exit_housing_stability:document.getElementById('cf-exit-stability').value||null, exit_expected_90_days:document.getElementById('cf-exit-90').value||null, housing_goal_achieved:document.getElementById('cf-goal-achieved').value||null, exit_reason:document.getElementById('cf-exit-reason').value||null, follow_up_planned:document.getElementById('cf-follow-up').value||null, exit_notes:document.getElementById('cf-exit-notes').value.trim()||null, updated_by:this.user?.email||null, updated_at:new Date().toISOString() }; if(!payload.agency_client_id || !payload.entry_date){ document.getElementById('client-save-state').textContent='Agency Client ID and Entry Date are required.'; return; } const {error}=await this.sb.from('holloway_clients').upsert(payload,{onConflict:'id'}); if(error){ document.getElementById('client-save-state').textContent='Save failed: '+error.message; return; } document.getElementById('client-save-state').textContent='Saved.'; await this.loadAll(); this.closeForm('client'); this.showView(this.view||'clients'); },
+  async saveClient() { const id=this.currentClientId || (crypto.randomUUID ? crypto.randomUUID() : 'client_'+Date.now()); const payload={ id, program_id:this.program.id, fiscal_year:this.fiscalYear, agency_client_id:document.getElementById('cf-agency-client-id').value.trim(), hmis_unique_identifier:document.getElementById('cf-hmis-id').value.trim()||null, client_name:document.getElementById('cf-client-name').value.trim(), entry_date:document.getElementById('cf-entry-date').value || null, room_number:document.getElementById('cf-room-number').value.trim() || null, age:Number(document.getElementById('cf-age').value||0)||null, gender:document.getElementById('cf-gender').value||null, gender_other:document.getElementById('cf-gender-other')?.value.trim()||null, transgender_status:document.getElementById('cf-transgender-status')?.value||null, race_ethnicity:document.getElementById('cf-race').value||null, race_ethnicity_other:document.getElementById('cf-race-other')?.value.trim()||null, primary_language:document.getElementById('cf-primary-language')?.value||null, primary_language_other:document.getElementById('cf-primary-language-other')?.value.trim()||null, veteran:document.getElementById('cf-veteran').value||null, disability:document.getElementById('cf-disability').value||null, income_at_entry:Number(document.getElementById('cf-income-entry').value||0)||null, housing_plan_status:document.getElementById('cf-housing-plan').value||null, expected_exit_date:document.getElementById('cf-expected-exit').value||null, exit_date:document.getElementById('cf-exit-date').value||null, exit_destination_type:document.getElementById('cf-exit-type').value||null, exit_destination:document.getElementById('cf-exit-destination').value.trim()||null, exit_housing_stability:document.getElementById('cf-exit-stability').value||null, exit_expected_90_days:document.getElementById('cf-exit-90').value||null, housing_goal_achieved:document.getElementById('cf-goal-achieved').value||null, exit_reason:document.getElementById('cf-exit-reason').value||null, follow_up_planned:document.getElementById('cf-follow-up').value||null, exit_notes:document.getElementById('cf-exit-notes').value.trim()||null, updated_by:this.user?.email||null, updated_at:new Date().toISOString() }; if(!payload.agency_client_id || !payload.entry_date){ document.getElementById('client-save-state').textContent='Agency Client ID and Entry Date are required.'; return; } const {error}=await this.sb.from('holloway_clients').upsert(payload,{onConflict:'id'}); if(error){ document.getElementById('client-save-state').textContent='Save failed: '+error.message; return; } document.getElementById('client-save-state').textContent='Saved.'; await this.loadAll(); this.closeForm('client'); this.showView(this.view||'clients'); },
 
   openServiceForm(id=null,clientId=null) { this.currentServiceId=id; const s=id ? (this.data.clientServices||[]).find(x=>x.id===id)||{} : {client_id:clientId||''}; document.getElementById('service-body').innerHTML=`<div class="form-section"><div class="form-section-title">Service Contact</div><div class="client-form-grid"><div class="field-group full"><label class="field-label required">Client</label><select id="sf-client" class="field-select">${this.clientOptionList(s.client_id)}</select></div><div class="field-group"><label class="field-label required">Service Date</label><input id="sf-date" type="date" class="field-input" value="${this.dateOnly(s.service_date) || new Date().toISOString().slice(0,10)}"></div><div class="field-group"><label class="field-label required">Service Type</label><select id="sf-type" class="field-select">${this.serviceTypeOptions().map(x=>`<option value="${this.escape(x)}" ${s.service_type===x?'selected':''}>${this.escape(x)}</option>`).join('')}</select></div><div class="field-group"><label class="field-label">Duration Minutes</label><input id="sf-minutes" type="number" class="field-input" value="${s.duration_minutes||30}"></div><div class="field-group"><label class="field-label">Staff</label><input id="sf-staff" class="field-input" value="${this.escape(s.staff_name||'')}"></div><div class="field-group full"><label class="field-label">Notes</label><textarea id="sf-notes" class="field-textarea">${this.escape(s.notes||'')}</textarea></div></div></div>`; this.openOverlay('service'); },
 
@@ -1328,7 +1405,7 @@ const App = {
       <div aria-hidden="true">📌</div>
       <div><strong>${q} · ${this.quarters[q].period}</strong><br>
       Status: ${this.statusBadge(this.bundleStatus(q))} &nbsp; Due: ${this.formatDate(this.quarters[q].due)} &nbsp; 
-      YTD persons served: <strong>${report.persons_ytd ?? this.calcPersonsYtd(q)}</strong> &nbsp; 
+      YTD persons served: <strong>${this.generatedPersonsYtd(q)}</strong> &nbsp; 
       Occupancy: <strong>${this.percent(scope.bedNightsOcc, scope.bedNightsAvail)}</strong></div>
     </div>`;
   },
@@ -1394,7 +1471,7 @@ const App = {
     const exits = this.data.exits.filter(e => e.quarter === q);
     return [
       { label:'Quarterly Program Report', ok: this.reportVisualComplete(q), visualOk: this.reportVisualComplete(q), submitReady: this.reportSubmitReady(q), started: this.reportSubmissionStatus(q) !== 'not_started', detail: this.reportReadinessLabel(q), action:'quarterly' },
-      { label:'Client Roster', ok: this.rosterLooksComplete(q), started: !!roster, detail: roster ? this.rosterMovementDetail(roster) : 'Not uploaded/entered', action:'roster' },
+      { label:'HMIS Roster Backup Documentation', ok: this.rosterLooksComplete(q), started: !!roster, detail: roster ? this.rosterMovementDetail(roster) : 'HMIS roster backup has not been uploaded for this quarter.', action:'roster' },
       { label:'Non-Permanent Exit Detail', ok: exits.length > 0 || this.data.bundles[q]?.no_exits === true || ['accepted'].includes(this.bundleStatus(q)), started: exits.length > 0, detail: exits.length ? `${exits.length} exit row(s)` : 'Enter exits or mark no exits', action:'exits' }
     ];
   },
@@ -1403,9 +1480,10 @@ const App = {
     const r = this.data.rosters[q];
     if (!r) return false;
     const hasPeriod = !!r.period_start && !!r.period_end;
+    const hasFile = !!(r.file_path || r.file_name);
     const vals = ['start_count','intakes_count','exits_count','end_count'].map(k => r[k]);
     const hasMovement = vals.every(v => v !== null && v !== undefined && v !== '');
-    return hasPeriod && hasMovement && this.rosterMovementTies(r);
+    return hasFile && hasPeriod && hasMovement && this.rosterMovementTies(r);
   },
 
   rosterMovementTies(r={}) {
@@ -1422,7 +1500,8 @@ const App = {
     const exits = Number(r.exits_count || 0);
     const end = Number(r.end_count || 0);
     const formula = `${start} + ${intakes} - ${exits} = ${end}`;
-    return this.rosterMovementTies(r) ? `Movement ties out: ${formula}` : `Check movement: ${formula}`;
+    const fileNote = (r.file_path || r.file_name) ? 'HMIS backup uploaded. ' : 'HMIS backup file missing. ';
+    return fileNote + (this.rosterMovementTies(r) ? `Movement ties out: ${formula}` : `Check movement: ${formula}`);
   },
 
   reportLooksComplete(q) {
@@ -1849,38 +1928,58 @@ const App = {
     this.updateReadOnlyStates('quarterly');
   },
 
-  reportScope(q) {
+  useClientGeneratedReporting() {
+    return Array.isArray(this.data.clients) && this.data.clients.length > 0;
+  },
+
+  storedReportScope(q) {
     const r = this.data.reports[q] || {};
     const scope = {};
     Object.entries(this.scopeMap).forEach(([key,col]) => scope[key] = r[col]);
     return scope;
   },
 
+  reportScope(q) {
+    return this.useClientGeneratedReporting() ? this.generatedScopeFromClients(q) : this.storedReportScope(q);
+  },
+
+  generatedPersonsQuarter(q=this.currentQuarter) {
+    return this.useClientGeneratedReporting() ? this.generatedScopeFromClients(q).residentsServed : Number(this.data.reports[q]?.persons_quarter || 0);
+  },
+
+  generatedPersonsYtd(q=this.currentQuarter) {
+    return this.useClientGeneratedReporting() ? this.ytdClientsServed(q).length : this.calcPersonsYtd(q);
+  },
+
   renderCoverForm(q) {
     const r = this.data.reports[q] || {};
-    const personsYtd = r.persons_ytd ?? this.calcPersonsYtd(q);
-    const d = r.demographics_age_gender || this.blankAgeGender();
-    const eth = this.normalizeEthnicity(r.demographics_ethnicity || {});
-    const lang = this.normalizeLanguage(r.demographics_language || {});
+    const generatedMode = this.useClientGeneratedReporting();
+    const generatedScope = generatedMode ? this.generatedScopeFromClients(q) : null;
+    const personsQuarterValue = generatedMode ? generatedScope.residentsServed : (r.persons_quarter ?? '');
+    const personsYtd = generatedMode ? this.ytdClientsServed(q).length : (r.persons_ytd ?? this.calcPersonsYtd(q));
+    const generatedDemos = generatedMode ? this.generatedDemographicsFromClients(q) : null;
+    const d = generatedMode ? generatedDemos.ageGender : (r.demographics_age_gender || this.blankAgeGender());
+    const eth = generatedMode ? generatedDemos.ethnicity : this.normalizeEthnicity(r.demographics_ethnicity || {});
+    const lang = generatedMode ? generatedDemos.language : this.normalizeLanguage(r.demographics_language || {});
     document.getElementById('qr-cover-body').innerHTML = `
-      <div class="notice navy"><div aria-hidden="true">ℹ️</div><div><strong>${q} Cover Page</strong><br>Enter current-quarter values. YTD values are calculated from accepted prior quarters plus this quarter.</div></div>
+      <div class="notice navy"><div aria-hidden="true">ℹ️</div><div><strong>${q} Cover Page</strong><br>${generatedMode ? 'Client counts are generated from client records for the reporting period. Only narrative, certification, and HMIS backup documentation require manual completion.' : 'Enter current-quarter values. YTD values are calculated from accepted prior quarters plus this quarter.'}</div></div>
       <div class="form-section"><div class="form-section-title">Program Information</div>
         <div class="form-row"><div class="field-group"><label class="field-label" for="qr-agency-name">Agency</label><input class="field-input" id="qr-agency-name" value="${this.escape(this.agencyName())}" readonly></div><div class="field-group"><label class="field-label" for="qr-program-name">Program</label><input class="field-input" id="qr-program-name" value="${this.escape(this.programName())}" readonly></div></div>
         <div class="form-row"><div class="field-group"><label class="field-label">Reporting Quarter</label><input class="field-input" value="${q} · ${this.quarters[q].period}" readonly></div><div class="field-group"><label class="field-label">Contract Year</label><input class="field-input" value="October 1, 2025 – September 30, 2026" readonly></div></div>
       </div>
       <div class="form-section"><div class="form-section-title">New, Unduplicated Persons Served</div>
         <div class="form-row three">
-          ${this.field('qr-persons-quarter','This Quarter (WeHo)',r.persons_quarter,'number',true,'New, unduplicated WeHo clients this quarter')}
-          ${this.field('qr-persons-ytd','Year-to-Date (WeHo)',personsYtd,'number',false,'Auto-calculated from accepted prior quarters plus this quarter',true)}
+          ${this.field('qr-persons-quarter','This Quarter (WeHo)',personsQuarterValue,'number',!generatedMode, generatedMode ? 'Auto-calculated from active client records overlapping this quarter' : 'New, unduplicated WeHo clients this quarter', generatedMode)}
+          ${this.field('qr-persons-ytd','Year-to-Date (WeHo)',personsYtd,'number',false, generatedMode ? 'Auto-calculated from client records served year-to-date' : 'Auto-calculated from accepted prior quarters plus this quarter',true)}
         </div>
-        ${this.field('qr-data-source','Data Source',r.data_source_note || '', 'text', false, 'Example: Data was collected through enrollment via HMIS')}
+        ${this.field('qr-data-source','Data Source',r.data_source_note || (generatedMode ? 'Client-level records in this portal, supported by uploaded HMIS roster backup documentation.' : ''), 'text', false, 'Example: Data was collected through enrollment via HMIS')}
       </div>
-      <div class="form-section"><div class="form-section-title">Demographics — Age & Gender</div>${this.renderAgeGenderGrid(q,d)}</div>
+      <div class="form-section"><div class="form-section-title">Demographics — Age & Gender</div>${generatedMode ? '<div class="notice green"><div aria-hidden="true">✅</div><div><strong>Demographics are generated from client records.</strong><br>Update each client intake record to correct age, gender identity, race/ethnicity, or language. These totals will be saved into the submitted report.</div></div>' : ''}${this.renderAgeGenderGrid(q,d,generatedMode)}</div>
       <div class="form-row">
-        <div class="field-group"><label class="field-label">Ethnicity</label>${this.renderSimpleDemoTable('eth', this.ethnicityKeys, eth, q)}
+        <div class="field-group"><label class="field-label">Ethnicity</label>${this.renderSimpleDemoTable('eth', this.ethnicityKeys, eth, q, generatedMode)}
           <div class="field-group" style="margin-top:10px;"><label class="field-label" for="qr-eth-other-detail">If Other, please specify</label><input class="field-input" id="qr-eth-other-detail" value="${this.escape(r.demographics_ethnicity_other_detail || '')}" placeholder="Optional description of Other category"><span class="field-hint">Use only when the Other count is greater than zero.</span></div>
         </div>
-        <div class="field-group"><label class="field-label">Household Language</label>${this.renderSimpleDemoTable('lang', this.languageKeys, lang, q)}</div>
+        <div class="field-group"><label class="field-label">Household Language</label>${this.renderSimpleDemoTable('lang', this.languageKeys, lang, q, generatedMode)}</div>
       </div>
       <div class="form-section" style="margin-top:20px;"><div class="form-section-title">Signatory</div>
         <div class="form-row three">
@@ -1895,7 +1994,7 @@ const App = {
     return `<div class="field-group" data-field-group="${id}"><label class="field-label ${required?'required':''}" for="${id}">${label}</label><input class="field-input" id="${id}" type="${type}" value="${this.escape(value ?? '')}" ${required?'required':''} ${readonly?'readonly':''}><span class="field-error">Required or invalid.</span>${hint?`<span class="field-hint">${hint}</span>`:''}</div>`;
   },
 
-  renderAgeGenderGrid(q, data) {
+  renderAgeGenderGrid(q, data, readonly=false) {
     let qMale=0, qFemale=0, qNb=0, qUnk=0, yMale=0, yFemale=0, yNb=0, yUnk=0;
     // Reconciliation banner — updated live by recalculateLiveForm.
     let html = `<div id="demo-recon" class="demo-recon warn" role="status" aria-live="polite"><span class="tag">Demographic totals:</span> <span id="demo-recon-text">Awaiting input</span></div>
@@ -1909,17 +2008,17 @@ const App = {
       qMale += Number(row.male||0); qFemale += Number(row.female||0); qNb += Number(row.nb||0); qUnk += Number(row.unk||0);
       yMale += Number(y.male||0); yFemale += Number(y.female||0); yNb += Number(y.nb||0); yUnk += Number(y.unk||0);
       html += `<div class="demo-cell row-label" role="rowheader">${age}</div>
-        ${['male','female','nb','unk'].map(k => `<div class="demo-cell"><input type="number" min="0" class="demo-input" data-demo="age" data-age="${age}" data-key="${k}" value="${row[k]||0}"></div>`).join('')}
+        ${['male','female','nb','unk'].map(k => readonly ? `<div class="demo-cell ro" data-demo="age" data-age="${age}" data-key="${k}">${row[k]||0}</div>` : `<div class="demo-cell"><input type="number" min="0" class="demo-input" data-demo="age" data-age="${age}" data-key="${k}" value="${row[k]||0}"></div>`).join('')}
         <div class="demo-cell ro" data-age-total="${age}">${total}</div>
         <div class="demo-cell ro" data-ytd-age="${age}" data-ytd-key="male">${y.male}</div><div class="demo-cell ro" data-ytd-age="${age}" data-ytd-key="female">${y.female}</div><div class="demo-cell ro" data-ytd-age="${age}" data-ytd-key="nb">${y.nb}</div><div class="demo-cell ro" data-ytd-age="${age}" data-ytd-key="unk">${y.unk}</div><div class="demo-cell ro" data-ytd-age-total="${age}">${this.sumDemoRow(y)}</div>`;
     });
     html += `<div class="demo-cell row-label total-row">Grand Total</div>
       <div class="demo-cell ro total-row" data-age-grand="male">${qMale}</div><div class="demo-cell ro total-row" data-age-grand="female">${qFemale}</div><div class="demo-cell ro total-row" data-age-grand="nb">${qNb}</div><div class="demo-cell ro total-row" data-age-grand="unk">${qUnk}</div><div class="demo-cell ro total-row" data-age-grand-total>${qMale+qFemale+qNb+qUnk}</div>
       <div class="demo-cell ro total-row" data-ytd-age-grand="male">${yMale}</div><div class="demo-cell ro total-row" data-ytd-age-grand="female">${yFemale}</div><div class="demo-cell ro total-row" data-ytd-age-grand="nb">${yNb}</div><div class="demo-cell ro total-row" data-ytd-age-grand="unk">${yUnk}</div><div class="demo-cell ro total-row" data-ytd-age-grand-total>${yMale+yFemale+yNb+yUnk}</div>`;
-    return html + `</div><p class="field-hint" style="margin-top:8px;">Quarter demographics must equal Persons Served This Quarter. YTD demographics are calculated and read-only.</p>`;
+    return html + `</div><p class="field-hint" style="margin-top:8px;">Quarter demographics must equal Persons Served This Quarter. When client-generated reporting is active, both quarter and YTD demographics are calculated from client records and shown read-only.</p>`;
   },
 
-  renderSimpleDemoTable(prefix, keys, values, q) {
+  renderSimpleDemoTable(prefix, keys, values, q, readonly=false) {
     let qTotal = 0;
     let yTotal = 0;
     const rows = keys.map(k => {
@@ -1927,7 +2026,7 @@ const App = {
       qTotal += current;
       const ytd = prefix === 'eth' ? this.calcSimpleDemoYtd(q,'demographics_ethnicity',k,current) : this.calcSimpleDemoYtd(q,'demographics_language',k,current);
       yTotal += Number(ytd || 0);
-      return `<tr><th scope="row" style="text-align:left;font-weight:600;">${this.escape(k)}</th><td><input type="number" min="0" class="demo-input" data-demo="${prefix}" data-key="${this.escape(k)}" value="${current}" aria-label="${this.escape(k)} this quarter"></td><td data-ytd-simple="${prefix}" data-key="${this.escape(k)}" style="text-align:right;font-weight:800;color:var(--navy);">${ytd}</td></tr>`;
+      return `<tr><th scope="row" style="text-align:left;font-weight:600;">${this.escape(k)}</th><td style="text-align:right;">${readonly ? `<strong>${current}</strong>` : `<input type="number" min="0" class="demo-input" data-demo="${prefix}" data-key="${this.escape(k)}" value="${current}" aria-label="${this.escape(k)} this quarter">`}</td><td data-ytd-simple="${prefix}" data-key="${this.escape(k)}" style="text-align:right;font-weight:800;color:var(--navy);">${ytd}</td></tr>`;
     }).join('');
     return `<div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;"><table class="svc-table"><thead><tr><th scope="col">Category</th><th scope="col" style="width:80px;text-align:right;">Qtr</th><th scope="col" style="width:80px;text-align:right;">YTD</th></tr></thead><tbody>
       ${rows}
@@ -1936,28 +2035,52 @@ const App = {
   },
 
   renderScopeForm(q) {
+    const generatedMode = this.useClientGeneratedReporting();
     const s = this.reportScope(q);
     const cumulative = new Set(CONFIG.CUMULATIVE_SCOPE_KEYS);
     let last = '';
-    document.getElementById('qr-scope-body').innerHTML = `<div class="notice navy"><div aria-hidden="true">ℹ️</div><div><strong>Scope of Services</strong><br>YTD fields are calculated only for cumulative metrics. Snapshot and service fields remain quarter-specific.</div></div>
-      <table class="svc-table"><thead><tr><th scope="col">Metric</th><th scope="col">This Quarter</th><th scope="col">YTD / Display</th><th scope="col">Notes</th></tr></thead><tbody>
+    document.getElementById('qr-scope-body').innerHTML = `<div class="notice ${generatedMode ? 'green' : 'navy'}"><div aria-hidden="true">${generatedMode ? '✅' : 'ℹ️'}</div><div><strong>Scope of Services</strong><br>${generatedMode ? 'These metrics are calculated from client records and will be saved into the submitted quarterly report. Providers should update client records, services, exits, and HMIS backup documentation rather than manually typing totals here.' : 'YTD fields are calculated only for cumulative metrics. Snapshot and service fields remain quarter-specific.'}</div></div>
+      <table class="svc-table"><thead><tr><th scope="col">Metric</th><th scope="col">This Quarter</th><th scope="col">YTD / Display</th><th scope="col">Source / Notes</th></tr></thead><tbody>
       ${CONFIG.SCOPE_ROWS.map(row => {
         const cat = row.category, key = row.key, label = row.label, mode = row.mode, hint = row.hint || '';
         const header = cat !== last ? (last=cat, `<tr class="cat-header"><td colspan="4">${this.escape(cat)}</td></tr>`) : '';
         const isPersonsYtd = mode === 'personsYtd';
         const isCumulative = cumulative.has(key);
-        const ytd = isPersonsYtd ? this.calcPersonsYtd(q) : (isCumulative ? this.calcScopeYtd(q,key,s[key] || 0) : 'Quarter only');
-        // mode 'currency'/'percent'/'text' map to similar inputs; everything but 'text'
-        // is a number input here. Schema columns are unchanged.
+        const ytd = isPersonsYtd ? this.generatedPersonsYtd(q) : (isCumulative ? this.calcScopeYtd(q,key,s[key] || 0) : 'Quarter only');
+        const value = isPersonsYtd ? this.generatedPersonsYtd(q) : (s[key] ?? '');
         const inputType = mode === 'text' ? 'text' : 'number';
         const minAttr = inputType === 'number' ? ' min="0"' : '';
         const stepAttr = mode === 'currency' ? ' step="0.01"' : '';
         const qCell = isPersonsYtd
-          ? '<span class="field-hint">Calculated</span>'
-          : `<label class="sr-only" for="scope-${key}">${this.escape(label)}</label><input type="${inputType}"${minAttr}${stepAttr} id="scope-${key}" data-scope="${key}" value="${this.escape(s[key] ?? '')}">`;
+          ? `<strong>${value || 0}</strong><br><span class="field-hint">Calculated</span>`
+          : (generatedMode
+            ? `<strong>${this.escape(value ?? 0)}</strong><br><span class="field-hint">Calculated from client records</span>`
+            : `<label class="sr-only" for="scope-${key}">${this.escape(label)}</label><input type="${inputType}"${minAttr}${stepAttr} id="scope-${key}" data-scope="${key}" value="${this.escape(s[key] ?? '')}">`);
         const ytdAttr = isCumulative ? `data-scope-ytd="${key}"` : (isPersonsYtd ? 'data-persons-ytd-cell="true"' : '');
-        return `${header}<tr><th scope="row" style="text-align:left;font-weight:600;">${this.escape(label)}</th><td>${qCell}</td><td ${ytdAttr} class="${isPersonsYtd ? 'total-cell' : ''}">${ytd}</td><td class="field-hint">${this.escape(hint)}</td></tr>`;
+        const sourceNote = generatedMode ? this.scopeSourceNote(key, hint) : hint;
+        return `${header}<tr><th scope="row" style="text-align:left;font-weight:600;">${this.escape(label)}</th><td>${qCell}</td><td ${ytdAttr} class="${isPersonsYtd ? 'total-cell' : ''}">${ytd}</td><td class="field-hint">${this.escape(sourceNote)}</td></tr>`;
       }).join('')}</tbody></table>`;
+  },
+
+  scopeSourceNote(key, fallback='') {
+    const notes = {
+      activeResidents: 'Calculated from clients active on the last day of the quarter.',
+      residentsServed: 'Calculated from clients whose stay overlaps the quarter.',
+      unduplicatedYTD: 'Calculated from unduplicated client records served year-to-date.',
+      newIntakes: 'Calculated from entry dates within the quarter.',
+      bedNightsAvail: 'Calculated from program bed capacity and days in the quarter.',
+      bedNightsOcc: 'Calculated from client entry/exit dates overlapping the quarter.',
+      phExits: 'Calculated from exits to permanent housing destinations during the quarter.',
+      avgDaysToPH: 'Calculated from client length of stay for people served/exited in the quarter.',
+      suppServicesEngaged: 'Calculated from unique clients with service records during the quarter.',
+      incomeIncrease: 'Calculated from quarterly client update records.',
+      incomeMaintained: 'Calculated from quarterly client update records.',
+      exitsTemp: 'Calculated from exit destination type.',
+      exitsInstitutional: 'Calculated from exit destination type.',
+      exitsHomeless: 'Calculated from exit destination type.',
+      exitsUnknown: 'Calculated from missing or unknown exit destination type.'
+    };
+    return notes[key] || fallback || 'Calculated from client-level source records.';
   },
 
   renderNarrativeForm(q) {
@@ -2146,10 +2269,10 @@ const App = {
     const detail = useProgramMovement ? this.programMovementDetail(q) : this.rosterMovementDetail({ start_count:startVal, intakes_count:intakesVal, exits_count:exitsVal, end_count:endVal });
 
     document.getElementById('roster-meta').innerHTML = `${q} · ${this.quarters[q].period} · ${this.statusBadge(this.bundleStatus(q))}`;
-    document.getElementById('roster-body').innerHTML = `<div class="notice navy"><div aria-hidden="true">📁</div><div><strong>Client Roster and Quarterly Program Movement</strong><br>Upload the roster backup file and summarize movement through the 20-bed program during the reporting period. This is separate from total people served YTD and should never exceed the 20-bed program capacity at quarter end.</div></div>
+    document.getElementById('roster-body').innerHTML = `<div class="notice navy"><div aria-hidden="true">📁</div><div><strong>HMIS Roster Backup Documentation and Quarterly Program Movement</strong><br>Upload the HMIS roster/export that supports clients served, entry dates, exit dates, and length of stay for the reporting period. This backup documentation supports the program counts generated by the portal and should reconcile with quarterly program movement.</div></div>
       ${useProgramMovement ? `<div class="notice green"><div aria-hidden="true">✓</div><div><strong>Historical quarter movement calculated from accepted program report data.</strong><br>For accepted quarters, this screen displays operational movement based on active residents, intakes, and exits from the program report rather than editable roster summary fields.</div></div>` : ''}
-      <div class="form-section"><div class="form-section-title">Upload Roster Backup</div>
-        <label class="upload-zone"><input type="file" id="roster-file"><div style="font-size:30px;" aria-hidden="true">📁</div><div id="roster-file-label"><strong>Click to select roster file</strong><br><span class="field-hint">Accepted formats: Any file type, including Excel, CSV, PDF, Word, image, or ZIP.</span></div></label>
+      <div class="form-section"><div class="form-section-title">Upload HMIS Roster Backup</div>
+        <label class="upload-zone"><input type="file" id="roster-file"><div style="font-size:30px;" aria-hidden="true">📁</div><div id="roster-file-label"><strong>Click to select roster file</strong><br><span class="field-hint">Accepted formats: Excel, CSV, PDF, Word, image, ZIP, or other HMIS export/back-up file.</span></div></label>
       </div>
       <div class="form-section"><div class="form-section-title">Roster Period</div>
         <div class="form-row">${this.field('roster-start','Period Start',r.period_start || '','date',true)}${this.field('roster-end','Period End',r.period_end || '','date',true)}</div>
@@ -2158,9 +2281,9 @@ const App = {
         <div class="form-row">${this.field('roster-start-count','People Physically in Program at Start of Quarter',startVal,'number',true)}${this.field('roster-intakes-count','Intakes During Quarter',intakesVal,'number',true)}</div>
         <div class="form-row">${this.field('roster-exits-count','Exits During Quarter',exitsVal,'number',true)}${this.field('roster-end-count','People Physically in Program at End of Quarter',endVal,'number',true)}</div>
         <div id="roster-reconcile" class="notice ${ties ? 'green' : 'amber'}" style="margin-top:10px;"><div aria-hidden="true">${ties ? '✅' : '⚠️'}</div><div><strong>${ties ? 'Quarterly program movement ties out.' : 'Check quarterly program movement.'}</strong><br><span>${this.escape(detail)}</span></div></div>
-        <p class="field-hint">This movement summary reconciles the number of people physically in the 20-bed program at the start and end of the quarter. It is separate from total unduplicated people served YTD.</p>
+        <p class="field-hint">This movement summary reconciles the number of people physically in the 20-bed program at the start and end of the quarter and supports reported clients served and length of stay.</p>
       </div>
-      <div class="form-section"><div class="form-section-title">Optional Notes</div><div class="field-group"><label class="field-label" for="roster-notes">Notes</label><textarea class="field-textarea" id="roster-notes" placeholder="Optional: describe roster source, export date, or reconciliation notes.">${this.escape(r.notes || '')}</textarea></div></div>
+      <div class="form-section"><div class="form-section-title">Optional Notes</div><div class="field-group"><label class="field-label" for="roster-notes">Notes</label><textarea class="field-textarea" id="roster-notes" placeholder="Optional: describe HMIS source, export date, roster filters used, or reconciliation notes.">${this.escape(r.notes || '')}</textarea></div></div>
       <div class="form-section"><div class="form-section-title">Roster Records</div>${this.renderRosterPager()}</div>`;
 
     document.querySelectorAll('#modal-roster input, #modal-roster textarea').forEach(el => {
@@ -2304,15 +2427,24 @@ const App = {
     if (this.quarterLocked()) return;
     const q = this.currentQuarter;
     this.setSaveState('qr','Saving...');
+    const generatedMode = this.useClientGeneratedReporting();
+    const sourceScope = generatedMode ? this.generatedScopeFromClients(q) : null;
+    const sourceDemos = generatedMode ? this.generatedDemographicsFromClients(q) : null;
     const scope = {};
-    Object.keys(this.scopeMap).forEach(key => scope[this.scopeMap[key]] = this.numVal('scope-' + key));
+    Object.keys(this.scopeMap).forEach(key => {
+      scope[this.scopeMap[key]] = generatedMode ? Number(sourceScope[key] || 0) : this.numVal('scope-' + key);
+    });
+    const personsQuarter = generatedMode ? Number(sourceScope.residentsServed || 0) : this.numVal('qr-persons-quarter');
+    const personsYtd = generatedMode ? this.ytdClientsServed(q).length : this.calcPersonsYtd(q, personsQuarter);
 
     const payload = {
       program_id: this.program.id, quarter: q, fiscal_year: this.fiscalYear, status: 'draft',
       signatory_name: this.val('qr-signatory'), signatory_date: this.val('qr-sig-date') || null,
-      persons_quarter: this.numVal('qr-persons-quarter'), persons_ytd: this.calcPersonsYtd(q, this.numVal('qr-persons-quarter')), persons_total: null,
-      data_source_note: this.val('qr-data-source'), demographics_ethnicity_other_detail: this.val('qr-eth-other-detail') || null, demographics_age_gender: this.collectAgeGender(),
-      demographics_ethnicity: this.collectSimpleDemo('eth'), demographics_language: this.collectSimpleDemo('lang'),
+      persons_quarter: personsQuarter, persons_ytd: personsYtd, persons_total: null,
+      data_source_note: this.val('qr-data-source'), demographics_ethnicity_other_detail: this.val('qr-eth-other-detail') || null,
+      demographics_age_gender: generatedMode ? sourceDemos.ageGender : this.collectAgeGender(),
+      demographics_ethnicity: generatedMode ? sourceDemos.ethnicity : this.collectSimpleDemo('eth'),
+      demographics_language: generatedMode ? sourceDemos.language : this.collectSimpleDemo('lang'),
       narrative_text: this.val('qr-narrative-text'), narrative_submitted_by: this.val('qr-narrative-name'), narrative_date: this.val('qr-narrative-date') || null,
       updated_at: new Date().toISOString(), ...scope
     };
@@ -2437,15 +2569,17 @@ const App = {
   validateQuarterly() {
     const errors = [];
     document.querySelectorAll('#modal-quarterly [required]').forEach(el => { if (!this.validateField(el)) errors.push(el); });
-    const qPersons = this.numVal('qr-persons-quarter') || 0;
-    const yPersons = this.numVal('qr-persons-ytd') || 0;
-    const d = this.demographicTotalsFromForm();
-    if (d.qAge !== qPersons) errors.push('age');
-    if (d.qEth !== qPersons) errors.push('eth');
-    if (d.qLang !== qPersons) errors.push('lang');
-    if (d.yAge !== yPersons) errors.push('yAge');
-    if ((this.numVal('scope-bedNightsOcc')||0) > (this.numVal('scope-bedNightsAvail')||0)) errors.push('bed');
-    if ((this.numVal('scope-satSatisfied')||0) > (this.numVal('scope-satTotal')||0)) errors.push('survey');
+    if (!this.useClientGeneratedReporting()) {
+      const qPersons = this.numVal('qr-persons-quarter') || 0;
+      const yPersons = this.numVal('qr-persons-ytd') || 0;
+      const d = this.demographicTotalsFromForm();
+      if (d.qAge !== qPersons) errors.push('age');
+      if (d.qEth !== qPersons) errors.push('eth');
+      if (d.qLang !== qPersons) errors.push('lang');
+      if (d.yAge !== yPersons) errors.push('yAge');
+      if ((this.numVal('scope-bedNightsOcc')||0) > (this.numVal('scope-bedNightsAvail')||0)) errors.push('bed');
+      if ((this.numVal('scope-satSatisfied')||0) > (this.numVal('scope-satTotal')||0)) errors.push('survey');
+    }
     return errors;
   },
 
@@ -2552,9 +2686,10 @@ const App = {
     const b = this.data.bundles[q] || {};
     const status = (this.bundleStatus(q) || 'incomplete').replaceAll('_',' ');
     const movement = this.programMovement(q);
+    const generatedMode = this.useClientGeneratedReporting();
 
     const totalServedYtd = this.calcPersonsYtd(q);
-    const personsQuarter = Number(r.persons_quarter || 0);
+    const personsQuarter = Number(this.generatedPersonsQuarter(q) || r.persons_quarter || 0);
     const activeStart = Number(movement.start || 0);
     const newIntakes = Number(movement.intakes || s.newIntakes || 0);
     const exitsQuarter = Number(movement.exits || 0);
@@ -2593,20 +2728,24 @@ const App = {
         Year-to-date, the program has served ${totalServedYtd || 0} unduplicated people and recorded ${totalExitsYtd || 0} total exit${totalExitsYtd===1?'':'s'}, including ${phYtd || 0} permanent housing exit${phYtd===1?'':'s'} and ${nonPhYtd || 0} non-permanent exit${nonPhYtd===1?'':'s'}. Bed-night occupancy for the quarter was ${occupancyRate}, and service participation was ${serviceRate}.
       </p>`;
 
+    const printDemos = generatedMode ? this.generatedDemographicsFromClients(q) : null;
+    let qMaleTotal = 0, qFemaleTotal = 0, qNbTotal = 0, qUnkTotal = 0;
+    let yMaleTotal = 0, yFemaleTotal = 0, yNbTotal = 0, yUnkTotal = 0;
     const ageRowsBase = this.ageBands.map(age => {
-      const row = r.demographics_age_gender?.[age] || {male:0,female:0,nb:0,unk:0};
+      const row = printDemos ? printDemos.ageGender[age] : (r.demographics_age_gender?.[age] || {male:0,female:0,nb:0,unk:0});
       const y = this.calcAgeGenderYtd(q, age, row);
-      return `<tr><td>${age}</td><td>${row.male||0}</td><td>${row.female||0}</td><td>${row.nb||0}</td><td>${row.unk||0}</td><td>${this.sumDemoRow(row)}</td><td class="print-ytd-cell">${this.sumDemoRow(y)}</td></tr>`;
+      qMaleTotal += Number(row.male || 0); qFemaleTotal += Number(row.female || 0); qNbTotal += Number(row.nb || 0); qUnkTotal += Number(row.unk || 0);
+      yMaleTotal += Number(y.male || 0); yFemaleTotal += Number(y.female || 0); yNbTotal += Number(y.nb || 0); yUnkTotal += Number(y.unk || 0);
+      return `<tr><td>${age}</td><td>${row.male||0}</td><td>${row.female||0}</td><td>${row.nb||0}</td><td>${row.unk||0}</td><td>${this.sumDemoRow(row)}</td><td class="print-ytd-cell">${y.male||0}</td><td class="print-ytd-cell">${y.female||0}</td><td class="print-ytd-cell">${y.nb||0}</td><td class="print-ytd-cell">${y.unk||0}</td><td class="print-ytd-cell">${this.sumDemoRow(y)}</td></tr>`;
     }).join('');
-    const ageTotals = this.demographicTotals(q);
-    const ageRows = ageRowsBase + `<tr class="print-total-row"><td>Grand Total</td><td colspan="4"></td><td>${ageTotals.qAge}</td><td>${this.calcPersonsYtd(q)}</td></tr>`;
+    const ageRows = ageRowsBase + `<tr class="print-total-row"><td>Grand Total</td><td>${qMaleTotal}</td><td>${qFemaleTotal}</td><td>${qNbTotal}</td><td>${qUnkTotal}</td><td>${qMaleTotal+qFemaleTotal+qNbTotal+qUnkTotal}</td><td>${yMaleTotal}</td><td>${yFemaleTotal}</td><td>${yNbTotal}</td><td>${yUnkTotal}</td><td>${yMaleTotal+yFemaleTotal+yNbTotal+yUnkTotal}</td></tr>`;
 
-    const eth = this.normalizeEthnicity(r.demographics_ethnicity || {});
+    const eth = printDemos ? printDemos.ethnicity : this.normalizeEthnicity(r.demographics_ethnicity || {});
     const ethQTotal = Object.values(eth).reduce((a,b)=>a+Number(b||0),0);
     const ethYTotal = this.ethnicityKeys.reduce((sum,k)=>sum+Number(this.calcSimpleDemoYtd(q,'demographics_ethnicity',k,eth[k]||0)||0),0);
     const ethRows = this.ethnicityKeys.map(k => `<tr><td>${this.escape(k)}</td><td>${eth[k]||0}</td><td class="print-ytd-cell">${this.calcSimpleDemoYtd(q,'demographics_ethnicity',k,eth[k]||0)}</td></tr>`).join('') + `<tr class="print-total-row"><td>Grand Total</td><td>${ethQTotal}</td><td>${ethYTotal}</td></tr>`;
 
-    const lang = this.normalizeLanguage(r.demographics_language || {});
+    const lang = printDemos ? printDemos.language : this.normalizeLanguage(r.demographics_language || {});
     const langQTotal = Object.values(lang).reduce((a,b)=>a+Number(b||0),0);
     const langYTotal = this.languageKeys.reduce((sum,k)=>sum+Number(this.calcSimpleDemoYtd(q,'demographics_language',k,lang[k]||0)||0),0);
     const langRows = this.languageKeys.map(k => `<tr><td>${this.escape(k)}</td><td>${lang[k]||0}</td><td class="print-ytd-cell">${this.calcSimpleDemoYtd(q,'demographics_language',k,lang[k]||0)}</td></tr>`).join('') + `<tr class="print-total-row"><td>Grand Total</td><td>${langQTotal}</td><td>${langYTotal}</td></tr>`;
@@ -2661,7 +2800,7 @@ const App = {
         </div>
       </div>
 
-      <div class="print-section print-first"><h2>Executive Summary</h2>${executiveSummary}</div>
+      <div class="print-section print-first"><h2>Executive Summary</h2>${generatedMode ? '<p style="font-size:11px;color:#555;margin-bottom:8px;"><strong>Metric source:</strong> Program metrics are generated from client-level records in the portal and supported by the uploaded HMIS roster backup documentation.</p>' : ''}${executiveSummary}</div>
 
       <div class="print-kpis kpi-seven">${kpiCards}</div>
 
@@ -2676,20 +2815,20 @@ const App = {
         </tbody></table>
       </div>
 
-      <div class="print-section page-break"><h2>Scope of Services</h2>
+      <div class="print-section"><h2>Scope of Services</h2>
         <table class="print-table"><thead><tr><th>Metric</th><th>Value</th><th>Period / Note</th></tr></thead><tbody>${scopeRows}</tbody></table>
       </div>
 
-      <div class="print-section"><h2>Demographics</h2>
+      <div class="print-section compact"><h2>Demographics</h2>
         <h3>Age & Gender</h3>
-        <table class="print-table"><thead><tr><th>Age</th><th>Qtr Male</th><th>Qtr Female</th><th>Qtr NB/GNC</th><th>Qtr Unknown</th><th>Qtr Total</th><th>YTD Total</th></tr></thead><tbody>${ageRows}</tbody></table>
+        <table class="print-table print-demographics-table"><thead><tr><th>Age</th><th>Qtr Male</th><th>Qtr Female</th><th>Qtr NB/GNC</th><th>Qtr Unknown</th><th>Qtr Total</th><th>YTD Male</th><th>YTD Female</th><th>YTD NB/GNC</th><th>YTD Unknown</th><th>YTD Total</th></tr></thead><tbody>${ageRows}</tbody></table>
         <h3>Ethnicity</h3>
         <table class="print-table"><thead><tr><th>Category</th><th>Quarter</th><th>YTD</th></tr></thead><tbody>${ethRows}</tbody></table>
         <h3>Language</h3>
         <table class="print-table"><thead><tr><th>Category</th><th>Quarter</th><th>YTD</th></tr></thead><tbody>${langRows}</tbody></table>
       </div>
 
-      <div class="print-section page-break"><h2>Exit Summary</h2>
+      <div class="print-section"><h2>Exit Summary</h2>
         <table class="print-table"><thead><tr><th>Exit Type</th><th>This Quarter</th><th>YTD</th></tr></thead><tbody>${exitSummaryRows}</tbody></table>
         <p style="font-size:11px;color:#555;margin-top:8px;"><strong>Voluntary / Involuntary Summary:</strong> ${voluntarySummary}</p>
       </div>
@@ -2727,17 +2866,28 @@ const App = {
     return order.slice(0, order.indexOf(q)+1);
   },
   calcPersonsYtd(q, currentOverride=null) {
+    if (this.useClientGeneratedReporting()) return this.ytdClientsServed(q).length;
     const prior = this.priorQuarters(q).reduce((sum, qq) => sum + Number(this.data.reports[qq]?.persons_quarter || 0), 0);
     const current = currentOverride !== null ? Number(currentOverride || 0) : Number(this.data.reports[q]?.persons_quarter || 0);
     return prior + current;
   },
   calcScopeYtd(q,key,currentOverride=null) {
-    const prior = this.priorQuarters(q).reduce((sum,qq) => sum + Number(this.reportScope(qq)[key] || 0),0);
-    const current = currentOverride !== null ? Number(currentOverride||0) : Number(this.reportScope(q)[key] || 0);
+    if (this.useClientGeneratedReporting()) {
+      return this.thruQuarters(q).reduce((sum,qq) => sum + Number(this.generatedScopeFromClients(qq)[key] || 0), 0);
+    }
+    const prior = this.priorQuarters(q).reduce((sum,qq) => sum + Number(this.storedReportScope(qq)[key] || 0),0);
+    const current = currentOverride !== null ? Number(currentOverride||0) : Number(this.storedReportScope(q)[key] || 0);
     return prior + current;
   },
   calcAgeGenderYtd(q, age, currentRow=null) {
     const out = {male:0,female:0,nb:0,unk:0};
+    if (this.useClientGeneratedReporting()) {
+      this.thruQuarters(q).forEach(qq => {
+        const row = this.generatedDemographicsFromClients(qq).ageGender[age] || {};
+        ['male','female','nb','unk'].forEach(k => out[k] += Number(row[k] || 0));
+      });
+      return out;
+    }
     this.priorQuarters(q).forEach(qq => {
       const row = this.data.reports[qq]?.demographics_age_gender?.[age] || {};
       ['male','female','nb','unk'].forEach(k => out[k] += Number(row[k] || 0));
@@ -2747,6 +2897,14 @@ const App = {
     return out;
   },
   calcSimpleDemoYtd(q,col,key,currentVal=0) {
+    if (this.useClientGeneratedReporting()) {
+      return this.thruQuarters(q).reduce((sum,qq) => {
+        const obj = col === 'demographics_ethnicity'
+          ? this.generatedDemographicsFromClients(qq).ethnicity
+          : this.generatedDemographicsFromClients(qq).language;
+        return sum + Number(obj[key] || 0);
+      },0);
+    }
     const prior = this.priorQuarters(q).reduce((sum,qq) => {
       const obj = col === 'demographics_ethnicity'
         ? this.normalizeEthnicity(this.data.reports[qq]?.[col] || {})
@@ -2758,9 +2916,10 @@ const App = {
 
   demographicTotals(q) {
     const r = this.data.reports[q] || {};
-    const age = r.demographics_age_gender || {};
-    const eth = this.normalizeEthnicity(r.demographics_ethnicity || {});
-    const lang = this.normalizeLanguage(r.demographics_language || {});
+    const gen = this.useClientGeneratedReporting() ? this.generatedDemographicsFromClients(q) : null;
+    const age = gen ? gen.ageGender : (r.demographics_age_gender || {});
+    const eth = gen ? gen.ethnicity : this.normalizeEthnicity(r.demographics_ethnicity || {});
+    const lang = gen ? gen.language : this.normalizeLanguage(r.demographics_language || {});
     return {
       qAge: Object.values(age).reduce((s,row)=>s+this.sumDemoRow(row),0),
       qEth: Object.values(eth).reduce((a,b)=>a+Number(b||0),0),
@@ -3083,6 +3242,156 @@ const App = {
   };
 })();
 
+
+
+// ---------- Simplified client-entry workflow overrides ----------
+(function(){
+  const css = `
+    .segmented-row{display:flex;gap:8px;flex-wrap:wrap}.segment-btn{border:1px solid var(--border);background:white;color:var(--gray-600);border-radius:999px;padding:7px 13px;font-weight:800;font-size:12px;cursor:pointer}.segment-btn.active{background:var(--navy);border-color:var(--navy);color:white}.wizard-steps{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.wizard-step{flex:1;min-width:150px;border:1px solid var(--border);border-left:4px solid var(--gold);background:white;border-radius:var(--radius);padding:10px 12px}.wizard-step .num{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);font-weight:900}.wizard-step .name{font-weight:900;color:var(--navy);margin-top:2px}.housing-progress{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.hp-step{border:1px solid var(--border);background:white;border-radius:var(--radius);padding:9px 10px;text-align:left;font-weight:800;color:var(--gray-600);cursor:pointer}.hp-step.active{background:#EEF2FA;border-color:var(--navy);color:var(--navy);box-shadow:inset 4px 0 0 var(--gold)}.client-entry-layout{display:grid;grid-template-columns:minmax(0,2fr) 260px;gap:18px;align-items:start}.report-summary-card{position:sticky;top:76px}.report-check{display:flex;gap:8px;align-items:flex-start;border-bottom:1px solid var(--gray-100);padding:7px 0;font-size:12.5px}.report-check:last-child{border-bottom:none}.recent-service-row{display:flex;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;background:white;margin-bottom:7px;font-size:12.5px}.exit-section.is-hidden{display:none}.data-quality-list{margin-top:8px;display:grid;gap:6px}.dq-warning{font-size:12px;background:var(--amber-light);border:1px solid #F0C96B;color:#7A5200;border-radius:var(--radius);padding:6px 8px}@media(max-width:980px){.client-entry-layout{grid-template-columns:1fr}.report-summary-card{position:static}.housing-progress{grid-template-columns:1fr}}`;
+  const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+  App.clientDisplayId = function(c){ return c?.hmis_unique_identifier || c?.agency_client_id || '—'; };
+  App.simpleClientStatus = function(c){ if (c?.exit_date) return 'Exited'; if (c?.expected_exit_date) return 'Scheduled Exit'; return 'Active'; };
+  App.housingProgressOptions = function(){ return ['Intake Complete','Assessment Complete','Housing Search','Housing Identified','Lease Pending','Permanently Housed']; };
+  App.deriveExitDefaults = function(exitType){
+    const t=String(exitType||'').toLowerCase();
+    if(!exitType) return {stability:null, days90:null, goal:null};
+    if(this.isPermanentExit({exit_destination_type:exitType})) return {stability:'Stable', days90:'Yes', goal:'Yes'};
+    if(t.includes('family/friends') || t.includes('spouse/partner')) return {stability:'Potentially Stable', days90:'Unknown', goal:'Partially'};
+    if(t.includes('temporary') || t.includes('shelter') || t.includes('institutional') || t.includes('hotel')) return {stability:'Temporary', days90:'No', goal:'No'};
+    if(t.includes('homeless') || t.includes('unknown') || t.includes('left program')) return {stability:'Unstable', days90:'No', goal:'No'};
+    return {stability:'Unknown', days90:'Unknown', goal:'Unknown'};
+  };
+  App.yesNoSegment = function(id, label, value){
+    const vals=['Yes','No','Client doesn’t know','Client prefers not to answer','Data not collected'];
+    return `<div class="field-group"><label class="field-label">${this.escape(label)}</label><div class="segmented-row" data-segment-group="${id}">${vals.map(v=>`<button type="button" class="segment-btn ${value===v?'active':''}" data-value="${this.escape(v)}">${this.escape(v==='Client doesn’t know'?'Unknown':v==='Client prefers not to answer'?'Prefers not':v==='Data not collected'?'Not collected':v)}</button>`).join('')}</div><input type="hidden" id="${id}" value="${this.escape(value||'')}"></div>`;
+  };
+  App.reportingSummaryHtml = function(c){
+    const today=this.today ? this.today() : new Date().toISOString().slice(0,10);
+    const entry=this.dateOnly(c.entry_date); const exit=this.dateOnly(c.exit_date);
+    const los=entry ? this.daysInclusive(entry, exit||today) : 0;
+    const status=this.simpleClientStatus(c);
+    const checks=[
+      status==='Exited' ? 'Counts as exited client' : 'Counts as active resident',
+      entry ? 'Counts toward residents served' : 'Entry date needed for reporting',
+      entry ? 'New intake is auto-calculated by quarter' : 'New intake not yet calculated',
+      `Length of stay: ${los||'—'} day${los===1?'':'s'}`,
+      `Housing progress: ${c.housing_plan_status||'Not set'}`
+    ];
+    return `<div class="card report-summary-card"><div class="card-header"><div><div class="card-title">Reporting Summary</div><div class="field-hint">Generated automatically from this record.</div></div></div><div class="card-body">${checks.map(x=>`<div class="report-check"><span>✓</span><span>${this.escape(x)}</span></div>`).join('')}</div></div>`;
+  };
+  App.clientQualityWarnings = function(c){
+    const warnings=[]; const entry=this.dateOnly(c.entry_date); const exit=this.dateOnly(c.exit_date);
+    if(!c.hmis_unique_identifier) warnings.push('HMIS ID is missing.');
+    if(!entry) warnings.push('Entry date is missing.');
+    if(exit && entry && exit < entry) warnings.push('Exit date is before entry date.');
+    if(c.status==='Exited' && !exit) warnings.push('Exited clients need an exit date.');
+    if(c.status==='Exited' && !c.exit_destination_type) warnings.push('Exited clients need an exit destination.');
+    if(c.status!=='Exited' && c.exit_destination_type) warnings.push('Active/scheduled clients should not have an exit destination.');
+    if(c.status==='Scheduled Exit' && !c.expected_exit_date) warnings.push('Scheduled exits should include an expected exit date.');
+    return warnings;
+  };
+
+  App.renderClients = function(){
+    const el=document.getElementById('view-clients');
+    const active=(this.data.clients||[]).filter(c=>this.clientStatus(c)!=='Exited');
+    const rows=active.map(c=>`<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.statusBadge(this.simpleClientStatus(c).toLowerCase().replace(' ','-'))}</td><td>${this.escape(c.housing_plan_status||'—')}</td><td>${this.clientBedNights(c,this.dateOnly(c.entry_date),this.today()).toLocaleString()}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.escape(c.room_number||'—')}</td><td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button><button class="btn btn-ghost btn-sm" data-add-service="${c.id}">Add Service</button></div></td></tr>`).join('') || '<tr><td colspan="8" class="field-hint" style="text-align:center;padding:24px;">No active client records entered yet.</td></tr>';
+    el.innerHTML=`<div class="page-header"><div><div class="page-title">Active Caseload</div><div class="page-subtitle">Daily client workspace. Quarterly reporting is generated from these source records.</div></div><button class="btn btn-gold" id="btn-new-client">+ Add Client</button></div><div class="notice navy"><div>ℹ️</div><div><strong>Simplified entry:</strong> HMIS ID is the client identifier. Agency ID has been removed from the visible workflow.</div></div><div class="client-table-wrap"><table class="client-table"><thead><tr><th>HMIS ID</th><th>Name</th><th>Status</th><th>Housing Progress</th><th>LOS</th><th>Entry</th><th>Room / Bed</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    el.querySelector('#btn-new-client').addEventListener('click',()=>this.openClientForm());
+    el.querySelectorAll('[data-edit-client]').forEach(b=>b.addEventListener('click',()=>this.openClientForm(b.dataset.editClient)));
+    el.querySelectorAll('[data-add-service]').forEach(b=>b.addEventListener('click',()=>this.openServiceForm(null,b.dataset.addService)));
+  };
+
+  App.renderClientExits = function(){
+    const el=document.getElementById('view-client-exits'); const exits=(this.data.clients||[]).filter(c=>c.exit_date);
+    const rows=exits.map(c=>`<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.formatDate(c.exit_date)}</td><td>${this.escape(c.exit_destination_type||'—')}</td><td>${this.escape(this.exitOutcomeBand(c)||'—')}</td><td>${this.escape(this.exitStability(c)||'—')}</td><td>${this.escape(c.housing_goal_achieved||'—')}</td><td><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button></td></tr>`).join('') || '<tr><td colspan="9" class="field-hint" style="text-align:center;padding:24px;">No client exits recorded yet.</td></tr>';
+    el.innerHTML=`<div class="page-header"><div><div class="page-title">Exits</div><div class="page-subtitle">Exit detail appears only when a client is marked exited.</div></div></div>${this.renderOutcomeSummary(this.currentQuarter)}<div class="client-table-wrap" style="margin-top:16px;"><table class="client-table"><thead><tr><th>HMIS ID</th><th>Name</th><th>Entry</th><th>Exit</th><th>Destination</th><th>Outcome Band</th><th>Stability</th><th>Goal</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    el.querySelectorAll('[data-edit-client]').forEach(b=>b.addEventListener('click',()=>this.openClientForm(b.dataset.editClient)));
+  };
+
+  App.openClientForm = function(id=null){
+    this.currentClientId=id; const c=id ? (this.data.clients||[]).find(x=>x.id===id) || {} : {};
+    const opt=(arr,val)=>arr.map(x=>`<option value="${this.escape(x)}" ${val===x?'selected':''}>${this.escape(x)}</option>`).join('');
+    const status=this.simpleClientStatus(c);
+    const progress=c.housing_plan_status || 'Intake Complete';
+    const services=(this.data.clientServices||[]).filter(s=>s.client_id===id).slice(0,5);
+    const recent=services.map(s=>`<div class="recent-service-row"><div><strong>${this.escape(s.service_type||'Service')}</strong><br><span class="field-hint">${this.formatDate(s.service_date)}</span></div><span class="field-hint">${Number(s.duration_minutes||0)} min</span></div>`).join('') || '<div class="field-hint">No services recorded yet.</div>';
+    document.getElementById('client-title').textContent = id ? `Client Profile · ${this.escape(this.clientDisplayId(c))}` : 'New Client Intake';
+    document.getElementById('client-body').innerHTML=`<div class="notice navy"><div>ℹ️</div><div><strong>Streamlined workflow:</strong> Complete intake and demographics first. Housing progress, case management milestones, services, and exit details can be updated as the case progresses.</div></div><div class="wizard-steps"><div class="wizard-step"><div class="num">Step 1</div><div class="name">Intake & Demographics</div></div><div class="wizard-step"><div class="num">Step 2</div><div class="name">Housing & Case Management</div></div><div class="wizard-step"><div class="num">Step 3</div><div class="name">Services / Exit if applicable</div></div></div><div class="client-entry-layout"><div>
+      <div class="form-section"><div class="form-section-title">Intake & Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label required">HMIS ID</label><input id="cf-hmis-id" class="field-input" value="${this.escape(c.hmis_unique_identifier||c.agency_client_id||'')}" placeholder="HMIS Unique Identifier"></div><div class="field-group"><label class="field-label required">Entry Date</label><input id="cf-entry-date" type="date" class="field-input" value="${this.dateOnly(c.entry_date)}"></div><div class="field-group"><label class="field-label">Current Status</label><div class="segmented-row" data-status-group>${['Active','Scheduled Exit','Exited'].map(v=>`<button type="button" class="segment-btn ${status===v?'active':''}" data-status="${v}">${v}</button>`).join('')}</div><input type="hidden" id="cf-status" value="${this.escape(status)}"></div><div class="field-group"><label class="field-label">Room / Bed Assignment</label><input id="cf-room-number" class="field-input" value="${this.escape(c.room_number||'')}" placeholder="e.g., Room 7, 102, Bed A, Unassigned"></div></div></div>
+      <div class="form-section"><div class="form-section-title">Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Client Name <span class="field-hint">Agency use only</span></label><input id="cf-client-name" class="field-input" value="${this.escape(c.client_name||'')}"></div><div class="field-group"><label class="field-label">Age</label><input id="cf-age" type="number" class="field-input" value="${c.age||''}"></div><div class="field-group"><label class="field-label">Gender Identity</label><select id="cf-gender" class="field-select"><option></option>${opt(this.hmisGenderOptions(), c.gender)}</select><div id="cf-gender-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify gender identity</label><input id="cf-gender-other" class="field-input" value="${this.escape(c.gender_other||'')}"></div><div class="field-hint">Transgender experience is captured separately below and is not treated as a gender.</div></div><div class="field-group"><label class="field-label">Transgender Experience</label><select id="cf-transgender-status" class="field-select"><option></option>${opt(['Yes','No','Questioning','Client doesn’t know','Client prefers not to answer','Data not collected'], c.transgender_status)}</select></div><div class="field-group"><label class="field-label">Race / Ethnicity</label><select id="cf-race" class="field-select"><option></option>${opt(this.hmisRaceEthnicityOptions(), c.race_ethnicity)}</select><div id="cf-race-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify race/ethnicity</label><input id="cf-race-other" class="field-input" value="${this.escape(c.race_ethnicity_other||'')}"></div></div><div class="field-group"><label class="field-label">Primary Language</label><select id="cf-primary-language" class="field-select"><option></option>${opt(['English','Spanish','Russian','Farsi','Other'], c.primary_language||c.household_language||c.language)}</select><div id="cf-primary-language-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify language</label><input id="cf-primary-language-other" class="field-input" value="${this.escape(c.primary_language_other||'')}"></div></div>${this.yesNoSegment('cf-veteran','Veteran Status',c.veteran)}${this.yesNoSegment('cf-disability','Disability Status',c.disability)}</div><details style="margin-top:12px;"><summary class="field-label" style="cursor:pointer;">Additional Information</summary><div class="client-form-grid" style="margin-top:12px;"><div class="field-group"><label class="field-label">Income at Entry</label><input id="cf-income-entry" type="number" class="field-input" value="${c.income_at_entry||''}"></div></div></details></div>
+      <div class="form-section"><div class="form-section-title">Housing & Case Management</div><div class="housing-progress">${this.housingProgressOptions().map(v=>`<button type="button" class="hp-step ${progress===v?'active':''}" data-housing-progress="${this.escape(v)}">○ ${this.escape(v)}</button>`).join('')}</div><input type="hidden" id="cf-housing-plan" value="${this.escape(progress)}"><div class="client-form-grid" style="margin-top:14px;"><div class="field-group"><label class="field-label">Expected Exit Date</label><input id="cf-expected-exit" type="date" class="field-input" value="${this.dateOnly(c.expected_exit_date)}"></div><div class="field-group"><label class="field-label">Housing Assessment Completed</label><input id="cf-housing-assessment" type="date" class="field-input" value="${this.dateOnly(c.housing_assessment_completed)}"></div><div class="field-group"><label class="field-label">Benefits Screening Completed</label><input id="cf-benefits-screening" type="date" class="field-input" value="${this.dateOnly(c.benefits_screening_completed)}"></div><div class="field-group"><label class="field-label">Income Verification Completed</label><input id="cf-income-verification" type="date" class="field-input" value="${this.dateOnly(c.income_verification_completed)}"></div></div></div>
+      <div id="cf-exit-section" class="form-section exit-section ${status==='Exited'?'':'is-hidden'}"><div class="form-section-title">Exit Information</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Exit Date</label><input id="cf-exit-date" type="date" class="field-input" value="${this.dateOnly(c.exit_date)}"></div><div class="field-group"><label class="field-label">Exit Destination</label><select id="cf-exit-type" class="field-select"><option></option>${opt(this.exitDestinationOptions(), c.exit_destination_type)}</select><div id="cf-exit-type-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please describe exit destination</label><input id="cf-exit-type-other" class="field-input" value="${this.escape(c.exit_destination_other||'')}"></div></div><div class="field-group"><label class="field-label">Reason for Exit</label><select id="cf-exit-reason" class="field-select"><option></option>${opt(this.exitReasonOptions(), c.exit_reason)}</select><div id="cf-exit-reason-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify reason for exit</label><input id="cf-exit-reason-other" class="field-input" value="${this.escape(c.exit_reason_other||'')}"></div></div><div class="field-group"><label class="field-label">Specific Destination / Notes</label><input id="cf-exit-destination" class="field-input" value="${this.escape(c.exit_destination||'')}"></div><div class="field-group full"><label class="field-label">Outcome Notes</label><textarea id="cf-exit-notes" class="field-textarea">${this.escape(c.exit_notes||'')}</textarea></div></div></div>
+      <div class="form-section"><div class="form-section-title">Recent Services</div>${recent}<button class="btn btn-ghost btn-sm" id="cf-add-service" ${id?'':'disabled'}>+ Add Service</button><div class="field-hint" style="margin-top:6px;">Save the client before adding services.</div></div><div id="cf-quality" class="data-quality-list"></div>
+    </div>${this.reportingSummaryHtml({...c,housing_plan_status:progress})}</div>`;
+    this.openOverlay('client');
+    const isOtherValue=(v)=>String(v||'').toLowerCase().includes('other') || String(v||'').toLowerCase().includes('different identity') || String(v||'').toLowerCase().includes('additional race');
+    const setupOther=(selectId,wrapId,inputId)=>{ const sel=document.getElementById(selectId), wrap=document.getElementById(wrapId), inp=document.getElementById(inputId); if(!sel||!wrap||!inp) return; const toggle=()=>{ const show=isOtherValue(sel.value); wrap.style.display=show?'block':'none'; if(!show) inp.value=''; }; sel.addEventListener('change',toggle); toggle(); };
+    setupOther('cf-gender','cf-gender-other-wrap','cf-gender-other');
+    setupOther('cf-race','cf-race-other-wrap','cf-race-other');
+    setupOther('cf-primary-language','cf-primary-language-other-wrap','cf-primary-language-other');
+    setupOther('cf-exit-type','cf-exit-type-other-wrap','cf-exit-type-other');
+    setupOther('cf-exit-reason','cf-exit-reason-other-wrap','cf-exit-reason-other');
+    const refresh=()=>{
+      const temp={hmis_unique_identifier:document.getElementById('cf-hmis-id').value.trim(), entry_date:document.getElementById('cf-entry-date').value, expected_exit_date:document.getElementById('cf-expected-exit').value, exit_date:document.getElementById('cf-exit-date')?.value, status:document.getElementById('cf-status').value, exit_destination_type:document.getElementById('cf-exit-type')?.value, housing_plan_status:document.getElementById('cf-housing-plan').value};
+      const warnings=this.clientQualityWarnings(temp); const q=document.getElementById('cf-quality'); if(q) q.innerHTML=warnings.map(w=>`<div class="dq-warning">⚠ ${this.escape(w)}</div>`).join('');
+    };
+    document.querySelectorAll('[data-status]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-status]').forEach(x=>x.classList.remove('active')); b.classList.add('active'); document.getElementById('cf-status').value=b.dataset.status; document.getElementById('cf-exit-section').classList.toggle('is-hidden', b.dataset.status!=='Exited'); refresh();}));
+    document.querySelectorAll('[data-segment-group]').forEach(g=>g.querySelectorAll('.segment-btn').forEach(b=>b.addEventListener('click',()=>{g.querySelectorAll('.segment-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active'); document.getElementById(g.dataset.segmentGroup).value=b.dataset.value;})));
+    document.querySelectorAll('[data-housing-progress]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-housing-progress]').forEach(x=>x.classList.remove('active')); b.classList.add('active'); document.getElementById('cf-housing-plan').value=b.dataset.housingProgress;}));
+    document.getElementById('cf-add-service')?.addEventListener('click',()=>{ this.closeForm('client'); this.openServiceForm(null,id); });
+    ['cf-hmis-id','cf-entry-date','cf-expected-exit','cf-exit-date','cf-exit-type'].forEach(i=>document.getElementById(i)?.addEventListener('input',refresh));
+    refresh();
+  };
+
+  App.saveClient = async function(){
+    const id=this.currentClientId || (crypto.randomUUID ? crypto.randomUUID() : 'client_'+Date.now());
+    const status=document.getElementById('cf-status').value;
+    const hmis=document.getElementById('cf-hmis-id').value.trim();
+    const exitType=status==='Exited' ? (document.getElementById('cf-exit-type').value||null) : null;
+    const defs=this.deriveExitDefaults(exitType);
+    const payload={ id, program_id:this.program.id, fiscal_year:this.fiscalYear, agency_client_id:hmis, hmis_unique_identifier:hmis || null, client_name:document.getElementById('cf-client-name').value.trim(), entry_date:document.getElementById('cf-entry-date').value || null, room_number:document.getElementById('cf-room-number').value.trim() || null, age:Number(document.getElementById('cf-age').value||0)||null, gender:document.getElementById('cf-gender').value||null, gender_other:document.getElementById('cf-gender-other')?.value.trim()||null, transgender_status:document.getElementById('cf-transgender-status')?.value||null, race_ethnicity:document.getElementById('cf-race').value||null, race_ethnicity_other:document.getElementById('cf-race-other')?.value.trim()||null, primary_language:document.getElementById('cf-primary-language')?.value||null, primary_language_other:document.getElementById('cf-primary-language-other')?.value.trim()||null, veteran:document.getElementById('cf-veteran').value||null, disability:document.getElementById('cf-disability').value||null, income_at_entry:Number(document.getElementById('cf-income-entry')?.value||0)||null, housing_plan_status:document.getElementById('cf-housing-plan').value||null, expected_exit_date:status==='Scheduled Exit' ? (document.getElementById('cf-expected-exit').value||null) : (document.getElementById('cf-expected-exit').value||null), housing_assessment_completed:document.getElementById('cf-housing-assessment')?.value||null, benefits_screening_completed:document.getElementById('cf-benefits-screening')?.value||null, income_verification_completed:document.getElementById('cf-income-verification')?.value||null, exit_date:status==='Exited' ? (document.getElementById('cf-exit-date').value||null) : null, exit_destination_type:exitType, exit_destination_other:status==='Exited' ? (document.getElementById('cf-exit-type-other')?.value.trim()||null) : null, exit_destination:status==='Exited' ? (document.getElementById('cf-exit-destination').value.trim()||null) : null, exit_housing_stability:status==='Exited' ? defs.stability : null, exit_expected_90_days:status==='Exited' ? defs.days90 : null, housing_goal_achieved:status==='Exited' ? defs.goal : null, exit_reason:status==='Exited' ? (document.getElementById('cf-exit-reason').value||null) : null, exit_reason_other:status==='Exited' ? (document.getElementById('cf-exit-reason-other')?.value.trim()||null) : null, follow_up_planned:status==='Exited' && defs.goal==='Yes' ? 'Yes' : null, exit_notes:status==='Exited' ? (document.getElementById('cf-exit-notes').value.trim()||null) : null, updated_by:this.user?.email||null, updated_at:new Date().toISOString() };
+    const warnings=this.clientQualityWarnings({...payload,status});
+    const blocking=warnings.filter(w=>/missing|need|before/.test(w));
+    const needsOther=[];
+    const otherCheck=(selectId,inputId,label)=>{ const sel=document.getElementById(selectId), inp=document.getElementById(inputId); const v=String(sel?.value||'').toLowerCase(); if((v.includes('other') || v.includes('different identity') || v.includes('additional race')) && !String(inp?.value||'').trim()) needsOther.push(label); };
+    otherCheck('cf-gender','cf-gender-other','Please specify gender identity.');
+    otherCheck('cf-race','cf-race-other','Please specify race/ethnicity.');
+    otherCheck('cf-primary-language','cf-primary-language-other','Please specify language.');
+    otherCheck('cf-exit-type','cf-exit-type-other','Please describe exit destination.');
+    otherCheck('cf-exit-reason','cf-exit-reason-other','Please specify reason for exit.');
+    if(needsOther.length){ document.getElementById('client-save-state').textContent=needsOther.join(' '); return; }
+    if(blocking.length){ document.getElementById('client-save-state').textContent=blocking.join(' '); return; }
+    const {error}=await this.sb.from('holloway_clients').upsert(payload,{onConflict:'id'});
+    if(error){ document.getElementById('client-save-state').textContent='Save failed: '+error.message; return; }
+    document.getElementById('client-save-state').textContent='Saved.'; await this.loadAll(); this.closeForm('client'); this.showView(this.view||'clients');
+  };
+
+  // Accurate demographic capture + reusable "Other, specify" support.
+  App.hmisGenderOptions = function(){ return ['Woman (Girl, if child)','Man (Boy, if child)','Culturally Specific Identity','Non-Binary','Questioning','Different Identity','Client doesn’t know','Client prefers not to answer','Data not collected']; };
+
+  App.openServiceForm = function(id=null,clientId=null) {
+    this.currentServiceId=id;
+    const s=id ? (this.data.clientServices||[]).find(x=>x.id===id)||{} : {client_id:clientId||''};
+    document.getElementById('service-body').innerHTML=`<div class="form-section"><div class="form-section-title">Service Contact</div><div class="client-form-grid"><div class="field-group full"><label class="field-label required">Client</label><select id="sf-client" class="field-select">${this.clientOptionList(s.client_id)}</select></div><div class="field-group"><label class="field-label required">Service Date</label><input id="sf-date" type="date" class="field-input" value="${this.dateOnly(s.service_date) || new Date().toISOString().slice(0,10)}"></div><div class="field-group"><label class="field-label required">Service Type</label><select id="sf-type" class="field-select">${this.serviceTypeOptions().map(x=>`<option value="${this.escape(x)}" ${s.service_type===x?'selected':''}>${this.escape(x)}</option>`).join('')}</select><div id="sf-type-other-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify service type</label><input id="sf-type-other" class="field-input" value="${this.escape(s.service_type_other||'')}"></div></div><div class="field-group"><label class="field-label">Duration Minutes</label><input id="sf-minutes" type="number" class="field-input" value="${s.duration_minutes||30}"></div><div class="field-group"><label class="field-label">Staff</label><input id="sf-staff" class="field-input" value="${this.escape(s.staff_name||'')}"></div><div class="field-group full"><label class="field-label">Notes</label><textarea id="sf-notes" class="field-textarea">${this.escape(s.notes||'')}</textarea></div></div></div>`;
+    this.openOverlay('service');
+    const toggle=()=>{ const show=String(document.getElementById('sf-type')?.value||'').toLowerCase().includes('other'); const wrap=document.getElementById('sf-type-other-wrap'); const inp=document.getElementById('sf-type-other'); if(wrap) wrap.style.display=show?'block':'none'; if(!show && inp) inp.value=''; };
+    document.getElementById('sf-type')?.addEventListener('change',toggle);
+    toggle();
+  };
+
+  App.saveService = async function() {
+    const id=this.currentServiceId || (crypto.randomUUID ? crypto.randomUUID() : 'svc_'+Date.now());
+    const serviceType=document.getElementById('sf-type').value||null;
+    const serviceTypeOther=document.getElementById('sf-type-other')?.value.trim()||null;
+    if(String(serviceType||'').toLowerCase().includes('other') && !serviceTypeOther){ document.getElementById('service-save-state').textContent='Please specify service type.'; return; }
+    const payload={id, program_id:this.program.id, fiscal_year:this.fiscalYear, client_id:document.getElementById('sf-client').value, service_date:document.getElementById('sf-date').value||null, service_type:serviceType, service_type_other:serviceTypeOther, duration_minutes:Number(document.getElementById('sf-minutes').value||0)||0, staff_name:document.getElementById('sf-staff').value.trim()||null, notes:document.getElementById('sf-notes').value.trim()||null, updated_by:this.user?.email||null, updated_at:new Date().toISOString()};
+    const {error}=await this.sb.from('holloway_client_services').upsert(payload,{onConflict:'id'});
+    if(error){ document.getElementById('service-save-state').textContent='Save failed: '+error.message; return; }
+    document.getElementById('service-save-state').textContent='Saved.'; await this.loadAll(); this.closeForm('service'); this.showView(this.view||'services');
+  };
+
+})();
 
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
