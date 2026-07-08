@@ -3497,6 +3497,119 @@ const App = {
 
 })();
 
+
+// ---------- Historical case notes enhancement (non-reporting) ----------
+(function(){
+  App.currentCaseNoteId = null;
+  App.ensureCaseNoteModal = function(){
+    if(document.getElementById('modal-case-note')) return;
+    const modal=document.createElement('div');
+    modal.id='modal-case-note';
+    modal.className='form-overlay';
+    modal.setAttribute('role','dialog');
+    modal.setAttribute('aria-modal','true');
+    modal.setAttribute('aria-labelledby','case-note-title');
+    modal.innerHTML=`<div class="form-modal">
+      <div class="form-modal-header"><div><div class="form-modal-title" id="case-note-title">Case Note</div><div class="form-modal-meta">Operational case management note — not used for program report calculations</div></div><button class="form-close-btn" data-close-case-note="1">✕</button></div>
+      <div class="form-gold-bar"></div>
+      <div class="form-body" id="case-note-body"></div>
+      <div class="form-footer"><div class="save-state" id="case-note-save-state">Not saved this session</div><div style="display:flex;gap:10px;"><button class="btn btn-ghost" data-close-case-note="1">Close</button><button class="btn btn-gold" id="btn-save-case-note">Save Case Note</button></div></div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.querySelectorAll('[data-close-case-note]').forEach(b=>b.addEventListener('click',()=>this.closeCaseNoteForm()));
+    modal.querySelector('#btn-save-case-note').addEventListener('click',()=>this.saveCaseNote());
+  };
+
+  const previousLoadAllForCaseNotes = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAllForCaseNotes.call(this);
+    if(!this.data) this.data={};
+    const pid=this.program?.id;
+    if(!pid){ this.data.caseNotes=[]; return; }
+    const {data,error}=await this.sb.from('holloway_case_notes')
+      .select('*')
+      .eq('program_id',pid)
+      .eq('fiscal_year',this.fiscalYear)
+      .order('note_date',{ascending:false})
+      .order('created_at',{ascending:false});
+    if(error){ console.warn('case notes unavailable', error); this.data.caseNotes=[]; }
+    else this.data.caseNotes=data||[];
+  };
+
+  App.caseNotesForClient = function(clientId){
+    return (this.data.caseNotes||[]).filter(n=>n.client_id===clientId).sort((a,b)=>String(b.note_date||b.created_at||'').localeCompare(String(a.note_date||a.created_at||'')));
+  };
+
+  App.renderCaseNotesPanel = function(clientId){
+    if(!clientId) return `<div class="form-section"><div class="form-section-title">Case Notes</div><div class="notice navy"><div>📝</div><div>Save the client record first, then add case notes. Case notes are stored as a separate history and do not feed the quarterly program report.</div></div></div>`;
+    const rows=this.caseNotesForClient(clientId);
+    return `<div class="form-section" id="client-case-notes-section"><div class="form-section-title">Case Notes</div>
+      <div class="notice navy"><div>📝</div><div><strong>Case notes are retained historically.</strong> They support case management documentation only and are not used in program report calculations.</div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;"><div class="field-hint">${rows.length} note${rows.length===1?'':'s'} on file</div><button class="btn btn-gold btn-sm" id="btn-add-case-note" type="button">+ Add Case Note</button></div>
+      ${rows.length ? `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Date</th><th>Staff</th><th>Note</th><th>Actions</th></tr></thead><tbody>${rows.map(n=>`<tr><td>${this.formatDate(this.dateOnly(n.note_date))}</td><td>${this.escape(n.staff_name||'—')}</td><td>${this.escape(n.note||'')}</td><td><button class="btn btn-ghost btn-sm" data-edit-case-note="${this.escape(n.id)}" type="button">Edit</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="notice amber"><div>ℹ️</div><div>No case notes have been added for this client yet.</div></div>`}
+    </div>`;
+  };
+
+  const previousOpenClientFormForCaseNotes = App.openClientForm;
+  App.openClientForm = function(id=null){
+    previousOpenClientFormForCaseNotes.call(this,id);
+    const body=document.getElementById('client-body');
+    if(!body) return;
+    const caseNotesHtml=this.renderCaseNotesPanel(id);
+    const exitSection=[...body.querySelectorAll('.form-section-title')].find(el=>/exit/i.test(el.textContent||''))?.closest('.form-section');
+    if(exitSection) exitSection.insertAdjacentHTML('beforebegin', caseNotesHtml);
+    else body.insertAdjacentHTML('beforeend', caseNotesHtml);
+    body.querySelector('#btn-add-case-note')?.addEventListener('click',()=>this.openCaseNoteForm(null,id));
+    body.querySelectorAll('[data-edit-case-note]').forEach(btn=>btn.addEventListener('click',()=>this.openCaseNoteForm(btn.dataset.editCaseNote,id)));
+  };
+
+  App.openCaseNoteForm = function(noteId=null, clientId=null){
+    this.ensureCaseNoteModal();
+    this.currentCaseNoteId=noteId;
+    const n=noteId ? (this.data.caseNotes||[]).find(x=>x.id===noteId)||{} : {client_id:clientId||this.currentClientId||'', note_date:this.today ? this.today() : new Date().toISOString().slice(0,10), staff_name:this.user?.email||''};
+    document.getElementById('case-note-title').textContent=noteId?'Edit Case Note':'Add Case Note';
+    document.getElementById('case-note-body').innerHTML=`<div class="form-section"><div class="form-section-title">Case Note Detail</div><div class="client-form-grid">
+      <div class="field-group full"><label class="field-label required">Client</label><select id="cn-client" class="field-select">${this.clientOptionList(n.client_id)}</select></div>
+      <div class="field-group"><label class="field-label required">Note Date</label><input id="cn-date" type="date" class="field-input" value="${this.dateOnly(n.note_date)||new Date().toISOString().slice(0,10)}"></div>
+      <div class="field-group"><label class="field-label">Staff</label><input id="cn-staff" class="field-input" value="${this.escape(n.staff_name||this.user?.email||'')}"></div>
+      <div class="field-group full"><label class="field-label required">Case Note</label><textarea id="cn-note" class="field-textarea" style="min-height:150px;">${this.escape(n.note||'')}</textarea><div class="field-hint">Case notes are saved to the client history only. They are not used in quarterly metrics or printed program-report calculations.</div></div>
+    </div></div>`;
+    document.getElementById('case-note-save-state').textContent='Not saved this session';
+    document.getElementById('modal-case-note').classList.add('open');
+  };
+
+  App.closeCaseNoteForm = function(){
+    document.getElementById('modal-case-note')?.classList.remove('open');
+    this.currentCaseNoteId=null;
+  };
+
+  App.saveCaseNote = async function(){
+    const clientId=document.getElementById('cn-client')?.value||'';
+    const noteDate=document.getElementById('cn-date')?.value||'';
+    const note=(document.getElementById('cn-note')?.value||'').trim();
+    if(!clientId || !noteDate || !note){ document.getElementById('case-note-save-state').textContent='Client, note date, and case note are required.'; return; }
+    const id=this.currentCaseNoteId || (crypto.randomUUID ? crypto.randomUUID() : 'note_'+Date.now());
+    const payload={
+      id,
+      program_id:this.program.id,
+      fiscal_year:this.fiscalYear,
+      client_id:clientId,
+      note_date:noteDate,
+      staff_name:(document.getElementById('cn-staff')?.value||'').trim()||null,
+      note,
+      updated_by:this.user?.email||null,
+      updated_at:new Date().toISOString()
+    };
+    const {error}=await this.sb.from('holloway_case_notes').upsert(payload,{onConflict:'id'});
+    if(error){ document.getElementById('case-note-save-state').textContent='Save failed: '+error.message; return; }
+    document.getElementById('case-note-save-state').textContent='Saved.';
+    await this.loadAll();
+    this.closeCaseNoteForm();
+    if(document.getElementById('modal-client')?.classList.contains('open')) this.openClientForm(clientId);
+    else this.showView(this.view||'clients');
+  };
+})();
+
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 </body>
