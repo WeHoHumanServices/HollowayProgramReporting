@@ -1317,8 +1317,10 @@ const App = {
   },
   genderKeyForClient(c) {
     const g = String(c.gender || '').toLowerCase();
-    if (g.includes('man') || g.includes('boy') || g === 'male') return 'male';
+    // Check female/woman BEFORE male/man: "woman" contains the substring "man",
+    // so checking male first misclassified every "Woman" as male.
     if (g.includes('woman') || g.includes('girl') || g === 'female') return 'female';
+    if (g.includes('man') || g.includes('boy') || g === 'male') return 'male';
     if (g.includes('non-binary') || g.includes('nonbinary') || g.includes('culturally') || g.includes('different') || g.includes('questioning') || g.includes('nb')) return 'nb';
     return 'unk';
   },
@@ -1326,9 +1328,12 @@ const App = {
     const r = String(c.race_ethnicity || '').toLowerCase();
     if (r.includes('american indian') || r.includes('alaska native') || r.includes('indigenous')) return 'American Indian / Alaska Native';
     if (r.includes('asian') || r.includes('pacific islander') || r.includes('native hawaiian')) return 'Asian/Pacific Islander';
+    // Check Middle Eastern / North African BEFORE Black/African: "north african"
+    // contains the substring "african", so checking the Black/African bucket
+    // first misclassified every Middle Eastern/North African client.
+    if (r.includes('middle eastern') || r.includes('north african')) return 'Middle Eastern / North African';
     if (r.includes('black') || r.includes('african american') || r.includes('african')) return 'Black, African American, or African';
     if (r.includes('hispanic') || r.includes('latina') || r.includes('latino') || r.includes('latine')) return 'Hispanic/Latina/o/e';
-    if (r.includes('middle eastern') || r.includes('north african')) return 'Middle Eastern / North African';
     if (r.includes('white')) return 'White';
     if (r.includes('additional') || r.includes('other') || (c.race_ethnicity_other || '').trim()) return 'Other';
     return 'Unknown';
@@ -3317,7 +3322,7 @@ const App = {
   };
   App.clientQualityWarnings = function(c){
     const warnings=[]; const entry=this.dateOnly(c.entry_date); const exit=this.dateOnly(c.exit_date);
-    if(!c.hmis_unique_identifier) warnings.push('HMIS ID is missing.');
+    if(!c.hmis_unique_identifier && !c.id) warnings.push('HMIS ID is missing.');
     if(!entry) warnings.push('Entry date is missing.');
     if(exit && entry && exit < entry) warnings.push('Exit date is before entry date.');
     if(c.status==='Exited' && !exit) warnings.push('Exited clients need an exit date.');
@@ -3394,7 +3399,12 @@ const App = {
       room_assignment:document.getElementById('cf-room-number').value.trim() || null,
       age:Number(document.getElementById('cf-age').value||0)||null,
       gender:document.getElementById('cf-gender').value||null,
+      gender_other:document.getElementById('cf-gender-other')?.value.trim()||null,
+      transgender_status:document.getElementById('cf-transgender-status')?.value||null,
       race_ethnicity:document.getElementById('cf-race').value||null,
+      race_ethnicity_other:document.getElementById('cf-race-other')?.value.trim()||null,
+      primary_language:document.getElementById('cf-primary-language')?.value||null,
+      primary_language_other:document.getElementById('cf-primary-language-other')?.value.trim()||null,
       veteran:document.getElementById('cf-veteran').value||null,
       disability:document.getElementById('cf-disability').value||null,
       income_at_entry:Number(document.getElementById('cf-income-entry')?.value||0)||null,
@@ -3405,11 +3415,13 @@ const App = {
       income_verification_completed:document.getElementById('cf-income-verification')?.value||null,
       exit_date:status==='Exited' ? (document.getElementById('cf-exit-date').value||null) : null,
       exit_destination_type:exitType,
+      exit_destination_other:status==='Exited' ? (document.getElementById('cf-exit-type-other')?.value.trim()||null) : null,
       exit_destination:status==='Exited' ? (document.getElementById('cf-exit-destination').value.trim()||null) : null,
       exit_housing_stability:status==='Exited' ? defs.stability : null,
       exit_expected_90_days:status==='Exited' ? defs.days90 : null,
       housing_goal_achieved:status==='Exited' ? defs.goal : null,
       exit_reason:status==='Exited' ? (document.getElementById('cf-exit-reason').value||null) : null,
+      exit_reason_other:status==='Exited' ? (document.getElementById('cf-exit-reason-other')?.value.trim()||null) : null,
       follow_up_planned:status==='Exited' && defs.goal==='Yes' ? 'Yes' : null,
       exit_notes:status==='Exited' ? (document.getElementById('cf-exit-notes').value.trim()||null) : null,
       updated_by:this.user?.email||null,
