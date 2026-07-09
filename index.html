@@ -12,6 +12,7 @@
   const WEHO_LOGO_URL = 'https://www.governmentjobs.com/AgencyPages/weho/agencyImages/download/weho_white_on_blue.jpg';
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
 :root {
@@ -3607,6 +3608,151 @@ const App = {
     this.closeCaseNoteForm();
     if(document.getElementById('modal-client')?.classList.contains('open')) this.openClientForm(clientId);
     else this.showView(this.view||'clients');
+  };
+})();
+
+// ---------- Excel export (analysis-ready, tidy tables for PivotTables) ----------
+(function(){
+  App.excelDateOrNull = function(v){ const d=this.dateOnly(v); return d ? new Date(d+'T00:00:00') : null; };
+
+  App.buildClientExportRows = function(){
+    return (this.data.clients||[]).map(c => ({
+      'HMIS ID': this.clientDisplayId(c),
+      'Status': this.simpleClientStatus ? this.simpleClientStatus(c) : this.clientStatus(c),
+      'Entry Date': this.excelDateOrNull(c.entry_date),
+      'Exit Date': this.excelDateOrNull(c.exit_date),
+      'Expected Exit Date': this.excelDateOrNull(c.expected_exit_date),
+      'Length of Stay (Days)': c.entry_date ? this.daysInclusive(this.dateOnly(c.entry_date), this.dateOnly(c.exit_date) || this.today()) : null,
+      'Room / Bed Assignment': c.room_assignment || '',
+      'Age': c.age ?? null,
+      'Age Band': this.ageBandForClient ? (this.ageBandForClient(c) || '') : '',
+      'Gender': c.gender || '',
+      'Gender (Other, specify)': c.gender_other || '',
+      'Transgender Experience': c.transgender_status || '',
+      'Race/Ethnicity': c.race_ethnicity || '',
+      'Race/Ethnicity (Other, specify)': c.race_ethnicity_other || '',
+      'Primary Language': c.primary_language || '',
+      'Primary Language (Other, specify)': c.primary_language_other || '',
+      'Veteran Status': c.veteran || '',
+      'Disability Status': c.disability || '',
+      'Income at Entry': c.income_at_entry ?? null,
+      'Housing Plan Status': c.housing_plan_status || '',
+      'Housing Assessment Completed': this.excelDateOrNull(c.housing_assessment_completed),
+      'Benefits Screening Completed': this.excelDateOrNull(c.benefits_screening_completed),
+      'Income Verification Completed': this.excelDateOrNull(c.income_verification_completed),
+      'Exit Destination Type': c.exit_destination_type || '',
+      'Exit Destination (Other, specify)': c.exit_destination_other || '',
+      'Exit Destination Notes': c.exit_destination || '',
+      'Exit Outcome Band': c.exit_date ? (this.exitOutcomeBand(c) || '') : '',
+      'Exit Stability': c.exit_date ? (this.exitStability(c) || '') : '',
+      'Expected Stable 90+ Days': c.exit_expected_90_days || '',
+      'Housing Goal Achieved': c.housing_goal_achieved || '',
+      'Reason for Exit': c.exit_reason || '',
+      'Reason for Exit (Other, specify)': c.exit_reason_other || '',
+      'Follow-up Planned': c.follow_up_planned || '',
+      'Updated By': c.updated_by || '',
+      'Updated At': c.updated_at ? new Date(c.updated_at) : null
+    }));
+  };
+
+  App.buildServiceExportRows = function(){
+    const clientMap = new Map((this.data.clients||[]).map(c => [c.id, c]));
+    return (this.data.clientServices||[]).map(s => {
+      const c = clientMap.get(s.client_id) || {};
+      return {
+        'HMIS ID': this.clientDisplayId(c) || s.client_id || '',
+        'Service Date': this.excelDateOrNull(s.service_date),
+        'Service Type': s.service_type || '',
+        'Duration (Minutes)': Number(s.duration_minutes || 0),
+        'Staff': s.staff_name || '',
+        'Notes': s.notes || ''
+      };
+    });
+  };
+
+  App.buildFollowUpExportRows = function(){
+    const rows = this.expectedFollowUps ? this.expectedFollowUps() : (this.data.housingFollowUps||[]);
+    return rows.map(f => {
+      const c = f.client || (this.data.clients||[]).find(x=>x.id===f.client_id) || {};
+      return {
+        'HMIS ID': this.clientDisplayId(c),
+        'Follow-Up Type': f.followup_type || '',
+        'Due Date': this.excelDateOrNull(f.due_date),
+        'Status': this.followUpStatus ? this.followUpStatus(f) : (f.status || ''),
+        'Housing Status': f.housing_status || '',
+        'Stable at Follow-Up': f.stable_at_followup || '',
+        'Contact Method': f.contact_method || '',
+        'Completed Date': this.excelDateOrNull(f.completed_date),
+        'Notes': f.notes || ''
+      };
+    });
+  };
+
+  App.buildQuarterlyMetricExportRows = function(){
+    const rows = [];
+    Object.keys(this.quarters).forEach(q => {
+      const scope = this.reportScope(q);
+      CONFIG.SCOPE_ROWS.forEach(row => {
+        if (row.mode === 'personsYtd') return;
+        rows.push({ 'Fiscal Year': CONFIG.FISCAL_YEAR_LABEL, 'Quarter': q, 'Metric': row.label, 'Value': Number(scope[row.key] ?? 0) });
+      });
+      const personsQuarter = this.generatedPersonsQuarter ? this.generatedPersonsQuarter(q) : Number(this.data.reports[q]?.persons_quarter || 0);
+      const personsYtd = this.generatedPersonsYtd ? this.generatedPersonsYtd(q) : this.calcPersonsYtd(q);
+      rows.push({ 'Fiscal Year': CONFIG.FISCAL_YEAR_LABEL, 'Quarter': q, 'Metric': 'Unduplicated Persons Served (Quarter)', 'Value': Number(personsQuarter||0) });
+      rows.push({ 'Fiscal Year': CONFIG.FISCAL_YEAR_LABEL, 'Quarter': q, 'Metric': 'Unduplicated Persons Served (YTD)', 'Value': Number(personsYtd||0) });
+    });
+    return rows;
+  };
+
+  App.buildDemographicExportRows = function(){
+    const rows = [];
+    if (!(this.useClientGeneratedReporting && this.useClientGeneratedReporting())) return rows;
+    Object.keys(this.quarters).forEach(q => {
+      const demo = this.generatedDemographicsFromClients(q);
+      this.ageBands.forEach(age => {
+        const row = demo.ageGender[age] || {};
+        ['male','female','nb','unk'].forEach(k => {
+          rows.push({ 'Fiscal Year': CONFIG.FISCAL_YEAR_LABEL, 'Quarter': q, 'Demographic Type': 'Age & Gender', 'Category': age, 'Subcategory': k, 'Count': Number(row[k]||0) });
+        });
+      });
+      this.ethnicityKeys.forEach(k => rows.push({ 'Fiscal Year': CONFIG.FISCAL_YEAR_LABEL, 'Quarter': q, 'Demographic Type': 'Ethnicity', 'Category': k, 'Subcategory': '', 'Count': Number(demo.ethnicity[k]||0) }));
+      this.languageKeys.forEach(k => rows.push({ 'Fiscal Year': CONFIG.FISCAL_YEAR_LABEL, 'Quarter': q, 'Demographic Type': 'Language', 'Category': k, 'Subcategory': '', 'Count': Number(demo.language[k]||0) }));
+    });
+    return rows;
+  };
+
+  App.exportDataToExcel = function(){
+    if (typeof XLSX === 'undefined') { this.toast('Excel export library failed to load. Check your network connection.', { error:true }); return; }
+
+    const addSheet = (wb, rows, name) => {
+      const safeRows = rows.length ? rows : [{ 'No data': 'No records available for this program/fiscal year yet.' }];
+      const ws = XLSX.utils.json_to_sheet(safeRows, { cellDates: true });
+      ws['!cols'] = Object.keys(safeRows[0]).map(k => ({ wch: Math.min(42, Math.max(12, String(k).length + 2)) }));
+      XLSX.utils.book_append_sheet(wb, ws, name.slice(0,31));
+    };
+
+    const wb = XLSX.utils.book_new();
+    addSheet(wb, this.buildClientExportRows(), 'Clients');
+    addSheet(wb, this.buildServiceExportRows(), 'Services');
+    addSheet(wb, this.buildFollowUpExportRows(), 'Housing Follow-Ups');
+    addSheet(wb, this.buildQuarterlyMetricExportRows(), 'Quarterly Metrics');
+    addSheet(wb, this.buildDemographicExportRows(), 'Demographics');
+
+    const progName = (this.programName ? this.programName() : 'Program').replace(/[^\w\- ]+/g,'').trim() || 'Program';
+    const filename = `${progName} Data Export ${new Date().toISOString().slice(0,10)}.xlsx`;
+    XLSX.writeFile(wb, filename, { cellDates: true });
+    this.toast('Excel export ready — check your downloads.');
+  };
+
+  const oldRenderDashboardForExport = App.renderDashboard;
+  App.renderDashboard = function(){
+    oldRenderDashboardForExport.call(this);
+    const el = document.getElementById('view-dashboard');
+    const printBtn = el?.querySelector('#btn-print-current');
+    if (printBtn && !document.getElementById('btn-export-excel')) {
+      printBtn.insertAdjacentHTML('afterend', '<button class="btn btn-ghost btn-sm" id="btn-export-excel">Export to Excel</button>');
+      el.querySelector('#btn-export-excel')?.addEventListener('click', () => this.exportDataToExcel());
+    }
   };
 })();
 
