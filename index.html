@@ -3574,7 +3574,7 @@ const App = {
     document.getElementById('qr-narrative-body').innerHTML = `<div class="form-section"><div class="form-section-title">Quarterly Narrative</div><div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div><div><strong>Complete the narrative sections.</strong><br>Include context for the quarter, challenges, planned improvements, and one de-identified success story.</div></div>
       <div class="field-group" data-field-group="qr-narrative-text"><label class="field-label required" for="qr-narrative-text">Combined Narrative</label><textarea class="field-textarea" id="qr-narrative-text" required style="min-height:220px;line-height:1.65;">${this.escape(r.narrative_text || '')}</textarea><span class="field-error">Narrative is required before submission.</span></div>
       <div class="form-row"><div class="field-group"><label class="field-label required" for="qr-narrative-name">Submitted By</label><input class="field-input" id="qr-narrative-name" required value="${this.escape(r.narrative_submitted_by || r.signatory_name || this.defaultSignatory())}"></div><div class="field-group"><label class="field-label required" for="qr-narrative-date">Date</label><input type="date" class="field-input" id="qr-narrative-date" required value="${r.narrative_date || ''}"></div></div>
-      <div class="notice amber"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.1 14c.9-1 1.9-2.1 1.9-4a5 5 0 0 0-10 0c0 1.9 1 3 1.9 4 .7.8 1.1 1.2 1.1 2h4c0-.8.4-1.2 1.1-2Z"/></svg></div><div>For easier editing, use the dedicated <strong>Quarterly Narrative</strong> page in the left navigation. This tab stores the combined report narrative.</div></div>
+      <div class="notice amber"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.1 14c.9-1 1.9-2.1 1.9-4a5 5 0 0 0-10 0c0 1.9 1 3 1.9 4 .7.8 1.1 1.2 1.1 2h4c0-.8.4-1.2 1.1-2Z"/></svg></div><div>For easier editing, use the <strong>Quarterly Narrative</strong> page in the left navigation.</div></div>
     </div>`;
   };
 
@@ -3597,7 +3597,7 @@ const App = {
    ============================================================ */
 (function(){
   const css = `
-    .segmented-row{display:flex;gap:8px;flex-wrap:wrap}.segment-btn{border:1px solid var(--border);background:white;color:var(--gray-600);border-radius:999px;padding:7px 13px;font-weight:800;font-size:12px;cursor:pointer}.segment-btn.active{background:var(--navy);border-color:var(--navy);color:white}.wizard-steps{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.wizard-step{flex:1;min-width:150px;border:1px solid var(--border);border-left:4px solid var(--gold);background:white;border-radius:var(--radius);padding:10px 12px}.wizard-step .num{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);font-weight:900}.wizard-step .name{font-weight:900;color:var(--navy);margin-top:2px}.housing-progress{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.hp-step{border:1px solid var(--border);background:white;border-radius:var(--radius);padding:9px 10px;text-align:left;font-weight:800;color:var(--gray-600);cursor:pointer}.hp-step.active{background:#EEF2FA;border-color:var(--navy);color:var(--navy);box-shadow:inset 4px 0 0 var(--gold)}.client-entry-layout{display:grid;grid-template-columns:minmax(0,2fr) 260px;gap:18px;align-items:start}.report-summary-card{position:sticky;top:76px}.report-check{display:flex;gap:8px;align-items:flex-start;border-bottom:1px solid var(--gray-100);padding:7px 0;font-size:12.5px}.report-check:last-child{border-bottom:none}.recent-service-row{display:flex;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;background:white;margin-bottom:7px;font-size:12.5px}.exit-section.is-hidden{display:none}.data-quality-list{margin-top:8px;display:grid;gap:6px}.dq-warning{font-size:12px;background:var(--amber-light);border:1px solid #F0C96B;color:#7A5200;border-radius:var(--radius);padding:6px 8px}@media(max-width:980px){.client-entry-layout{grid-template-columns:1fr}.report-summary-card{position:static}.housing-progress{grid-template-columns:1fr}}`;
+    .segmented-row{display:flex;gap:8px;flex-wrap:wrap}.segment-btn{border:1px solid var(--border);background:white;color:var(--gray-600);border-radius:999px;padding:7px 13px;font-weight:800;font-size:12px;cursor:pointer}.segment-btn.active{background:var(--navy);border-color:var(--navy);color:white}.wizard-steps{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.wizard-step{flex:1;min-width:150px;border:1px solid var(--border);border-left:4px solid var(--gold);background:white;border-radius:var(--radius);padding:10px 12px}.wizard-step .num{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);font-weight:900}.wizard-step .name{font-weight:900;color:var(--navy);margin-top:2px}.housing-progress{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.hp-step{border:1px solid var(--border);background:white;border-radius:var(--radius);padding:9px 10px;text-align:left;font-weight:800;color:var(--gray-600);cursor:pointer}.hp-step.active{background:#EEF2FA;border-color:var(--navy);color:var(--navy);box-shadow:inset 4px 0 0 var(--gold)}.client-entry-layout{display:grid;grid-template-columns:minmax(0,2fr) 260px;gap:18px;align-items:start}.report-summary-card{position:sticky;top:76px}.report-check{display:flex;gap:8px;align-items:flex-start;border-bottom:1px solid var(--gray-100);padding:7px 0;font-size:12.5px}.report-check:last-child{border-bottom:none}.recent-service-row{display:flex;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;background:white;margin-bottom:7px;font-size:12.5px}.exit-section.is-hidden{display:none}.data-quality-list{margin-top:8px;display:grid;gap:6px}.dq-warning{font-size:12px;background:var(--amber-light);border:1px solid #F0C96B;color:#7A5200;border-radius:var(--radius);padding:6px 8px}.client-table th.sortable{cursor:pointer;user-select:none;white-space:nowrap}.client-table th.sortable:hover{color:var(--navy)}.exit-dest-cell{cursor:help}@media(max-width:980px){.client-entry-layout{grid-template-columns:1fr}.report-summary-card{position:static}.housing-progress{grid-template-columns:1fr}}`;
   const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
   App.clientDisplayId = function(c){ return c?.id || c?.hmis_unique_identifier || c?.agency_client_id || '—'; };
@@ -3642,21 +3642,91 @@ const App = {
     return warnings;
   };
 
+  // Generic column-sort helpers shared by the Active Caseload and Exits tables.
+  App.applySort = function(list, sortState, accessors){
+    if(!sortState || !sortState.key || !accessors[sortState.key]) return list;
+    const acc = accessors[sortState.key];
+    const sorted = [...list].sort((a,b)=>{
+      const av = acc(a), bv = acc(b);
+      const aEmpty = av===null || av===undefined || av==='';
+      const bEmpty = bv===null || bv===undefined || bv==='';
+      if(aEmpty && bEmpty) return 0;
+      if(aEmpty) return 1;
+      if(bEmpty) return -1;
+      if(av < bv) return -1;
+      if(av > bv) return 1;
+      return 0;
+    });
+    if(sortState.dir === 'desc') sorted.reverse();
+    return sorted;
+  };
+  App.toggleSort = function(sortState, key){
+    if(sortState.key === key){ sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc'; }
+    else { sortState.key = key; sortState.dir = 'asc'; }
+  };
+  App.sortIndicator = function(sortState, key){
+    if(!sortState || sortState.key !== key) return '';
+    return sortState.dir === 'asc' ? ' ▲' : ' ▼';
+  };
+  App.sortableHeader = function(sortState, key, label){
+    return `<th class="sortable" data-sort-key="${key}">${this.escape(label)}${this.sortIndicator(sortState, key)}</th>`;
+  };
+  App.wireSortableHeaders = function(el, sortState, onSort){
+    el.querySelectorAll('th[data-sort-key]').forEach(th=>th.addEventListener('click', ()=>{
+      this.toggleSort(sortState, th.dataset.sortKey);
+      onSort();
+    }));
+  };
+
   App.renderClients = function(){
     const el=document.getElementById('view-clients');
-    const active=(this.data.clients||[]).filter(c=>this.clientStatus(c)!=='Exited');
+    this._caseloadSort = this._caseloadSort || {key:null, dir:'asc'};
+    const activeRaw=(this.data.clients||[]).filter(c=>this.clientStatus(c)!=='Exited');
+    const accessors = {
+      hmis: c=>this.clientDisplayId(c),
+      name: c=>this.clientName(c)||'',
+      status: c=>this.simpleClientStatus(c),
+      housing: c=>c.housing_plan_status||'',
+      los: c=>this.clientBedNights(c,this.dateOnly(c.entry_date),this.today()),
+      entry: c=>this.dateOnly(c.entry_date)||'',
+      room: c=>c.room_assignment||''
+    };
+    const active = this.applySort(activeRaw, this._caseloadSort, accessors);
     const rows=active.map(c=>`<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.statusBadge(this.simpleClientStatus(c).toLowerCase().replace(' ','-'))}</td><td>${this.escape(c.housing_plan_status||'—')}</td><td>${this.clientBedNights(c,this.dateOnly(c.entry_date),this.today()).toLocaleString()}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.escape(c.room_assignment||'—')}</td><td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button><button class="btn btn-ghost btn-sm" data-add-service="${c.id}">Add Service</button></div></td></tr>`).join('') || '<tr><td colspan="8" class="empty-table-state">No active client records entered yet.</td></tr>';
-    el.innerHTML=`<div class="page-header"><div><div class="page-title">Active Caseload</div><div class="page-subtitle">Daily client workspace. Quarterly reporting is generated from these source records.</div></div><button class="btn btn-gold" id="btn-new-client">+ Add Client</button></div><div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div><strong>Simplified entry:</strong> HMIS ID is the client identifier. Agency ID has been removed from the visible workflow.</div></div><div class="client-table-wrap"><table class="client-table"><thead><tr><th>HMIS ID</th><th>Name</th><th>Status</th><th>Housing Progress</th><th>LOS</th><th>Entry</th><th>Room / Bed</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    el.innerHTML=`<div class="page-header"><div><div class="page-title">Active Caseload</div><div class="page-subtitle">Daily client workspace. Quarterly reporting is generated from these source records.</div></div><button class="btn btn-gold" id="btn-new-client">+ Add Client</button></div><div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._caseloadSort,'hmis','HMIS ID')}${this.sortableHeader(this._caseloadSort,'name','Name')}${this.sortableHeader(this._caseloadSort,'status','Status')}${this.sortableHeader(this._caseloadSort,'housing','Housing Progress')}${this.sortableHeader(this._caseloadSort,'los','LOS')}${this.sortableHeader(this._caseloadSort,'entry','Entry')}${this.sortableHeader(this._caseloadSort,'room','Room / Bed')}<th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     el.querySelector('#btn-new-client').addEventListener('click',()=>this.openClientForm());
     el.querySelectorAll('[data-edit-client]').forEach(b=>b.addEventListener('click',()=>this.openClientForm(b.dataset.editClient)));
     el.querySelectorAll('[data-add-service]').forEach(b=>b.addEventListener('click',()=>this.openServiceForm(null,b.dataset.addService)));
+    this.wireSortableHeaders(el, this._caseloadSort, ()=>this.renderClients());
   };
 
   App.renderClientExits = function(){
-    const el=document.getElementById('view-client-exits'); const exits=(this.data.clients||[]).filter(c=>c.exit_date);
-    const rows=exits.map(c=>`<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.formatDate(c.exit_date)}</td><td>${this.escape(c.exit_destination_type||'—')}</td><td>${this.escape(this.exitOutcomeBand(c)||'—')}</td><td>${this.escape(this.exitStability(c)||'—')}</td><td>${this.escape(c.housing_goal_achieved||'—')}</td><td><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button></td></tr>`).join('') || '<tr><td colspan="9" class="field-hint" style="text-align:center;padding:24px;">No client exits recorded yet.</td></tr>';
-    el.innerHTML=`<div class="page-header"><div><div class="page-title">Exits</div><div class="page-subtitle">Exit detail appears only when a client is marked exited.</div></div></div>${this.renderOutcomeSummary(this.currentQuarter)}<div class="client-table-wrap" style="margin-top:16px;"><table class="client-table"><thead><tr><th>HMIS ID</th><th>Name</th><th>Entry</th><th>Exit</th><th>Destination</th><th>Outcome Band</th><th>Stability</th><th>Goal</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    const el=document.getElementById('view-client-exits'); const exitsRaw=(this.data.clients||[]).filter(c=>c.exit_date);
+    this._exitsSort = this._exitsSort || {key:null, dir:'asc'};
+    const accessors = {
+      hmis: c=>this.clientDisplayId(c),
+      name: c=>this.clientName(c)||'',
+      entry: c=>this.dateOnly(c.entry_date)||'',
+      exit: c=>this.dateOnly(c.exit_date)||'',
+      los: c=>this.daysInclusive(this.dateOnly(c.entry_date), this.dateOnly(c.exit_date)),
+      destination: c=>c.exit_destination_type||'',
+      outcome: c=>this.exitOutcomeBand(c)||'',
+      stability: c=>this.exitStability(c)||'',
+      goal: c=>c.housing_goal_achieved||''
+    };
+    const exits = this.applySort(exitsRaw, this._exitsSort, accessors);
+    const missingDestCount = exitsRaw.filter(c=>!c.exit_destination_type).length;
+    const missingDestBanner = missingDestCount>0 ? `<div class="notice amber" style="margin-top:16px;"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.1 14c.9-1 1.9-2.1 1.9-4a5 5 0 0 0-10 0c0 1.9 1 3 1.9 4 .7.8 1.1 1.2 1.1 2h4c0-.8.4-1.2 1.1-2Z"/></svg></div><div><strong>${missingDestCount} of ${exitsRaw.length} exited client${exitsRaw.length===1?'':'s'}</strong> ${missingDestCount===1?'is':'are'} missing an exit destination. Open each record to complete it so quarterly reporting reflects accurate outcomes.</div></div>` : '';
+    const rows=exits.map(c=>{
+      const destDetail=[c.exit_destination, c.exit_notes].filter(Boolean).join(' — ');
+      const destCell = destDetail
+        ? `<td class="exit-dest-cell" title="${this.escape(destDetail)}">${this.escape(c.exit_destination_type||'—')} <span aria-hidden="true">ⓘ</span></td>`
+        : `<td>${this.escape(c.exit_destination_type||'—')}</td>`;
+      return `<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.formatDate(c.exit_date)}</td><td>${this.daysInclusive(this.dateOnly(c.entry_date), this.dateOnly(c.exit_date)).toLocaleString()}</td>${destCell}<td>${this.escape(this.exitOutcomeBand(c)||'—')}</td><td>${this.escape(this.exitStability(c)||'—')}</td><td>${this.escape(c.housing_goal_achieved||'—')}</td><td><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button></td></tr>`;
+    }).join('') || '<tr><td colspan="10" class="field-hint" style="text-align:center;padding:24px;">No client exits recorded yet.</td></tr>';
+    el.innerHTML=`<div class="page-header"><div><div class="page-title">Exits</div><div class="page-subtitle">Exit detail appears only when a client is marked exited.</div></div></div>${this.renderOutcomeSummary(this.currentQuarter)}${missingDestBanner}<div class="client-table-wrap" style="margin-top:16px;"><table class="client-table"><thead><tr>${this.sortableHeader(this._exitsSort,'hmis','HMIS ID')}${this.sortableHeader(this._exitsSort,'name','Name')}${this.sortableHeader(this._exitsSort,'entry','Entry')}${this.sortableHeader(this._exitsSort,'exit','Exit')}${this.sortableHeader(this._exitsSort,'los','LOS')}${this.sortableHeader(this._exitsSort,'destination','Destination')}${this.sortableHeader(this._exitsSort,'outcome','Outcome Band')}${this.sortableHeader(this._exitsSort,'stability','Stability')}${this.sortableHeader(this._exitsSort,'goal','Goal')}<th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
     el.querySelectorAll('[data-edit-client]').forEach(b=>b.addEventListener('click',()=>this.openClientForm(b.dataset.editClient)));
+    this.wireSortableHeaders(el, this._exitsSort, ()=>this.renderClientExits());
   };
 
   App.openClientForm = function(id=null){
@@ -3667,7 +3737,7 @@ const App = {
     const services=(this.data.clientServices||[]).filter(s=>s.client_id===id).slice(0,5);
     const recent=services.map(s=>`<div class="recent-service-row"><div><strong>${this.escape(s.service_type||'Service')}</strong><br><span class="field-hint">${this.formatDate(s.service_date)}</span></div><span class="field-hint">${Number(s.duration_minutes||0)} min</span></div>`).join('') || '<div class="field-hint">No services recorded yet.</div>';
     document.getElementById('client-title').textContent = id ? `Client Profile · ${this.escape(this.clientDisplayId(c))}` : 'New Client Intake';
-    document.getElementById('client-body').innerHTML=`<div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div><strong>Streamlined workflow:</strong> Complete intake and demographics first. Housing progress, case management milestones, services, and exit details can be updated as the case progresses.</div></div><div class="wizard-steps"><div class="wizard-step"><div class="num">Step 1</div><div class="name">Intake & Demographics</div></div><div class="wizard-step"><div class="num">Step 2</div><div class="name">Housing & Case Management</div></div><div class="wizard-step"><div class="num">Step 3</div><div class="name">Services / Exit if applicable</div></div></div><div class="client-entry-layout"><div>
+    document.getElementById('client-body').innerHTML=`<div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>Complete intake and demographics first. Housing progress, case management milestones, services, and exit details can be added as the case progresses.</div></div><div class="wizard-steps"><div class="wizard-step"><div class="num">Step 1</div><div class="name">Intake & Demographics</div></div><div class="wizard-step"><div class="num">Step 2</div><div class="name">Housing & Case Management</div></div><div class="wizard-step"><div class="num">Step 3</div><div class="name">Services / Exit if applicable</div></div></div><div class="client-entry-layout"><div>
       <div class="form-section"><div class="form-section-title">Intake & Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label required">HMIS ID</label><input id="cf-hmis-id" class="field-input" value="${this.escape(c.id||c.hmis_unique_identifier||c.agency_client_id||'')}" placeholder="HMIS Unique Identifier"></div><div class="field-group"><label class="field-label required">Entry Date</label><input id="cf-entry-date" type="date" class="field-input" value="${this.dateOnly(c.entry_date)}"></div><div class="field-group"><label class="field-label">Current Status</label><div class="segmented-row" data-status-group>${['Active','Scheduled Exit','Exited'].map(v=>`<button type="button" class="segment-btn ${status===v?'active':''}" data-status="${v}">${v}</button>`).join('')}</div><input type="hidden" id="cf-status" value="${this.escape(status)}"></div><div class="field-group"><label class="field-label">Room / Bed Assignment</label><input id="cf-room-number" class="field-input" value="${this.escape(c.room_assignment||'')}" placeholder="e.g., Room 7, 102, Bed A, Unassigned"></div></div></div>
       <div class="form-section"><div class="form-section-title">Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Client Name <span class="field-hint">Agency use only</span></label><input id="cf-client-name" class="field-input" value="${this.escape(c.client_name||'')}"></div><div class="field-group"><label class="field-label">Age</label><input id="cf-age" type="number" class="field-input" value="${c.age||''}"></div><div class="field-group"><label class="field-label">Gender Identity</label><select id="cf-gender" class="field-select"><option></option>${opt(this.hmisGenderOptions(), c.gender)}</select><div id="cf-gender-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify gender identity</label><input id="cf-gender-other" class="field-input" value="${this.escape(c.gender_other||'')}"></div><div class="field-hint">Transgender experience is captured separately below and is not treated as a gender.</div></div><div class="field-group"><label class="field-label">Transgender Experience</label><select id="cf-transgender-status" class="field-select"><option></option>${opt(['Yes','No','Questioning','Client doesn’t know','Client prefers not to answer','Data not collected'], c.transgender_status)}</select></div><div class="field-group"><label class="field-label">Race / Ethnicity</label><select id="cf-race" class="field-select"><option></option>${opt(this.hmisRaceEthnicityOptions(), c.race_ethnicity)}</select><div id="cf-race-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify race/ethnicity</label><input id="cf-race-other" class="field-input" value="${this.escape(c.race_ethnicity_other||'')}"></div></div><div class="field-group"><label class="field-label">Primary Language</label><select id="cf-primary-language" class="field-select"><option></option>${opt(['English','Spanish','Russian','Farsi','Other'], c.primary_language||c.household_language||c.language)}</select><div id="cf-primary-language-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify language</label><input id="cf-primary-language-other" class="field-input" value="${this.escape(c.primary_language_other||'')}"></div></div>${this.yesNoSegment('cf-veteran','Veteran Status',c.veteran)}${this.yesNoSegment('cf-disability','Disability Status',c.disability)}</div><details style="margin-top:12px;"><summary class="field-label" style="cursor:pointer;">Additional Information</summary><div class="client-form-grid" style="margin-top:12px;"><div class="field-group"><label class="field-label">Income at Entry</label><input id="cf-income-entry" type="number" class="field-input" value="${c.income_at_entry||''}"></div></div></details></div>
       <div class="form-section"><div class="form-section-title">Housing & Case Management</div><div class="housing-progress">${this.housingProgressOptions().map(v=>`<button type="button" class="hp-step ${progress===v?'active':''}" data-housing-progress="${this.escape(v)}">○ ${this.escape(v)}</button>`).join('')}</div><input type="hidden" id="cf-housing-plan" value="${this.escape(progress)}"><div class="client-form-grid" style="margin-top:14px;"><div class="field-group"><label class="field-label">Expected Exit Date</label><input id="cf-expected-exit" type="date" class="field-input" value="${this.dateOnly(c.expected_exit_date)}"></div><div class="field-group"><label class="field-label">Housing Assessment Completed</label><input id="cf-housing-assessment" type="date" class="field-input" value="${this.dateOnly(c.housing_assessment_completed)}"></div><div class="field-group"><label class="field-label">Benefits Screening Completed</label><input id="cf-benefits-screening" type="date" class="field-input" value="${this.dateOnly(c.benefits_screening_completed)}"></div><div class="field-group"><label class="field-label">Income Verification Completed</label><input id="cf-income-verification" type="date" class="field-input" value="${this.dateOnly(c.income_verification_completed)}"></div></div></div>
