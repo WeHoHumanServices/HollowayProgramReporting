@@ -345,6 +345,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .word-count-text.amber { color:var(--amber); }
 .word-count-text.green { color:var(--green); }
 .word-count-text.red { color:var(--red); }
+.field-textarea.auto-grow { overflow:hidden; resize:none; }
+.narrative-section-block { padding:18px 0; border-bottom:1px solid var(--gray-100); }
+.narrative-section-block:first-child { padding-top:2px; }
+.narrative-section-block:last-of-type { border-bottom:none; padding-bottom:2px; }
+.narrative-section-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:9px; }
+.narrative-section-title-wrap { display:flex; align-items:center; gap:9px; }
+.narrative-section-num { width:22px; height:22px; border-radius:50%; background:#EEF2FA; color:var(--navy); font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.narrative-section-title-wrap .field-label { font-size:14px; }
+.narrative-section-foot { display:flex; justify-content:flex-end; margin-top:6px; font-size:12px; }
+.narrative-word-count { color:var(--gray-400); }
+.narrative-word-count.ok { color:var(--green); font-weight:600; }
+.narrative-rough-notes { background:var(--off-white); border:1px dashed var(--gray-400); margin-bottom:10px; }
+.narrative-rough-notes-label { font-size:11.5px; font-weight:700; color:var(--gray-600); text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px; display:block; }
 .demo-recon { display:flex; flex-wrap:wrap; gap:14px; padding:9px 12px; border-radius:var(--radius); margin-bottom:10px; font-size:12.5px; align-items:center; }
 .demo-recon.ok { background:var(--green-light); border:1px solid #9FD4B5; color:#1A5735; }
 .demo-recon.warn { background:var(--amber-light); border:1px solid #F0C96B; color:#7A5200; }
@@ -2738,7 +2751,7 @@ const App = {
 
     document.getElementById('exits-meta').innerHTML = `${q} · ${this.quarters[q].period} · ${this.statusBadge(this.bundleStatus(q))}`;
     document.getElementById('exits-body').innerHTML = `<div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg></div><div><strong>Non-Permanent Exit</strong><br>Rows below are generated automatically for every client who exited this quarter without a confirmed permanent housing destination. HMIS ID, Type, and Reason come from the client record — complete Voluntary/Involuntary, Receiving Program, and Follow-up here.</div></div>${missingTypeBanner}
-      <div style="overflow-x:auto;"><table class="svc-table"><thead><tr><th>#</th><th>Client</th><th>Type</th><th>Reason</th><th>Vol/Invol</th><th>Receiving Program</th><th>Follow-up</th><th>Notes</th></tr></thead><tbody id="exits-tbody">
+      <div style="overflow-x:auto;"><table class="svc-table"><thead><tr><th>#</th><th>HMIS ID</th><th>Type</th><th>Reason</th><th>Vol/Invol</th><th>Receiving Program</th><th>Follow-up</th><th>Notes</th></tr></thead><tbody id="exits-tbody">
       ${linkedRows.map((r,i)=>this.exitRowHtml(r.saved||{}, i+1, !!r.saved, r.client)).join('')}
       ${manualRows.map((e,i)=>this.exitRowHtml(e, linkedRows.length+i+1, true, null)).join('')}
       </tbody></table></div>
@@ -2765,7 +2778,7 @@ const App = {
       const needsType = !c.exit_destination_type;
       return `<tr data-exit-row="${existing ? e.id : ''}" data-client-id="${this.escape(clientId)}">
         <td>${n}</td>
-        <td><strong>${this.escape(this.clientDisplayId(c))}</strong><br><span class="field-hint">${this.escape(this.clientName(c))}</span></td>
+        <td><strong>${this.escape(this.clientDisplayId(c))}</strong></td>
         <td><div class="locked-field"${needsType ? ' style="color:var(--amber);font-style:italic;"' : ''}>${this.escape(typeText)}</div></td>
         <td><div class="locked-field">${this.escape(reasonText)}</div></td>
         <td><select class="field-select exit-vol"><option></option>${['Voluntary','Involuntary','Unknown'].map(x=>`<option ${e.voluntary_involuntary===x?'selected':''}>${x}</option>`).join('')}</select></td>
@@ -3578,13 +3591,44 @@ const App = {
     ];
   };
 
-  // Section header with an inline "Generate Draft" button, shared by every
-  // narrative field below.
-  App.narrativeFieldLabel = function(section, forId, text, required=true){
-    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-      <label class="field-label${required?' required':''}" for="${forId}">${this.escape(text)}</label>
-      <button type="button" class="btn btn-ghost btn-sm ai-generate-btn" data-ai-section="${section}" data-ai-target="${forId}">✨ Generate Draft</button>
+  // Auto-growing, numbered narrative section block: label + Generate Draft
+  // button + textarea (auto-grow, no manual resize handle) + live word count.
+  // `opts.extraBefore` lets the success-story section inject its rough-notes
+  // box above the main textarea while reusing the same block chrome.
+  App.narrativeSectionHtml = function(num, section, forId, label, value, opts={}){
+    const { required=true, placeholder='', extraBefore='' } = opts;
+    return `<div class="narrative-section-block">
+      <div class="narrative-section-head">
+        <div class="narrative-section-title-wrap"><span class="narrative-section-num" aria-hidden="true">${num}</span><label class="field-label${required?' required':''}" for="${forId}">${this.escape(label)}</label></div>
+        <button type="button" class="btn btn-ghost btn-sm ai-generate-btn" data-ai-section="${section}" data-ai-target="${forId}">✨ Generate Draft</button>
+      </div>
+      ${extraBefore}
+      <textarea id="${forId}" class="field-textarea auto-grow" ${required?'required':''} placeholder="${this.escape(placeholder)}">${this.escape(value)}</textarea>
+      <div class="narrative-section-foot"><span class="narrative-word-count" data-word-count-for="${forId}"></span></div>
     </div>`;
+  };
+
+  App.autoGrowTextarea = function(el){
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = (el.scrollHeight + 2) + 'px';
+  };
+
+  App.updateNarrativeSectionWordCount = function(el){
+    if (!el) return;
+    const out = document.querySelector(`[data-word-count-for="${el.id}"]`);
+    if (!out) return;
+    const words = this.wordCount(el.value);
+    out.textContent = `${words} word${words===1?'':'s'}`;
+    out.classList.toggle('ok', el.hasAttribute('required') && words >= 30);
+  };
+
+  App.wireNarrativeAutoGrow = function(el){
+    el.querySelectorAll('textarea.auto-grow').forEach(ta => {
+      this.autoGrowTextarea(ta);
+      this.updateNarrativeSectionWordCount(ta);
+      ta.addEventListener('input', () => { this.autoGrowTextarea(ta); this.updateNarrativeSectionWordCount(ta); });
+    });
   };
 
   App.renderQuarterlyNarrativePage = function(){
@@ -3593,22 +3637,30 @@ const App = {
     const sections = this.parseNarrativeSections(r.narrative_text || '');
     const metrics = this.quarterSummaryMetrics(q);
     const el = document.getElementById('view-quarterly-narrative');
+    const roughNotesBox = `<div class="narrative-rough-notes field-group" style="padding:10px 12px;">
+        <span class="narrative-rough-notes-label">Rough notes (optional, de-identified) — used by Generate Draft</span>
+        <textarea id="narr-success-notes" class="field-textarea auto-grow" style="min-height:46px;" placeholder="e.g. entered with no income, completed benefits screening, approved for SSI, moved into a subsidized unit after 4 months."></textarea>
+      </div>`;
     el.innerHTML = `<div class="page-header"><div><div class="page-title">Quarterly Narrative</div><div class="page-subtitle">${this.escape(q)} · ${this.escape(this.quarters[q].period)} · Complete the qualitative context and success story for the quarter.</div></div><div style="display:flex;gap:10px;"><button class="btn btn-ghost" id="btn-narrative-open-review">Review & Submit</button><button class="btn btn-gold" id="btn-narrative-save">Save Narrative</button></div></div>
       ${this.renderQuarterButtons()}
       <div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div><div><strong>Narrative guidance</strong><br>Use the auto-generated quarter summary below to explain context behind the numbers. Please include a success story from the quarter. Client names should not be included in City-facing narratives unless expressly authorized and appropriate.</div></div>
       <div class="notice amber"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div><strong>Generate Draft is AI-assisted.</strong> Drafts are grounded only in this quarter's numbers (or, for the success story, in the rough notes you provide) — review and edit every draft before saving, and verify any fact before submitting to the City.</div></div>
       <div class="generated-metric-grid" style="grid-template-columns:repeat(3,1fr);">${metrics.map(m=>`<div class="generated-metric"><div class="label">${this.escape(m[0])}</div><div class="value">${this.escape(m[1])}</div></div>`).join('')}</div>
-      <div class="card"><div class="card-header"><div><div class="card-title">Narrative Sections</div><div class="field-hint">These sections will be combined into the quarterly report narrative.</div></div></div><div class="card-body">
-        <div class="form-row"><div class="field-group">${this.narrativeFieldLabel('program_summary','narr-program-summary','Program Summary')}<textarea id="narr-program-summary" class="field-textarea" required placeholder="Summarize overall program operations during this reporting period.">${this.escape(sections.program_summary)}</textarea></div><div class="field-group">${this.narrativeFieldLabel('program_successes','narr-program-successes','Program Successes')}<textarea id="narr-program-successes" class="field-textarea" required placeholder="Describe significant accomplishments, partnerships, or notable progress.">${this.escape(sections.program_successes)}</textarea></div></div>
-        <div class="form-row"><div class="field-group">${this.narrativeFieldLabel('program_challenges','narr-program-challenges','Challenges')}<textarea id="narr-program-challenges" class="field-textarea" required placeholder="Describe barriers such as housing availability, documentation, staffing, engagement, or other challenges.">${this.escape(sections.program_challenges)}</textarea></div><div class="field-group">${this.narrativeFieldLabel('program_trends','narr-program-trends','Notable Trends',false)}<textarea id="narr-program-trends" class="field-textarea" placeholder="Describe emerging needs, resident trends, or patterns observed this quarter.">${this.escape(sections.program_trends)}</textarea></div></div>
-        <div class="form-row"><div class="field-group">${this.narrativeFieldLabel('planned_improvements','narr-planned-improvements','Planned Improvements',false)}<textarea id="narr-planned-improvements" class="field-textarea" placeholder="Describe planned operational improvements for the upcoming quarter.">${this.escape(sections.planned_improvements)}</textarea></div><div class="field-group">${this.narrativeFieldLabel('success_story','narr-success-story','Success Story from the Quarter')}<textarea id="narr-success-notes" class="field-textarea" style="min-height:56px;margin-bottom:8px;" placeholder="Rough notes only, de-identified — e.g. &quot;entered with no income, completed benefits screening, approved for SSI, moved into a subsidized unit after 4 months.&quot; AI turns this into polished prose; nothing beyond what you write here is invented."></textarea><textarea id="narr-success-story" class="field-textarea" required placeholder="Share one brief de-identified success story that illustrates client progress or program impact.">${this.escape(sections.success_story)}</textarea></div></div>
-        <div class="form-row"><div class="field-group"><label class="field-label required" for="narr-submitted-by">Prepared By</label><input id="narr-submitted-by" class="field-input" required value="${this.escape(r.narrative_submitted_by || r.signatory_name || this.defaultSignatory())}"></div><div class="field-group"><label class="field-label required" for="narr-date">Date</label><input type="date" id="narr-date" class="field-input" required value="${r.narrative_date || ''}"></div></div>
+      <div class="card"><div class="card-header"><div><div class="card-title">Narrative Sections</div><div class="field-hint">These sections will be combined into the quarterly report narrative. Boxes grow as you type.</div></div></div><div class="card-body">
+        ${this.narrativeSectionHtml(1,'program_summary','narr-program-summary','Program Summary', sections.program_summary, { placeholder:'Summarize overall program operations during this reporting period.' })}
+        ${this.narrativeSectionHtml(2,'program_successes','narr-program-successes','Program Successes', sections.program_successes, { placeholder:'Describe significant accomplishments, partnerships, or notable progress.' })}
+        ${this.narrativeSectionHtml(3,'program_challenges','narr-program-challenges','Challenges', sections.program_challenges, { placeholder:'Describe barriers such as housing availability, documentation, staffing, engagement, or other challenges.' })}
+        ${this.narrativeSectionHtml(4,'program_trends','narr-program-trends','Notable Trends', sections.program_trends, { required:false, placeholder:'Describe emerging needs, resident trends, or patterns observed this quarter.' })}
+        ${this.narrativeSectionHtml(5,'planned_improvements','narr-planned-improvements','Planned Improvements', sections.planned_improvements, { required:false, placeholder:'Describe planned operational improvements for the upcoming quarter.' })}
+        ${this.narrativeSectionHtml(6,'success_story','narr-success-story','Success Story from the Quarter', sections.success_story, { placeholder:'Share one brief de-identified success story that illustrates client progress or program impact.', extraBefore: roughNotesBox })}
+        <div class="form-row" style="margin-top:4px;"><div class="field-group"><label class="field-label required" for="narr-submitted-by">Prepared By</label><input id="narr-submitted-by" class="field-input" required value="${this.escape(r.narrative_submitted_by || r.signatory_name || this.defaultSignatory())}"></div><div class="field-group"><label class="field-label required" for="narr-date">Date</label><input type="date" id="narr-date" class="field-input" required value="${r.narrative_date || ''}"></div></div>
         <div id="narrative-page-save-state" class="field-hint">Not saved this session.</div>
       </div></div>`;
     this.bindQuarterButtons(el);
     document.getElementById('btn-narrative-save')?.addEventListener('click', () => this.saveNarrativePage());
     document.getElementById('btn-narrative-open-review')?.addEventListener('click', () => this.showView('quarter'));
     el.querySelectorAll('.ai-generate-btn').forEach(btn => btn.addEventListener('click', () => this.generateNarrativeSection(btn.dataset.aiSection, btn.dataset.aiTarget, btn)));
+    this.wireNarrativeAutoGrow(el);
   };
 
   App.generateNarrativeSection = async function(section, targetId, btn){
@@ -3649,6 +3701,8 @@ const App = {
           return;
         }
         target.value = data.draft;
+        this.autoGrowTextarea(target);
+        this.updateNarrativeSectionWordCount(target);
         if (state) state.textContent = `AI draft inserted into "${this.narrativeSectionLabels[section] || section}" — review and edit, then Save Narrative.`;
       } catch (e) {
         if (state) state.textContent = 'AI draft failed: ' + (e?.message || e);
