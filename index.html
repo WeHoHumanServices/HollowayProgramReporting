@@ -162,6 +162,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .field-label { font-size:12px; font-weight:700; color:var(--gray-600); }
 .field-label.required::after { content:' *'; color:var(--red); }
 .field-input, .field-select, .field-textarea { border:1px solid var(--border); border-radius:var(--radius); padding:8px 11px; font-size:13.5px; color:var(--gray-800); background:var(--white); width:100%; }
+.locked-field { border:1px solid var(--border); border-radius:var(--radius); padding:8px 11px; font-size:13.5px; color:var(--gray-800); background:var(--gray-100); min-height:34px; display:flex; align-items:center; }
 .field-input[readonly], .field-input:disabled, .field-select:disabled, .field-textarea:disabled { background:var(--gray-100); color:var(--gray-600); cursor:not-allowed; }
 .field-textarea { resize:vertical; min-height:90px; }
 .field-hint { font-size:11px; color:var(--gray-400); }
@@ -2696,14 +2697,52 @@ const App = {
     this.renderRosterForm();
   },
 
+  // Builds the client-facing exit reason text from a client's own record —
+  // this is the "already captured" content that should never need retyping.
+  clientExitReasonText(c) {
+    const reason = c.exit_reason === 'Other' ? (c.exit_reason_other || 'Other') : c.exit_reason;
+    return reason || '';
+  },
+  clientExitTypeText(c) {
+    return c.exit_destination_type === 'Other Non-Permanent Exit'
+      ? (c.exit_destination_other || 'Other Non-Permanent Exit')
+      : (c.exit_destination_type || '');
+  },
+
   renderExitsForm() {
     const q = this.currentQuarter;
-    const rows = this.data.exits.filter(e => e.quarter === q);
+    const { start, end } = this.qRange(q);
+    const clientMap = new Map((this.data.clients||[]).map(c => [c.id, c]));
+    const savedRows = this.data.exits.filter(e => e.quarter === q);
+    const savedByClientId = new Map(savedRows.filter(e => e.client_id).map(e => [e.client_id, e]));
+
+    // Any exited client this quarter whose exit is NOT a confirmed permanent
+    // placement belongs in this table (isPermanentExit is false both for
+    // explicitly non-permanent exits and for exits with no destination set
+    // yet, so nothing falls through the cracks silently).
+    const nonPermanentClients = (this.data.clients||[])
+      .filter(c => c.exit_date && this.dateOnly(c.exit_date) >= start && this.dateOnly(c.exit_date) <= end && !this.isPermanentExit(c))
+      .sort((a,b) => (this.dateOnly(a.exit_date)||'').localeCompare(this.dateOnly(b.exit_date)||''));
+
+    const linkedRows = nonPermanentClients.map(c => ({ client: c, saved: savedByClientId.get(c.id) || null }));
+    const linkedClientIds = new Set(nonPermanentClients.map(c => c.id));
+    // Legacy/manual rows: saved rows with no client_id, or a client_id that
+    // no longer matches an exited-this-quarter client (edge case, e.g. the
+    // client record was later corrected). Nothing is ever silently dropped.
+    const manualRows = savedRows.filter(e => !e.client_id || !linkedClientIds.has(e.client_id));
+
+    const missingTypeCount = nonPermanentClients.filter(c => !c.exit_destination_type).length;
+    const missingTypeBanner = missingTypeCount > 0
+      ? `<div class="notice amber" style="margin-top:14px;"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div><strong>${missingTypeCount} of ${nonPermanentClients.length} auto-populated exit${nonPermanentClients.length===1?'':'s'}</strong> ${missingTypeCount===1?'is':'are'} missing an exit destination on the client record. Open the client record to set it — it will appear here automatically once saved.</div></div>`
+      : '';
+
     document.getElementById('exits-meta').innerHTML = `${q} · ${this.quarters[q].period} · ${this.statusBadge(this.bundleStatus(q))}`;
-    document.getElementById('exits-body').innerHTML = `<div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg></div><div><strong>Non-Permanent Exit</strong><br>A non-permanent exit means a participant left the program without a confirmed permanent housing destination. Include one row for each applicable exit.</div></div>
-      <div style="overflow-x:auto;"><table class="svc-table"><thead><tr><th>#</th><th>Type</th><th>Vol/Invol</th><th>Reason</th><th>Receiving Program</th><th>Follow-up</th><th>Notes</th></tr></thead><tbody id="exits-tbody">
-      ${rows.map((e,i)=>this.exitRowHtml(e,i+1,true)).join('')}
+    document.getElementById('exits-body').innerHTML = `<div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg></div><div><strong>Non-Permanent Exit</strong><br>Rows below are generated automatically for every client who exited this quarter without a confirmed permanent housing destination. HMIS ID, Type, and Reason come from the client record — complete Voluntary/Involuntary, Receiving Program, and Follow-up here.</div></div>${missingTypeBanner}
+      <div style="overflow-x:auto;"><table class="svc-table"><thead><tr><th>#</th><th>Client</th><th>Type</th><th>Reason</th><th>Vol/Invol</th><th>Receiving Program</th><th>Follow-up</th><th>Notes</th></tr></thead><tbody id="exits-tbody">
+      ${linkedRows.map((r,i)=>this.exitRowHtml(r.saved||{}, i+1, !!r.saved, r.client)).join('')}
+      ${manualRows.map((e,i)=>this.exitRowHtml(e, linkedRows.length+i+1, true, null)).join('')}
       </tbody></table></div>
+      <div class="field-hint" style="margin-top:8px;">Need to log an exit for someone not listed above (e.g. a record not yet entered as a client)? <button type="button" class="btn btn-ghost btn-sm" id="btn-add-exit">+ Add Manual Row</button></div>
       <div class="notice amber" style="margin-top:14px;"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div><strong>Involuntary vs. Voluntary</strong><br>Voluntary exits are initiated by the participant. Involuntary exits are initiated by the program due to safety, eligibility, or program participation issues.</div></div>`;
     // Wire autosave on existing exit-row edits. Without this, typing into
     // a row never sets the dirty flag and autosave never fires until the
@@ -2712,15 +2751,36 @@ const App = {
       el.addEventListener('input', () => this.markDirty('exits'));
       el.addEventListener('change', () => this.markDirty('exits'));
     });
+    document.getElementById('btn-add-exit')?.addEventListener('click', () => this.addExitDraftRow());
     this.updateReadOnlyStates('exits');
   },
 
-  exitRowHtml(e={}, n=1, existing=false) {
-    return `<tr data-exit-row="${existing ? e.id : ''}">
+  // `c` is the linked client record when this row was auto-populated from a
+  // client exit; null for legacy/manual rows entered before this existed.
+  exitRowHtml(e={}, n=1, existing=false, c=null) {
+    const clientId = c ? c.id : (e.client_id || '');
+    if (c) {
+      const typeText = this.clientExitTypeText(c) || '—';
+      const reasonText = this.clientExitReasonText(c) || '—';
+      const needsType = !c.exit_destination_type;
+      return `<tr data-exit-row="${existing ? e.id : ''}" data-client-id="${this.escape(clientId)}">
+        <td>${n}</td>
+        <td><strong>${this.escape(this.clientDisplayId(c))}</strong><br><span class="field-hint">${this.escape(this.clientName(c))}</span></td>
+        <td><div class="locked-field"${needsType ? ' style="color:var(--amber);font-style:italic;"' : ''}>${this.escape(typeText)}</div></td>
+        <td><div class="locked-field">${this.escape(reasonText)}</div></td>
+        <td><select class="field-select exit-vol"><option></option>${['Voluntary','Involuntary','Unknown'].map(x=>`<option ${e.voluntary_involuntary===x?'selected':''}>${x}</option>`).join('')}</select></td>
+        <td><input class="field-input exit-program" value="${this.escape(e.interim_program_name || '')}"></td>
+        <td><select class="field-select exit-followup"><option></option>${['Yes','No','No response'].map(x=>`<option ${e.staff_followup===x?'selected':''}>${x}</option>`).join('')}</select></td>
+        <td><input class="field-input exit-notes" value="${this.escape(e.additional_notes != null ? e.additional_notes : (c.exit_notes || ''))}"></td>
+      </tr>`;
+    }
+    // Legacy/manual row — no client link, keep the original fully-editable behavior.
+    return `<tr data-exit-row="${existing ? e.id : ''}" data-client-id="">
       <td>${n}</td>
-      <td><select class="field-select exit-type"><option></option>${['Temporary / Interim Housing','Institutional Setting','Returned to Homelessness','Unknown / Left Program'].map(x=>`<option ${e.exit_type===x?'selected':''}>${x}</option>`).join('')}</select></td>
-      <td><select class="field-select exit-vol"><option></option>${['Voluntary','Involuntary','Unknown'].map(x=>`<option ${e.voluntary_involuntary===x?'selected':''}>${x}</option>`).join('')}</select></td>
+      <td><input class="field-input exit-manual-id" placeholder="HMIS ID (optional)" value="${this.escape(e.manual_client_label || '')}"></td>
+      <td><select class="field-select exit-type"><option></option>${['Temporary / Interim Housing','Emergency Shelter','Institutional Setting','Hotel / Motel','Returned to Homelessness','Moved in with Family/Friends - No Lease','Moved in with Spouse/Partner - No Lease','Unknown / Left Program','Other Non-Permanent Exit'].map(x=>`<option ${e.exit_type===x?'selected':''}>${x}</option>`).join('')}</select></td>
       <td><input class="field-input exit-reason" value="${this.escape(e.reason_for_exit || '')}"></td>
+      <td><select class="field-select exit-vol"><option></option>${['Voluntary','Involuntary','Unknown'].map(x=>`<option ${e.voluntary_involuntary===x?'selected':''}>${x}</option>`).join('')}</select></td>
       <td><input class="field-input exit-program" value="${this.escape(e.interim_program_name || '')}"></td>
       <td><select class="field-select exit-followup"><option></option>${['Yes','No','No response'].map(x=>`<option ${e.staff_followup===x?'selected':''}>${x}</option>`).join('')}</select></td>
       <td><input class="field-input exit-notes" value="${this.escape(e.additional_notes || '')}"></td>
@@ -2729,7 +2789,7 @@ const App = {
 
   addExitDraftRow() {
     const tbody = document.getElementById('exits-tbody');
-    tbody.insertAdjacentHTML('beforeend', this.exitRowHtml({}, tbody.children.length + 1, false));
+    tbody.insertAdjacentHTML('beforeend', this.exitRowHtml({}, tbody.children.length + 1, false, null));
     const newRow = tbody.lastElementChild;
     newRow.querySelectorAll('input, select').forEach(el => {
       el.addEventListener('input', () => this.markDirty('exits'));
@@ -2831,6 +2891,7 @@ const App = {
     if (this.quarterLocked()) return;
     const q = this.currentQuarter;
     this.setSaveState('exits','Saving...');
+    const clientMap = new Map((this.data.clients||[]).map(c => [c.id, c]));
     const rows = [...document.querySelectorAll('#exits-tbody tr')];
     const existingIds = rows.map(r => r.dataset.exitRow).filter(Boolean);
     const currentExisting = this.data.exits.filter(e => e.quarter === q && e.id);
@@ -2841,14 +2902,22 @@ const App = {
     }
     let count = 1;
     for (const row of rows) {
+      const clientId = row.dataset.clientId || null;
+      const linkedClient = clientId ? clientMap.get(clientId) : null;
+      // Type and Reason are read-only snapshots pulled from the client
+      // record for linked rows (nothing to re-type); manual rows still have
+      // their own free-entry Type/Reason fields in the DOM.
       const payload = {
         program_id:this.program.id, quarter:q, fiscal_year:this.fiscalYear,
-        exit_number: count++, exit_type: row.querySelector('.exit-type').value || null,
+        exit_number: count++,
+        client_id: clientId,
+        exit_type: linkedClient ? (this.clientExitTypeText(linkedClient) || null) : (row.querySelector('.exit-type')?.value || null),
         voluntary_involuntary: row.querySelector('.exit-vol').value || null,
-        reason_for_exit: row.querySelector('.exit-reason').value || null,
+        reason_for_exit: linkedClient ? (this.clientExitReasonText(linkedClient) || null) : (row.querySelector('.exit-reason')?.value || null),
         interim_program_name: row.querySelector('.exit-program').value || null,
         staff_followup: row.querySelector('.exit-followup').value || null,
         additional_notes: row.querySelector('.exit-notes').value || null,
+        manual_client_label: linkedClient ? null : (row.querySelector('.exit-manual-id')?.value || null),
         submitted_by:this.profile.id
       };
       const id = row.dataset.exitRow;
@@ -3509,6 +3578,15 @@ const App = {
     ];
   };
 
+  // Section header with an inline "Generate Draft" button, shared by every
+  // narrative field below.
+  App.narrativeFieldLabel = function(section, forId, text, required=true){
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+      <label class="field-label${required?' required':''}" for="${forId}">${this.escape(text)}</label>
+      <button type="button" class="btn btn-ghost btn-sm ai-generate-btn" data-ai-section="${section}" data-ai-target="${forId}">✨ Generate Draft</button>
+    </div>`;
+  };
+
   App.renderQuarterlyNarrativePage = function(){
     const q = this.currentQuarter;
     const r = this.data.reports[q] || {};
@@ -3518,17 +3596,73 @@ const App = {
     el.innerHTML = `<div class="page-header"><div><div class="page-title">Quarterly Narrative</div><div class="page-subtitle">${this.escape(q)} · ${this.escape(this.quarters[q].period)} · Complete the qualitative context and success story for the quarter.</div></div><div style="display:flex;gap:10px;"><button class="btn btn-ghost" id="btn-narrative-open-review">Review & Submit</button><button class="btn btn-gold" id="btn-narrative-save">Save Narrative</button></div></div>
       ${this.renderQuarterButtons()}
       <div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div><div><strong>Narrative guidance</strong><br>Use the auto-generated quarter summary below to explain context behind the numbers. Please include a success story from the quarter. Client names should not be included in City-facing narratives unless expressly authorized and appropriate.</div></div>
+      <div class="notice amber"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div><strong>Generate Draft is AI-assisted.</strong> Drafts are grounded only in this quarter's numbers (or, for the success story, in the rough notes you provide) — review and edit every draft before saving, and verify any fact before submitting to the City.</div></div>
       <div class="generated-metric-grid" style="grid-template-columns:repeat(3,1fr);">${metrics.map(m=>`<div class="generated-metric"><div class="label">${this.escape(m[0])}</div><div class="value">${this.escape(m[1])}</div></div>`).join('')}</div>
       <div class="card"><div class="card-header"><div><div class="card-title">Narrative Sections</div><div class="field-hint">These sections will be combined into the quarterly report narrative.</div></div></div><div class="card-body">
-        <div class="form-row"><div class="field-group"><label class="field-label required" for="narr-program-summary">Program Summary</label><textarea id="narr-program-summary" class="field-textarea" required placeholder="Summarize overall program operations during this reporting period.">${this.escape(sections.program_summary)}</textarea></div><div class="field-group"><label class="field-label required" for="narr-program-successes">Program Successes</label><textarea id="narr-program-successes" class="field-textarea" required placeholder="Describe significant accomplishments, partnerships, or notable progress.">${this.escape(sections.program_successes)}</textarea></div></div>
-        <div class="form-row"><div class="field-group"><label class="field-label required" for="narr-program-challenges">Challenges</label><textarea id="narr-program-challenges" class="field-textarea" required placeholder="Describe barriers such as housing availability, documentation, staffing, engagement, or other challenges.">${this.escape(sections.program_challenges)}</textarea></div><div class="field-group"><label class="field-label" for="narr-program-trends">Notable Trends</label><textarea id="narr-program-trends" class="field-textarea" placeholder="Describe emerging needs, resident trends, or patterns observed this quarter.">${this.escape(sections.program_trends)}</textarea></div></div>
-        <div class="form-row"><div class="field-group"><label class="field-label" for="narr-planned-improvements">Planned Improvements</label><textarea id="narr-planned-improvements" class="field-textarea" placeholder="Describe planned operational improvements for the upcoming quarter.">${this.escape(sections.planned_improvements)}</textarea></div><div class="field-group"><label class="field-label required" for="narr-success-story">Success Story from the Quarter</label><textarea id="narr-success-story" class="field-textarea" required placeholder="Share one brief de-identified success story that illustrates client progress or program impact.">${this.escape(sections.success_story)}</textarea></div></div>
+        <div class="form-row"><div class="field-group">${this.narrativeFieldLabel('program_summary','narr-program-summary','Program Summary')}<textarea id="narr-program-summary" class="field-textarea" required placeholder="Summarize overall program operations during this reporting period.">${this.escape(sections.program_summary)}</textarea></div><div class="field-group">${this.narrativeFieldLabel('program_successes','narr-program-successes','Program Successes')}<textarea id="narr-program-successes" class="field-textarea" required placeholder="Describe significant accomplishments, partnerships, or notable progress.">${this.escape(sections.program_successes)}</textarea></div></div>
+        <div class="form-row"><div class="field-group">${this.narrativeFieldLabel('program_challenges','narr-program-challenges','Challenges')}<textarea id="narr-program-challenges" class="field-textarea" required placeholder="Describe barriers such as housing availability, documentation, staffing, engagement, or other challenges.">${this.escape(sections.program_challenges)}</textarea></div><div class="field-group">${this.narrativeFieldLabel('program_trends','narr-program-trends','Notable Trends',false)}<textarea id="narr-program-trends" class="field-textarea" placeholder="Describe emerging needs, resident trends, or patterns observed this quarter.">${this.escape(sections.program_trends)}</textarea></div></div>
+        <div class="form-row"><div class="field-group">${this.narrativeFieldLabel('planned_improvements','narr-planned-improvements','Planned Improvements',false)}<textarea id="narr-planned-improvements" class="field-textarea" placeholder="Describe planned operational improvements for the upcoming quarter.">${this.escape(sections.planned_improvements)}</textarea></div><div class="field-group">${this.narrativeFieldLabel('success_story','narr-success-story','Success Story from the Quarter')}<textarea id="narr-success-notes" class="field-textarea" style="min-height:56px;margin-bottom:8px;" placeholder="Rough notes only, de-identified — e.g. &quot;entered with no income, completed benefits screening, approved for SSI, moved into a subsidized unit after 4 months.&quot; AI turns this into polished prose; nothing beyond what you write here is invented."></textarea><textarea id="narr-success-story" class="field-textarea" required placeholder="Share one brief de-identified success story that illustrates client progress or program impact.">${this.escape(sections.success_story)}</textarea></div></div>
         <div class="form-row"><div class="field-group"><label class="field-label required" for="narr-submitted-by">Prepared By</label><input id="narr-submitted-by" class="field-input" required value="${this.escape(r.narrative_submitted_by || r.signatory_name || this.defaultSignatory())}"></div><div class="field-group"><label class="field-label required" for="narr-date">Date</label><input type="date" id="narr-date" class="field-input" required value="${r.narrative_date || ''}"></div></div>
         <div id="narrative-page-save-state" class="field-hint">Not saved this session.</div>
       </div></div>`;
     this.bindQuarterButtons(el);
     document.getElementById('btn-narrative-save')?.addEventListener('click', () => this.saveNarrativePage());
     document.getElementById('btn-narrative-open-review')?.addEventListener('click', () => this.showView('quarter'));
+    el.querySelectorAll('.ai-generate-btn').forEach(btn => btn.addEventListener('click', () => this.generateNarrativeSection(btn.dataset.aiSection, btn.dataset.aiTarget, btn)));
+  };
+
+  App.generateNarrativeSection = async function(section, targetId, btn){
+    const target = document.getElementById(targetId);
+    const state = document.getElementById('narrative-page-save-state');
+    if (!target) return;
+
+    let roughNotes;
+    if (section === 'success_story') {
+      roughNotes = (document.getElementById('narr-success-notes')?.value || '').trim();
+      if (!roughNotes) {
+        if (state) state.textContent = 'Add a few rough notes above the success story box first — nothing is invented from scratch.';
+        return;
+      }
+    }
+
+    const run = async () => {
+      const originalLabel = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Generating…';
+      if (state) state.textContent = 'Generating draft…';
+      try {
+        const q = this.currentQuarter;
+        const { data, error } = await this.sb.functions.invoke('generate-narrative', {
+          body: {
+            section,
+            sectionLabel: this.narrativeSectionLabels[section] || section,
+            programName: this.programName(),
+            agencyName: this.agencyName(),
+            quarterLabel: q,
+            quarterPeriod: this.quarters[q]?.period || '',
+            metrics: this.quarterSummaryMetrics(q),
+            roughNotes: roughNotes || undefined
+          }
+        });
+        if (error || !data || data.error) {
+          if (state) state.textContent = 'AI draft failed: ' + ((data && data.error) || error?.message || 'unknown error');
+          return;
+        }
+        target.value = data.draft;
+        if (state) state.textContent = `AI draft inserted into "${this.narrativeSectionLabels[section] || section}" — review and edit, then Save Narrative.`;
+      } catch (e) {
+        if (state) state.textContent = 'AI draft failed: ' + (e?.message || e);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+      }
+    };
+
+    if ((target.value || '').trim()) {
+      this.confirm(`This will replace the current text in "${this.narrativeSectionLabels[section] || section}" with an AI-generated draft. Continue?`, run);
+    } else {
+      await run();
+    }
   };
 
   App.collectNarrativePageSections = function(){
