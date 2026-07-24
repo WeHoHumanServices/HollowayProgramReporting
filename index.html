@@ -765,6 +765,46 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   body, button, input, select, textarea { font-family: var(--font-sans) !important; }
 }
 
+
+/* Dashboard redesign: performance-first layout, demographics, collapsed ops */
+.dash-toprow { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px; }
+.dash-toprow .quarter-selector { margin-bottom:0; }
+.dash-period-label { font-size:11.5px; color:var(--gray-500); flex:1; }
+
+.perf-card { margin-bottom:16px; }
+.perf-hero-row { display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:20px; margin-bottom:16px; }
+.perf-hero { border-right:1px solid var(--border); padding-right:16px; }
+.perf-hero-value { font-family:var(--font-sans); font-size:34px; font-weight:750; color:var(--green); letter-spacing:-.03em; margin-top:4px; }
+.perf-sub-value { font-family:var(--font-sans); font-size:24px; font-weight:750; color:var(--navy); letter-spacing:-.03em; margin-top:6px; }
+.perf-strip-row { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; border-top:1px solid var(--gray-100); padding-top:14px; }
+.perf-strip-value { font-size:18px; font-weight:750; color:var(--navy); margin-top:4px; }
+@media (max-width:800px) { .perf-hero-row, .perf-strip-row { grid-template-columns:1fr 1fr; } .perf-hero { border-right:none; padding-right:0; } }
+
+.demo-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:22px; }
+.demo-group-title { font-size:11px; font-weight:700; letter-spacing:.03em; color:var(--gray-500); margin-bottom:10px; }
+.demo-bar-row { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+.demo-bar-label { font-size:11.5px; color:var(--gray-800); width:88px; flex:0 0 88px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.demo-bar-track { flex:1; background:var(--gray-100); border-radius:4px; height:8px; }
+.demo-bar-fill { height:8px; border-radius:4px; }
+.demo-bar-pct { font-size:10.5px; color:var(--gray-500); width:44px; text-align:right; }
+@media (max-width:800px) { .demo-grid { grid-template-columns:1fr; gap:18px; } }
+
+.attention-chip-clear { background:var(--green-light); color:var(--green); border-radius:999px; padding:6px 13px; font-size:11.5px; font-weight:700; }
+.attention-chip { position:relative; }
+.attention-chip summary { list-style:none; cursor:pointer; display:inline-flex; align-items:center; gap:6px; background:var(--red-light); border:1px solid #EABCB6; color:var(--red); border-radius:999px; padding:6px 13px; font-size:11.5px; font-weight:700; }
+.attention-chip summary::-webkit-details-marker { display:none; }
+.attention-chip summary::after { content:'▾'; font-size:9px; }
+.attention-chip[open] summary::after { content:'▴'; }
+.attention-chip-panel { position:absolute; right:0; top:34px; width:300px; background:var(--white); border:1px solid var(--border); border-radius:12px; padding:10px 14px; box-shadow:var(--shadow-lg); z-index:20; }
+.attention-chip-row { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid var(--gray-100); font-size:12px; }
+.attention-chip-row:last-child { border-bottom:none; }
+
+.ops-drawer { margin-top:18px; }
+.ops-drawer-summary { list-style:none; cursor:pointer; font-size:11px; font-weight:700; letter-spacing:.03em; color:var(--gray-500); margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+.ops-drawer-summary::-webkit-details-marker { display:none; }
+.ops-drawer-summary::before { content:'▸'; font-size:10px; }
+.ops-drawer[open] .ops-drawer-summary::before { content:'▾'; }
+.ops-drawer-body { padding-top:2px; }
 </style>
 </head>
 
@@ -1945,21 +1985,98 @@ const App = {
           <button class="btn btn-gold" data-open="quarterly">${this.bundleStatus(q)==='accepted'?'View Report':'Start / Continue Report'}</button>
         </div>
       </div>
-      ${this.renderQuarterButtons()}
-      ${this.renderQuarterContext(q)}
-      <div class="kpi-row">${this.renderKpis(q)}</div>
-      <div class="section-label">Live Census — Today</div>
-      <div class="kpi-row">${this.renderLiveCensusKpis()}</div>
-      <div class="content-grid">
-        <div>${this.renderReadinessPanel(q)}${this.renderOutcomeSummary(q)}</div>
-        <div>${this.renderDataCheckPanel(q)}${this.renderGoalProgress(q)}${this.renderActivityLog(q)}</div>
-      </div>`;
+      <div class="dash-toprow">
+        ${this.renderQuarterButtons()}
+        <span class="dash-period-label">${this.escape(q)} · ${this.escape(this.quarters[q].period)} · Due ${this.formatDate(this.quarters[q].due)}</span>
+        ${this.renderAttentionChip(q)}
+      </div>
+      <div class="section-label">Program Performance</div>
+      ${this.renderProgramPerformance(q)}
+      ${this.renderOutcomeSummary(q)}
+      <div class="section-label" style="margin-top:18px;">Participant Demographics — Year to Date</div>
+      ${this.renderParticipantDemographics(q)}
+      ${this.renderProgramOperationsDrawer(q)}`;
     this.bindQuarterButtons(el);
     this.bindSubmitBundleButton(el);
-    el.querySelectorAll('[data-open]').forEach(btn => {
-      btn.addEventListener('click', () => this.openForm(btn.dataset.open));
-    });
+    el.querySelectorAll('[data-open]').forEach(btn => btn.addEventListener('click', () => this.openForm(btn.dataset.open)));
+    el.querySelectorAll('[data-attention-open]').forEach(btn => btn.addEventListener('click', () => this.openForm(btn.dataset.attentionOpen)));
+    el.querySelectorAll('[data-view-shortcut]').forEach(btn => btn.addEventListener('click', () => this.showView(btn.dataset.viewShortcut)));
     el.querySelector('#btn-print-current').addEventListener('click', () => this.printReport(q));
+  },
+
+  renderProgramPerformance(q=this.currentQuarter) {
+    const qtr = this.outcomeSummary(q, 'quarter');
+    const ytd = this.outcomeSummary(q, 'ytd');
+    const retention = this.confirmedRetentionSummary();
+    const s = (this.data.clients||[]).length ? this.generatedScopeFromClients(q) : this.reportScope(q);
+    const ytdPersons = (this.data.clients||[]).length ? s.unduplicatedYTD : (this.data.reports[q]?.persons_ytd ?? this.calcPersonsYtd(q));
+    const active = (this.data.clients||[]).filter(c=>this.clientStatus(c)==='Active');
+    const capacity = 20;
+    const servedBase = Number(s.residentsServed || s.activeResidents || 0);
+    const incomePct = servedBase ? Math.round((Number(s.incomeIncrease||0) / servedBase) * 100) : null;
+    return `<div class="card perf-card"><div class="card-body">
+      <div class="perf-hero-row">
+        <div class="perf-hero">
+          <div class="kpi-label">PH exit rate</div>
+          <div class="perf-hero-value">${qtr.phRate ?? '—'}${qtr.phRate!=null?'%':''}</div>
+          <div class="kpi-sub">${ytd.phRate!=null ? ytd.phRate+'% YTD' : 'No YTD exits yet'} &middot; ${qtr.byBand?.['Permanent Housing']||0} of ${qtr.countedExits||0} exits this quarter</div>
+        </div>
+        <div class="perf-sub">
+          <div class="kpi-label">Confirmed retention</div>
+          <div class="perf-sub-value">${retention.total ? retention.rate+'%' : '—'}</div>
+          <div class="kpi-sub">6- and 12-month combined</div>
+        </div>
+        <div class="perf-sub">
+          <div class="kpi-label">Avg length of stay</div>
+          <div class="perf-sub-value">${this.clientMetrics(q).avgLos}</div>
+          <div class="kpi-sub">days, served clients</div>
+        </div>
+      </div>
+      <div class="perf-strip-row">
+        <div><div class="kpi-label">Persons served YTD</div><div class="perf-strip-value">${ytdPersons ?? '—'}</div></div>
+        <div><div class="kpi-label">Occupancy</div><div class="perf-strip-value">${this.percent(s.bedNightsOcc, s.bedNightsAvail)}</div></div>
+        <div><div class="kpi-label">Current census</div><div class="perf-strip-value">${active.length}/${capacity}</div></div>
+        <div><div class="kpi-label">Income increased</div><div class="perf-strip-value">${incomePct!=null ? incomePct+'%' : '—'}</div></div>
+      </div>
+    </div></div>`;
+  },
+
+  participantDemographicsYtd(q=this.currentQuarter) {
+    const r = this.data.reports[q] || {};
+    const age = this.ageBands.map(band => ({ label: band, count: this.sumDemoRow(this.calcAgeGenderYtd(q, band)) }));
+    const eth = this.ethnicityKeys.map(k => ({ label: k, count: Number(this.calcSimpleDemoYtd(q,'demographics_ethnicity', k, r.demographics_ethnicity?.[k] || 0) || 0) }));
+    const lang = this.languageKeys.map(k => ({ label: k, count: Number(this.calcSimpleDemoYtd(q,'demographics_language', k, r.demographics_language?.[k] || 0) || 0) }));
+    return { age, eth, lang };
+  },
+
+  renderDemoBarGroup(title, rows, accentVar) {
+    const SUPPRESS_BELOW = 5;
+    const total = rows.reduce((a,b)=>a+b.count,0);
+    const top = rows.filter(r=>r.count>0).sort((a,b)=>b.count-a.count).slice(0,5);
+    if (!top.length) return `<div><div class="demo-group-title">${this.escape(title)}</div><p class="field-hint">No data recorded yet.</p></div>`;
+    const rowsHtml = top.map(r => {
+      const suppressed = r.count < SUPPRESS_BELOW;
+      const pct = total ? Math.round((r.count/total)*100) : 0;
+      return `<div class="demo-bar-row">
+        <span class="demo-bar-label">${this.escape(r.label)}</span>
+        <div class="demo-bar-track"><div class="demo-bar-fill" style="width:${suppressed?0:pct}%;background:${accentVar};"></div></div>
+        <span class="demo-bar-pct">${suppressed ? `<${SUPPRESS_BELOW}` : pct+'%'}</span>
+      </div>`;
+    }).join('');
+    return `<div><div class="demo-group-title">${this.escape(title)}</div>${rowsHtml}</div>`;
+  },
+
+  renderParticipantDemographics(q=this.currentQuarter) {
+    const d = this.participantDemographicsYtd(q);
+    const anySuppressed = [...d.age, ...d.eth, ...d.lang].some(r=>r.count>0 && r.count<5);
+    return `<div class="card"><div class="card-body">
+      <div class="demo-grid">
+        ${this.renderDemoBarGroup('Age', d.age, 'var(--navy)')}
+        ${this.renderDemoBarGroup('Race / Ethnicity', d.eth, 'var(--gold)')}
+        ${this.renderDemoBarGroup('Primary Language', d.lang, 'var(--green)')}
+      </div>
+      ${anySuppressed ? `<p class="field-hint" style="margin-top:12px;border-top:1px solid var(--gray-100);padding-top:10px;">Groups with fewer than 5 participants are suppressed to protect client privacy.</p>` : ''}
+    </div></div>`;
   },
 
   renderQuarterContext(q) {
@@ -1971,17 +2088,6 @@ const App = {
       <div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.8 7.5 12.3a1 1 0 0 0 .7 1.7h7.6a1 1 0 0 0 .7-1.7L15 10.8V5l1-2H8l1 2Z"/></svg></div>
       <div><strong>${q} · ${this.quarters[q].period}</strong></div>
     </div>`;
-  },
-
-  renderLiveCensusKpis() {
-    const active=(this.data.clients||[]).filter(c=>this.clientStatus(c)==='Active');
-    const capacity=20;
-    return [
-      ['Current Occupancy', `${active.length}/${capacity}`, `${this.percent(active.length,capacity)} occupied`, 'green'],
-      ['Vacant Beds', Math.max(capacity-active.length,0), `Based on ${capacity}-bed capacity`, 'gold'],
-      ['Average LOS', this.clientMetrics().avgLos, 'Days among served clients', 'navy'],
-      ['Pending / Upcoming Exits', active.filter(c=>c.expected_exit_date).length, 'Expected exit date recorded', 'amber']
-    ].map(k => `<div class="kpi-card ${k[3]}"><div class="kpi-label">${k[0]}</div><div class="kpi-value">${k[1]}</div><div class="kpi-sub">${k[2]}</div></div>`).join('');
   },
 
   renderKpis(q) {
@@ -3705,35 +3811,41 @@ const App = {
     return `<div style="margin-top:10px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><strong>Quarter-End Readiness</strong><span class="badge badge-${passed===checks.length?'green':'amber'}">${passed} of ${checks.length} checks</span></div>${checks.map(([label,ok])=>`<div class="readiness-check"><span>${ok?'✓':'⚠'}</span><span>${this.escape(label)}</span></div>`).join('')}</div>`;
   };
 
-  App.renderNeedsAttention = function(q=this.currentQuarter){
+  App.attentionItems = function(q=this.currentQuarter){
     const items=[];
-    this.readiness(q).forEach(r=>{ if(!(r.visualOk ?? r.ok)) items.push({label:r.label, detail:r.detail, openAction:r.action, tone:'amber'}); });
-    this.dataChecks(q).forEach(c=>{ if(!c.ok) items.push({label:c.label, detail:c.detail, tone:'red'}); });
+    this.readiness(q).forEach(r=>{ if(!(r.visualOk ?? r.ok)) items.push({label:r.label, detail:r.detail, openAction:r.action}); });
+    this.dataChecks(q).forEach(c=>{ if(!c.ok) items.push({label:c.label, detail:c.detail}); });
     const overdue=this.expectedFollowUps().filter(f=>this.followUpStatus(f)!=='complete' && this.daysUntil(f.due_date)<0);
-    if(overdue.length) items.push({label:`${overdue.length} follow-up${overdue.length===1?'':'s'} overdue`, detail:'6- and 12-month PH check-ins past their due date', viewAction:'housing-followups', tone:'red'});
+    if(overdue.length) items.push({label:`${overdue.length} follow-up${overdue.length===1?'':'s'} overdue`, detail:'6- and 12-month PH check-ins past their due date', viewAction:'housing-followups'});
     const active=this.activeClientsNow();
     const stale=active.filter(c=>!c.housing_plan_status || String(c.housing_plan_status).toLowerCase().includes('not'));
-    if(stale.length) items.push({label:`${stale.length} housing plan${stale.length===1?'':'s'} missing`, detail:'Active residents without a housing plan status set', viewAction:'clients', tone:'amber'});
-
-    if(!items.length){
-      return `<div class="notice green" style="margin-bottom:16px;"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></div><div><strong>All caught up.</strong> No outstanding readiness, data-check, or follow-up items for ${this.escape(q)}.</div></div>`;
-    }
-    return `<div class="card" style="margin-bottom:16px;border-left:4px solid #C0392B;">
-      <div class="card-header"><div class="card-title">Needs Attention</div><span class="badge badge-red">${items.length}</span></div>
-      <div class="card-body">
-        ${items.map(it=>`<div class="readiness-row"><div class="readiness-left"><span class="status-icon" aria-hidden="true">${it.tone==='red'?'🔴':'⚠️'}</span><div><strong>${this.escape(it.label)}</strong><br><span style="font-size:12px;color:var(--gray-400);">${this.escape(it.detail)}</span></div></div>${it.openAction?`<button class="btn btn-ghost btn-sm" data-attention-open="${it.openAction}">Open</button>`:it.viewAction?`<button class="btn btn-ghost btn-sm" data-view-shortcut="${it.viewAction}">Open</button>`:''}</div>`).join('')}
-      </div>
-    </div>`;
+    if(stale.length) items.push({label:`${stale.length} housing plan${stale.length===1?'':'s'} missing`, detail:'Active residents without a housing plan status set', viewAction:'clients'});
+    return items;
   };
 
-  const oldRenderDashboard = App.renderDashboard;
-  App.renderDashboard = function(){
-    oldRenderDashboard.call(this);
-    const el=document.getElementById('view-dashboard');
-    const header=el.querySelector('.page-header');
-    if(header) header.insertAdjacentHTML('afterend', this.renderNeedsAttention(this.currentQuarter) + this.renderTodayPanel(this.currentQuarter));
-    el.querySelectorAll('[data-view-shortcut]').forEach(b=>b.addEventListener('click',()=>this.showView(b.dataset.viewShortcut)));
-    el.querySelectorAll('[data-attention-open]').forEach(b=>b.addEventListener('click',()=>this.openForm(b.dataset.attentionOpen)));
+  App.renderAttentionChip = function(q=this.currentQuarter){
+    const items=this.attentionItems(q);
+    if(!items.length){
+      return `<span class="attention-chip-clear">All caught up</span>`;
+    }
+    return `<details class="attention-chip">
+      <summary>${items.length} need${items.length===1?'s':''} attention</summary>
+      <div class="attention-chip-panel">
+        ${items.map(it=>`<div class="attention-chip-row"><div><strong>${this.escape(it.label)}</strong><br><span class="field-hint">${this.escape(it.detail)}</span></div>${it.openAction?`<button class="btn btn-ghost btn-sm" data-attention-open="${it.openAction}">Open</button>`:it.viewAction?`<button class="btn btn-ghost btn-sm" data-view-shortcut="${it.viewAction}">Open</button>`:''}</div>`).join('')}
+      </div>
+    </details>`;
+  };
+
+  App.renderProgramOperationsDrawer = function(q=this.currentQuarter){
+    return `<details class="ops-drawer">
+      <summary class="ops-drawer-summary">Program Operations</summary>
+      <div class="ops-drawer-body">
+        <div class="content-grid">
+          <div>${this.renderReadinessPanel(q)}${this.renderTodayPanel(q)}</div>
+          <div>${this.renderDataCheckPanel(q)}${this.renderGoalProgress(q)}${this.renderActivityLog(q)}</div>
+        </div>
+      </div>
+    </details>`;
   };
 
   const oldRenderServices = App.renderServices;
