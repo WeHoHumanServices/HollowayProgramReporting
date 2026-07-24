@@ -1041,6 +1041,22 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   </div>
 </div>
 
+<!-- Client Update Modal -->
+<div id="modal-clientupdate" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="clientupdate-title">
+  <div class="form-modal">
+    <div class="form-modal-header">
+      <div><div class="form-modal-title" id="clientupdate-title">Client Update</div><div class="form-modal-meta">Quarterly income / benefits status check</div></div>
+      <button class="form-close-btn" data-close="clientupdate">✕</button>
+    </div>
+    <div class="form-gold-bar"></div>
+    <div class="form-body" id="clientupdate-body"></div>
+    <div class="form-footer">
+      <div class="save-state" id="clientupdate-save-state">Not saved this session</div>
+      <div style="display:flex;gap:10px;"><button class="btn btn-ghost" data-close="clientupdate">Close</button><button class="btn btn-gold" id="btn-save-clientupdate">Save Update</button></div>
+    </div>
+  </div>
+</div>
+
 <!-- Confirmation Modal -->
 <div id="confirm-modal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
   <div class="confirm-card">
@@ -1158,7 +1174,7 @@ const CONFIG = {
   },
 
   ANNUAL_GOALS: [
-    { key:'phExitsAnnual',      label:'Permanent Housing Exits',      desc:'Progress toward a 30% permanent housing exit benchmark for people served YTD.', target:null, unit:' exits' },
+    { key:'phExitsAnnual',      label:'Permanent Housing Exits',      desc:'Progress toward a 30% permanent housing exit benchmark for people served YTD, capped at 12 placements for the year.', target:null, unit:' exits' },
     { key:'suppServicesAnnual', label:'Supportive Services Engagement', desc:'Quarterly count of participants engaged in supportive services.',                target:null, unit:' people' },
     { key:'incomeAnnual',       label:'Income / Benefits Stability',    desc:'Participants who increased or maintained income/benefits this quarter.',         target:null, unit:' people' },
     { key:'occupancyAnnual',    label:'Occupancy / Utilization',        desc:'Bed nights occupied compared with available bed nights YTD.',                    target:null, unit:' bed nights' },
@@ -1263,6 +1279,7 @@ const App = {
     document.getElementById('btn-save-client').addEventListener('click', () => this.saveClient());
     document.getElementById('btn-save-followup')?.addEventListener('click', () => this.saveFollowUp());
     document.getElementById('btn-save-service').addEventListener('click', () => this.saveService());
+    document.getElementById('btn-save-clientupdate')?.addEventListener('click', () => this.saveClientUpdate());
     document.getElementById('error-chip').addEventListener('click', () => this.scrollToFirstError());
     document.getElementById('confirm-cancel').addEventListener('click', () => this.closeConfirm());
 
@@ -1808,7 +1825,14 @@ const App = {
     return c.exit_date ? 'Other Non-Permanent' : '';
   },
   clientMetrics(q=this.currentQuarter) { const {start,end}=this.qRange(q); const clients=this.data.clients||[]; const served=clients.filter(c=>this.clientOverlaps(c,start,end)); const activeAtEnd=clients.filter(c=>this.clientStatus(c,end)==='Active'); const intakes=clients.filter(c=>this.dateOnly(c.entry_date)>=start && this.dateOnly(c.entry_date)<=end); const exits=clients.filter(c=>this.dateOnly(c.exit_date)>=start && this.dateOnly(c.exit_date)<=end); const phExits=exits.filter(c=>this.isPermanentExit(c)); const positiveNonPermanent=exits.filter(c=>this.isPositiveNonPermanentExit(c)); const occupied=clients.reduce((sum,c)=>sum+this.clientBedNights(c,start,end),0); const available=20*this.daysInclusive(start,end); const losVals=served.map(c=>this.clientBedNights(c, this.dateOnly(c.entry_date), this.dateOnly(c.exit_date)||end)).filter(v=>v>0); const avgLos=losVals.length ? Math.round(losVals.reduce((a,b)=>a+b,0)/losVals.length) : 0; const services=(this.data.clientServices||[]).filter(s=>this.dateOnly(s.service_date)>=start && this.dateOnly(s.service_date)<=end); return {served, activeAtEnd, intakes, exits, phExits, positiveNonPermanent, occupied, available, avgLos, services}; },
-  generatedScopeFromClients(q=this.currentQuarter) { const m=this.clientMetrics(q); return { activeResidents:m.activeAtEnd.length, residentsServed:m.served.length, unduplicatedYTD:this.ytdClientsServed(q).length, newIntakes:m.intakes.length, bedNightsAvail:m.available, bedNightsOcc:m.occupied, phExits:m.phExits.length, avgDaysToPH:m.avgLos, suppServicesEngaged:new Set(m.services.map(s=>s.client_id)).size, incomeIncrease:this.countQuarterUpdates(q,'income_change','Increased'), incomeMaintained:this.countQuarterUpdates(q,'income_change','Maintained'), satSatisfied:0, satTotal:0, exitsTemp:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Temporary') || String(c.exit_destination_type||'').includes('Emergency Shelter') || String(c.exit_destination_type||'').includes('Hotel')).length, exitsInstitutional:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Institutional')).length, exitsHomeless:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Homeless')).length, exitsUnknown:m.exits.filter(c=>!c.exit_destination_type || String(c.exit_destination_type||'').includes('Unknown')).length, exitsFamilyFriends:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Family/Friends')).length, exitsPartner:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Spouse/Partner')).length, positiveNonPermanent:m.positiveNonPermanent.length }; },
+  // Income Increased / Income Maintained are agency-reported aggregate
+  // counts, not calculated from client records — even in client-generated
+  // reporting mode. Staff type the quarter's total directly on the Program
+  // Scope form (see MANUAL_SCOPE_KEYS below) and that number is stored on
+  // the quarterly_reports row (income_increase/income_maintained), which is
+  // what's read here. This is a deliberate simplification: no per-client
+  // tracking is required to feed the Income / Benefits Stability goal.
+  generatedScopeFromClients(q=this.currentQuarter) { const m=this.clientMetrics(q); const r=this.data.reports[q]||{}; return { activeResidents:m.activeAtEnd.length, residentsServed:m.served.length, unduplicatedYTD:this.ytdClientsServed(q).length, newIntakes:m.intakes.length, bedNightsAvail:m.available, bedNightsOcc:m.occupied, phExits:m.phExits.length, avgDaysToPH:m.avgLos, suppServicesEngaged:new Set(m.services.map(s=>s.client_id)).size, incomeIncrease:Number(r.income_increase||0), incomeMaintained:Number(r.income_maintained||0), satSatisfied:0, satTotal:0, exitsTemp:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Temporary') || String(c.exit_destination_type||'').includes('Emergency Shelter') || String(c.exit_destination_type||'').includes('Hotel')).length, exitsInstitutional:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Institutional')).length, exitsHomeless:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Homeless')).length, exitsUnknown:m.exits.filter(c=>!c.exit_destination_type || String(c.exit_destination_type||'').includes('Unknown')).length, exitsFamilyFriends:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Family/Friends')).length, exitsPartner:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Spouse/Partner')).length, positiveNonPermanent:m.positiveNonPermanent.length }; },
 
   ageBandForClient(c) {
     const age = Number(c.age || 0);
@@ -2209,7 +2233,9 @@ const App = {
     // live data so SCOPE columns stay the source of truth.
     const s = this.reportScope(q);
     const persons = this.calcPersonsYtd(q) || 0;
-    const phBenchmark = Math.max(1, Math.round(persons * 0.30));
+    // Placement goal is 30% of persons served YTD, but capped at 12
+    // placements for the contract year regardless of caseload size.
+    const phBenchmark = Math.min(12, Math.max(1, Math.round(persons * 0.30)));
     const bedAvail = this.calcScopeYtd(q, 'bedNightsAvail') || 0;
     const bedOcc = this.calcScopeYtd(q, 'bedNightsOcc') || 0;
     const dynamic = {
@@ -2742,18 +2768,25 @@ const App = {
       </tbody></table></div>`;
   },
 
+  // Income Increased / Income Maintained are reported directly by agency
+  // staff as an aggregate count for the quarter, rather than calculated
+  // from any per-client source — this is true even when client-generated
+  // reporting is otherwise active for every other Scope row.
+  MANUAL_SCOPE_KEYS: new Set(['incomeIncrease','incomeMaintained']),
+
   renderScopeForm(q) {
     const generatedMode = this.useClientGeneratedReporting();
     const s = this.reportScope(q);
     const cumulative = new Set(CONFIG.CUMULATIVE_SCOPE_KEYS);
     let last = '';
-    document.getElementById('qr-scope-body').innerHTML = `<div class="notice ${generatedMode ? 'green' : 'navy'}"><div aria-hidden="true">${generatedMode ? '<svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>' : '<svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg>'}</div><div><strong>Scope of Services</strong><br>${generatedMode ? 'These metrics are calculated from client records and will be saved into the submitted quarterly report. Providers should update client records, services, exits, and HMIS backup documentation rather than manually typing totals here.' : 'YTD fields are calculated only for cumulative metrics. Snapshot and service fields remain quarter-specific.'}</div></div>
+    document.getElementById('qr-scope-body').innerHTML = `<div class="notice ${generatedMode ? 'green' : 'navy'}"><div aria-hidden="true">${generatedMode ? '<svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>' : '<svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg>'}</div><div><strong>Scope of Services</strong><br>${generatedMode ? 'Most metrics are calculated from client records and will be saved into the submitted quarterly report. Providers should update client records, services, exits, and HMIS backup documentation rather than manually typing totals here. Income Increased / Income Maintained are the exception — agency staff report those two as an aggregate count for the quarter.' : 'YTD fields are calculated only for cumulative metrics. Snapshot and service fields remain quarter-specific.'}</div></div>
       <table class="svc-table"><thead><tr><th scope="col">Metric</th><th scope="col">This Quarter</th><th scope="col">YTD / Display</th><th scope="col">Source / Notes</th></tr></thead><tbody>
       ${CONFIG.SCOPE_ROWS.map(row => {
         const cat = row.category, key = row.key, label = row.label, mode = row.mode, hint = row.hint || '';
         const header = cat !== last ? (last=cat, `<tr class="cat-header"><td colspan="4">${this.escape(cat)}</td></tr>`) : '';
         const isPersonsYtd = mode === 'personsYtd';
         const isCumulative = cumulative.has(key);
+        const isManual = this.MANUAL_SCOPE_KEYS.has(key);
         const ytd = isPersonsYtd ? this.generatedPersonsYtd(q) : (isCumulative ? this.calcScopeYtd(q,key,s[key] || 0) : 'Quarter only');
         const value = isPersonsYtd ? this.generatedPersonsYtd(q) : (s[key] ?? '');
         const inputType = mode === 'text' ? 'text' : 'number';
@@ -2761,11 +2794,11 @@ const App = {
         const stepAttr = mode === 'currency' ? ' step="0.01"' : '';
         const qCell = isPersonsYtd
           ? `<strong>${value || 0}</strong><br><span class="field-hint">Calculated</span>`
-          : (generatedMode
+          : ((generatedMode && !isManual)
             ? `<strong>${this.escape(value ?? 0)}</strong><br><span class="field-hint">Calculated from client records</span>`
             : `<label class="sr-only" for="scope-${key}">${this.escape(label)}</label><input type="${inputType}"${minAttr}${stepAttr} id="scope-${key}" data-scope="${key}" value="${this.escape(s[key] ?? '')}">`);
         const ytdAttr = isCumulative ? `data-scope-ytd="${key}"` : (isPersonsYtd ? 'data-persons-ytd-cell="true"' : '');
-        const sourceNote = generatedMode ? this.scopeSourceNote(key, hint) : hint;
+        const sourceNote = isManual ? 'Agency-reported total for the quarter — enter directly.' : (generatedMode ? this.scopeSourceNote(key, hint) : hint);
         return `${header}<tr><th scope="row" style="text-align:left;font-weight:600;">${this.escape(label)}</th><td>${qCell}</td><td ${ytdAttr} class="${isPersonsYtd ? 'total-cell' : ''}">${ytd}</td><td class="field-hint">${this.escape(sourceNote)}</td></tr>`;
       }).join('')}</tbody></table>`;
   },
@@ -2781,8 +2814,10 @@ const App = {
       phExits: 'Calculated from exits to permanent housing destinations during the quarter.',
       avgDaysToPH: 'Calculated from client length of stay for people served/exited in the quarter.',
       suppServicesEngaged: 'Calculated from unique clients with service records during the quarter.',
-      incomeIncrease: 'Calculated from quarterly client update records.',
-      incomeMaintained: 'Calculated from quarterly client update records.',
+      // incomeIncrease/incomeMaintained are handled via MANUAL_SCOPE_KEYS in
+      // renderScopeForm and never reach this lookup, but kept here for safety.
+      incomeIncrease: 'Agency-reported total for the quarter — enter directly.',
+      incomeMaintained: 'Agency-reported total for the quarter — enter directly.',
       exitsTemp: 'Calculated from exit destination type.',
       exitsInstitutional: 'Calculated from exit destination type.',
       exitsHomeless: 'Calculated from exit destination type.',
@@ -3178,7 +3213,8 @@ const App = {
     const sourceDemos = generatedMode ? this.generatedDemographicsFromClients(q) : null;
     const scope = {};
     Object.keys(this.scopeMap).forEach(key => {
-      scope[this.scopeMap[key]] = generatedMode ? Number(sourceScope[key] || 0) : this.numVal('scope-' + key);
+      const isManual = this.MANUAL_SCOPE_KEYS.has(key);
+      scope[this.scopeMap[key]] = (generatedMode && !isManual) ? Number(sourceScope[key] || 0) : this.numVal('scope-' + key);
     });
     const personsQuarter = generatedMode ? Number(sourceScope.residentsServed || 0) : this.numVal('qr-persons-quarter');
     const personsYtd = generatedMode ? this.ytdClientsServed(q).length : this.calcPersonsYtd(q, personsQuarter);
@@ -4260,12 +4296,13 @@ const App = {
     const rows=active.map(c=>{
       const assignment=String(c.room_assignment||'').trim();
       const isDuplicate = assignment && duplicates.some(([k])=>k===assignment);
-      return `<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.statusBadge(this.simpleClientStatus(c).toLowerCase().replace(' ','-'))}</td><td>${this.escape(c.housing_plan_status||'—')}</td><td>${this.clientBedNights(c,this.dateOnly(c.entry_date),this.today()).toLocaleString()}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.escape(c.room_assignment||'—')}${isDuplicate?' <span class="badge badge-amber">Duplicate</span>':''}</td><td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button><button class="btn btn-ghost btn-sm" data-add-service="${c.id}">Add Service</button></div></td></tr>`;
+      return `<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.statusBadge(this.simpleClientStatus(c).toLowerCase().replace(' ','-'))}</td><td>${this.escape(c.housing_plan_status||'—')}</td><td>${this.clientBedNights(c,this.dateOnly(c.entry_date),this.today()).toLocaleString()}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.escape(c.room_assignment||'—')}${isDuplicate?' <span class="badge badge-amber">Duplicate</span>':''}</td><td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button><button class="btn btn-ghost btn-sm" data-add-service="${c.id}">Add Service</button><button class="btn btn-ghost btn-sm" data-add-update="${c.id}">Add Update</button></div></td></tr>`;
     }).join('') || '<tr><td colspan="8" class="empty-table-state">No active client records entered yet.</td></tr>';
     el.innerHTML=`<div class="page-header"><div><div class="page-title">Active Caseload</div><div class="page-subtitle">Daily client workspace. Quarterly reporting is generated from these source records.</div></div><button class="btn btn-gold" id="btn-new-client">+ Add Client</button></div>${duplicateNotice}<div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._caseloadSort,'hmis','HMIS ID')}${this.sortableHeader(this._caseloadSort,'name','Name')}${this.sortableHeader(this._caseloadSort,'status','Status')}${this.sortableHeader(this._caseloadSort,'housing','Housing Progress')}${this.sortableHeader(this._caseloadSort,'los','LOS')}${this.sortableHeader(this._caseloadSort,'entry','Entry')}${this.sortableHeader(this._caseloadSort,'room','Room / Bed')}<th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     el.querySelector('#btn-new-client').addEventListener('click',()=>this.openClientForm());
     el.querySelectorAll('[data-edit-client]').forEach(b=>b.addEventListener('click',()=>this.openClientForm(b.dataset.editClient)));
     el.querySelectorAll('[data-add-service]').forEach(b=>b.addEventListener('click',()=>this.openServiceForm(null,b.dataset.addService)));
+    el.querySelectorAll('[data-add-update]').forEach(b=>b.addEventListener('click',()=>this.openClientUpdateForm(b.dataset.addUpdate)));
     this.wireSortableHeaders(el, this._caseloadSort, ()=>this.renderClients());
   };
 
@@ -4305,13 +4342,15 @@ const App = {
     const progress=c.housing_plan_status || 'Intake Complete';
     const services=(this.data.clientServices||[]).filter(s=>s.client_id===id).slice(0,5);
     const recent=services.map(s=>`<div class="recent-service-row"><div><strong>${this.escape(s.service_type||'Service')}</strong><br><span class="field-hint">${this.formatDate(s.service_date)}</span></div><span class="field-hint">${Number(s.duration_minutes||0)} min</span></div>`).join('') || '<div class="field-hint">No services recorded yet.</div>';
+    const updates=(this.data.clientUpdates||[]).filter(u=>u.client_id===id).sort((a,b)=>(b.quarter||'').localeCompare(a.quarter||'')).slice(0,5);
+    const recentUpdates=updates.map(u=>`<div class="recent-service-row"><div><strong>${this.escape(u.quarter||'—')}</strong><br><span class="field-hint">${this.escape(u.income_change||'—')}</span></div><span class="field-hint">${u.income_at_update!=null?'$'+u.income_at_update:''}</span></div>`).join('') || '<div class="field-hint">No income/benefits updates recorded yet.</div>';
     document.getElementById('client-title').textContent = id ? `Client Profile · ${this.escape(this.clientDisplayId(c))}` : 'New Client Intake';
     document.getElementById('client-body').innerHTML=`<div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>Complete intake and demographics first. Housing progress, case management milestones, services, and exit details can be added as the case progresses.</div></div><div class="wizard-steps"><div class="wizard-step"><div class="num">Step 1</div><div class="name">Intake & Demographics</div></div><div class="wizard-step"><div class="num">Step 2</div><div class="name">Housing & Case Management</div></div><div class="wizard-step"><div class="num">Step 3</div><div class="name">Services / Exit if applicable</div></div></div><div class="client-entry-layout"><div>
       <div class="form-section"><div class="form-section-title">Intake & Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label required">HMIS ID</label><input id="cf-hmis-id" class="field-input" value="${this.escape(c.id||c.hmis_unique_identifier||c.agency_client_id||'')}" placeholder="HMIS Unique Identifier"></div><div class="field-group"><label class="field-label required">Entry Date</label><input id="cf-entry-date" type="date" class="field-input" value="${this.dateOnly(c.entry_date)}"></div><div class="field-group"><label class="field-label">Current Status</label><div class="segmented-row" data-status-group>${['Active','Scheduled Exit','Exited'].map(v=>`<button type="button" class="segment-btn ${status===v?'active':''}" data-status="${v}">${v}</button>`).join('')}</div><input type="hidden" id="cf-status" value="${this.escape(status)}"></div><div class="field-group"><label class="field-label">Room / Bed Assignment</label><input id="cf-room-number" class="field-input" value="${this.escape(c.room_assignment||'')}" placeholder="e.g., Room 7, 102, Bed A, Unassigned"></div></div></div>
       <div class="form-section"><div class="form-section-title">Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Client Name <span class="field-hint">Agency use only</span></label><input id="cf-client-name" class="field-input" value="${this.escape(c.client_name||'')}"></div><div class="field-group"><label class="field-label">Age</label><input id="cf-age" type="number" class="field-input" value="${c.age||''}"></div><div class="field-group"><label class="field-label">Gender Identity</label><select id="cf-gender" class="field-select"><option></option>${opt(this.hmisGenderOptions(), c.gender)}</select><div id="cf-gender-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify gender identity</label><input id="cf-gender-other" class="field-input" value="${this.escape(c.gender_other||'')}"></div><div class="field-hint">Transgender experience is captured separately below and is not treated as a gender.</div></div><div class="field-group"><label class="field-label">Transgender Experience</label><select id="cf-transgender-status" class="field-select"><option></option>${opt(['Yes','No','Questioning','Client doesn’t know','Client prefers not to answer','Data not collected'], c.transgender_status)}</select></div><div class="field-group"><label class="field-label">Race / Ethnicity</label><select id="cf-race" class="field-select"><option></option>${opt(this.hmisRaceEthnicityOptions(), c.race_ethnicity)}</select><div id="cf-race-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify race/ethnicity</label><input id="cf-race-other" class="field-input" value="${this.escape(c.race_ethnicity_other||'')}"></div></div><div class="field-group"><label class="field-label">Primary Language</label><select id="cf-primary-language" class="field-select"><option></option>${opt(['English','Spanish','Russian','Farsi','Other'], c.primary_language||c.household_language||c.language)}</select><div id="cf-primary-language-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify language</label><input id="cf-primary-language-other" class="field-input" value="${this.escape(c.primary_language_other||'')}"></div></div>${this.yesNoSegment('cf-veteran','Veteran Status',c.veteran)}${this.yesNoSegment('cf-disability','Disability Status',c.disability)}</div><details style="margin-top:12px;"><summary class="field-label" style="cursor:pointer;">Additional Information</summary><div class="client-form-grid" style="margin-top:12px;"><div class="field-group"><label class="field-label">Income at Entry</label><input id="cf-income-entry" type="number" class="field-input" value="${c.income_at_entry||''}"></div></div></details></div>
       <div class="form-section"><div class="form-section-title">Housing & Case Management</div><div class="housing-progress">${this.housingProgressOptions().map(v=>`<button type="button" class="hp-step ${progress===v?'active':''}" data-housing-progress="${this.escape(v)}">○ ${this.escape(v)}</button>`).join('')}</div><input type="hidden" id="cf-housing-plan" value="${this.escape(progress)}"><div class="client-form-grid" style="margin-top:14px;"><div class="field-group"><label class="field-label">Expected Exit Date</label><input id="cf-expected-exit" type="date" class="field-input" value="${this.dateOnly(c.expected_exit_date)}"></div><div class="field-group"><label class="field-label">Housing Assessment Completed</label><input id="cf-housing-assessment" type="date" class="field-input" value="${this.dateOnly(c.housing_assessment_completed)}"></div><div class="field-group"><label class="field-label">Benefits Screening Completed</label><input id="cf-benefits-screening" type="date" class="field-input" value="${this.dateOnly(c.benefits_screening_completed)}"></div><div class="field-group"><label class="field-label">Income Verification Completed</label><input id="cf-income-verification" type="date" class="field-input" value="${this.dateOnly(c.income_verification_completed)}"></div></div></div>
       <div id="cf-exit-section" class="form-section exit-section ${status==='Exited'?'':'is-hidden'}"><div class="form-section-title">Exit Information</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Exit Date</label><input id="cf-exit-date" type="date" class="field-input" value="${this.dateOnly(c.exit_date)}"></div><div class="field-group"><label class="field-label">Exit Destination</label><select id="cf-exit-type" class="field-select"><option></option>${opt(this.exitDestinationOptions(), c.exit_destination_type)}</select><div id="cf-exit-type-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please describe exit destination</label><input id="cf-exit-type-other" class="field-input" value="${this.escape(c.exit_destination_other||'')}"></div></div><div class="field-group"><label class="field-label">Reason for Exit</label><select id="cf-exit-reason" class="field-select"><option></option>${opt(this.exitReasonOptions(), c.exit_reason)}</select><div id="cf-exit-reason-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify reason for exit</label><input id="cf-exit-reason-other" class="field-input" value="${this.escape(c.exit_reason_other||'')}"></div></div><div class="field-group"><label class="field-label">Specific Destination / Notes</label><input id="cf-exit-destination" class="field-input" value="${this.escape(c.exit_destination||'')}"></div><div class="field-group"><label class="field-label">Income at Exit</label><input id="cf-income-exit" type="number" class="field-input" value="${c.income_at_exit||''}"></div><div class="field-group full"><label class="field-label">Outcome Notes</label><textarea id="cf-exit-notes" class="field-textarea">${this.escape(c.exit_notes||'')}</textarea></div></div></div>
-      <div class="form-section"><div class="form-section-title">Recent Services</div>${recent}<button class="btn btn-ghost btn-sm" id="cf-add-service" ${id?'':'disabled'}>+ Add Service</button><div class="field-hint" style="margin-top:6px;">Save the client before adding services.</div></div><div id="cf-quality" class="data-quality-list"></div>
+      <div class="form-section"><div class="form-section-title">Recent Services</div>${recent}<button class="btn btn-ghost btn-sm" id="cf-add-service" ${id?'':'disabled'}>+ Add Service</button><div class="field-hint" style="margin-top:6px;">Save the client before adding services.</div></div><div class="form-section"><div class="form-section-title">Income / Benefits Updates</div>${recentUpdates}<button class="btn btn-ghost btn-sm" id="cf-add-update" ${id?'':'disabled'}>+ Add Update</button><div class="field-hint" style="margin-top:6px;">Save the client before adding an update. One update per quarter.</div></div><div id="cf-quality" class="data-quality-list"></div>
     </div>${this.reportingSummaryHtml({...c,housing_plan_status:progress})}</div>`;
     this.openOverlay('client');
     const isOtherValue=(v)=>String(v||'').toLowerCase().includes('other') || String(v||'').toLowerCase().includes('different identity') || String(v||'').toLowerCase().includes('additional race');
@@ -4329,6 +4368,7 @@ const App = {
     document.querySelectorAll('[data-segment-group]').forEach(g=>g.querySelectorAll('.segment-btn').forEach(b=>b.addEventListener('click',()=>{g.querySelectorAll('.segment-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active'); document.getElementById(g.dataset.segmentGroup).value=b.dataset.value;})));
     document.querySelectorAll('[data-housing-progress]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-housing-progress]').forEach(x=>x.classList.remove('active')); b.classList.add('active'); document.getElementById('cf-housing-plan').value=b.dataset.housingProgress;}));
     document.getElementById('cf-add-service')?.addEventListener('click',()=>{ this.closeForm('client'); this.openServiceForm(null,id); });
+    document.getElementById('cf-add-update')?.addEventListener('click',()=>{ this.closeForm('client'); this.openClientUpdateForm(id); });
     ['cf-hmis-id','cf-entry-date','cf-expected-exit','cf-exit-date','cf-exit-type'].forEach(i=>document.getElementById(i)?.addEventListener('input',refresh));
     refresh();
   };
@@ -4431,6 +4471,44 @@ const App = {
     const {error}=await this.sb.from('holloway_client_services').upsert(payload,{onConflict:'id'});
     if(error){ document.getElementById('service-save-state').textContent='Save failed: '+error.message; return; }
     document.getElementById('service-save-state').textContent='Saved.'; await this.loadAll(); this.closeForm('service'); this.showView(this.view||'services');
+  };
+
+  // Quarterly income/benefits status check for an active client — feeds the
+  // Income / Benefits Stability annual goal (incomeIncrease/incomeMaintained
+  // counts on holloway_client_quarterly_updates). One record per client per
+  // quarter; reopening the form for a client already updated this quarter
+  // loads the existing record for editing rather than creating a duplicate.
+  App.incomeChangeOptions = function(){ return ['Increased','Maintained','Decreased','Lost Income/Benefits','Unknown']; };
+
+  App.openClientUpdateForm = function(clientId){
+    const c=(this.data.clients||[]).find(x=>x.id===clientId)||{};
+    const q=this.currentQuarter;
+    const existing=(this.data.clientUpdates||[]).find(u=>u.client_id===clientId && u.quarter===q)||{};
+    this.currentClientUpdate={clientId, id:existing.id||null};
+    document.getElementById('clientupdate-title').textContent=`Client Update · ${this.clientDisplayId(c)}`;
+    document.getElementById('clientupdate-body').innerHTML=`<div class="form-section"><div class="form-section-title">Income / Benefits Status — ${this.escape(q)}</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Client ID</label><input class="field-input" readonly value="${this.escape(this.clientDisplayId(c))}"></div><div class="field-group"><label class="field-label">Quarter</label><input class="field-input" readonly value="${this.escape(q)}"></div><div class="field-group"><label class="field-label required">Income / Benefits Change</label><select id="cu-change" class="field-select"><option></option>${this.incomeChangeOptions().map(x=>`<option ${existing.income_change===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field-group"><label class="field-label">Income at Update</label><input id="cu-income" type="number" class="field-input" value="${existing.income_at_update ?? ''}"></div><div class="field-group full"><label class="field-label">Notes</label><textarea id="cu-notes" class="field-textarea">${this.escape(existing.notes||'')}</textarea></div></div></div>`;
+    this.openOverlay('clientupdate');
+  };
+
+  App.saveClientUpdate = async function(){
+    const cur=this.currentClientUpdate||{};
+    const incomeChange=document.getElementById('cu-change').value||null;
+    if(!incomeChange){ document.getElementById('clientupdate-save-state').textContent='Please select an income/benefits change.'; return; }
+    const payload={
+      id: cur.id || (crypto.randomUUID ? crypto.randomUUID() : 'upd_'+Date.now()),
+      program_id:this.program.id,
+      fiscal_year:this.fiscalYear,
+      quarter:this.currentQuarter,
+      client_id:cur.clientId,
+      income_change:incomeChange,
+      income_at_update:document.getElementById('cu-income').value===''?null:Number(document.getElementById('cu-income').value),
+      notes:document.getElementById('cu-notes').value.trim()||null,
+      updated_by:this.user?.email||null,
+      updated_at:new Date().toISOString()
+    };
+    const {error}=await this.sb.from('holloway_client_quarterly_updates').upsert(payload,{onConflict:'id'});
+    if(error){ document.getElementById('clientupdate-save-state').textContent='Save failed: '+error.message; return; }
+    document.getElementById('clientupdate-save-state').textContent='Saved.'; await this.loadAll(); this.closeForm('clientupdate'); this.showView(this.view||'clients');
   };
 
 })();
