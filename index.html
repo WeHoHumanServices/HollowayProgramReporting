@@ -782,13 +782,31 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
       <div class="login-sub">City of West Hollywood · Human Services Division</div>
     </div>
     <div class="login-body">
-      <div class="field-group">
-        <label class="field-label required" for="login-email">Email Address</label>
-        <input type="email" id="login-email" class="field-input" autocomplete="email" required placeholder="name@example.org" />
+      <div class="segmented-row" id="login-mode-toggle" style="margin-bottom:16px;">
+        <button type="button" class="segment-btn active" data-login-mode="magic">Magic Link</button>
+        <button type="button" class="segment-btn" data-login-mode="password">Password</button>
       </div>
-      <p id="login-error" style="color:#C0392B;font-size:12px;margin:0 0 8px;"></p>
-      <button class="login-submit" id="login-submit-btn">Send Secure Login Link →</button>
-      <div class="login-footer">Enter your approved email address and we’ll send a secure login link.</div>
+      <div id="login-mode-magic">
+        <div class="field-group">
+          <label class="field-label required" for="login-email">Email Address</label>
+          <input type="email" id="login-email" class="field-input" autocomplete="email" required placeholder="name@example.org" />
+        </div>
+        <button class="login-submit" id="login-submit-btn">Send Secure Login Link →</button>
+        <div class="login-footer">Enter your approved email address and we’ll send a secure login link.</div>
+      </div>
+      <div id="login-mode-password" style="display:none;">
+        <div class="field-group">
+          <label class="field-label required" for="login-email-pw">Email Address</label>
+          <input type="email" id="login-email-pw" class="field-input" autocomplete="email" required placeholder="name@example.org" />
+        </div>
+        <div class="field-group">
+          <label class="field-label required" for="login-password">Password</label>
+          <input type="password" id="login-password" class="field-input" autocomplete="current-password" required placeholder="••••••••" />
+        </div>
+        <button class="login-submit" id="login-password-submit-btn">Log In →</button>
+        <div class="login-footer">Password login must be enabled for your account by the City program monitor.</div>
+      </div>
+      <p id="login-error" style="color:#C0392B;font-size:12px;margin:12px 0 0;"></p>
     </div>
   </div>
 </div>
@@ -821,13 +839,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
           <div class="sidebar-item" data-view="services"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V7a2 2 0 0 1 4 0v4"/><path d="M11 10V6a2 2 0 0 1 4 0v5"/><path d="M15 10V8a2 2 0 0 1 4 0v6c0 4.42-3.58 8-8 8h-1a7 7 0 0 1-7-7v-3a2 2 0 0 1 4 0v2"/></svg>Services</div>
           <div class="sidebar-item" data-view="client-exits"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg>Exits</div>
           <div class="sidebar-item" data-view="housing-followups"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg>Housing Follow-Ups</div>
-          <div class="sidebar-item" data-view="quarter"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review & Submit</div>
           <div class="sidebar-item" id="nav-review" data-view="admin-review" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review Queue</div>
           <div class="sidebar-item" id="nav-access" data-view="access" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1"/></svg>Access Management</div>
         </div>
         <div class="sidebar-section">
-          <div class="sidebar-label">Reports</div>
-          <div class="sidebar-item" data-view="quarterly-narrative"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8M8 9h2"/></svg>Quarterly Narrative</div>
+          <div class="sidebar-label">Program Reports</div>
+          <div class="sidebar-item" data-view="quarter"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Program Reports</div>
         </div>
       </nav>
     </aside>
@@ -839,7 +856,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
       <section id="view-services" class="view-section"></section>
       <section id="view-client-exits" class="view-section"></section>
       <section id="view-housing-followups" class="view-section"></section>
-      <section id="view-quarterly-narrative" class="view-section"></section>
       <section id="view-quarter" class="view-section"></section>
       <section id="view-admin-review" class="view-section"></section>
       <section id="view-access" class="view-section"></section>
@@ -1174,6 +1190,10 @@ const App = {
   bindStaticEvents() {
     document.getElementById('login-submit-btn').addEventListener('click', () => this.login());
     document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') this.login(); });
+    document.querySelectorAll('[data-login-mode]').forEach(btn => btn.addEventListener('click', () => this.setLoginMode(btn.dataset.loginMode)));
+    document.getElementById('login-password-submit-btn').addEventListener('click', () => this.loginWithPassword());
+    document.getElementById('login-email-pw').addEventListener('keydown', e => { if (e.key === 'Enter') this.loginWithPassword(); });
+    document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') this.loginWithPassword(); });
     document.getElementById('logout-btn').addEventListener('click', () => this.logout());
 
     document.querySelectorAll('.sidebar-item[data-view]').forEach(el => {
@@ -1224,7 +1244,16 @@ const App = {
       this.showLogin();
       return;
     }
-    this.user = session.user;
+    await this.establishSession(session.user);
+  },
+
+  // Shared by magic-link (checkSession, after Supabase auto-detects the
+  // session from the redirect URL) and password login — both end up with an
+  // authenticated Supabase user and need the exact same profile/data load.
+  async establishSession(user) {
+    document.getElementById('loading-screen').style.display = 'flex';
+    document.getElementById('login-screen').style.display = 'none';
+    this.user = user;
     try {
       await this.ensureProfile();
       await this.loadAll();
@@ -1242,6 +1271,13 @@ const App = {
     document.getElementById('app').style.display = 'none';
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('login-error').textContent = message;
+  },
+
+  setLoginMode(mode) {
+    document.querySelectorAll('[data-login-mode]').forEach(b => b.classList.toggle('active', b.dataset.loginMode === mode));
+    document.getElementById('login-mode-magic').style.display = mode === 'password' ? 'none' : 'block';
+    document.getElementById('login-mode-password').style.display = mode === 'password' ? 'block' : 'none';
+    document.getElementById('login-error').textContent = '';
   },
 
   showApp() {
@@ -1332,6 +1368,38 @@ const App = {
     }
     errorEl.style.color = '#2D7A4F';
     errorEl.textContent = 'Check your email for a secure login link.';
+  },
+
+  async loginWithPassword() {
+    const email = document.getElementById('login-email-pw').value.trim().toLowerCase();
+    const password = document.getElementById('login-password').value;
+    const errorEl = document.getElementById('login-error');
+    errorEl.style.color = '#C0392B';
+    if (!email || !password) { errorEl.textContent = 'Please enter your email and password.'; return; }
+    errorEl.textContent = '';
+
+    const submitBtn = document.getElementById('login-password-submit-btn');
+    submitBtn.disabled = true;
+    const originalLabel = submitBtn.textContent;
+    submitBtn.textContent = 'Signing in…';
+
+    const { data, error } = await this.sb.auth.signInWithPassword({ email, password });
+
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalLabel;
+
+    if (error) {
+      // Supabase returns a generic "Invalid login credentials" for both a
+      // wrong password AND an account that has no password set yet (i.e.
+      // every account provisioned so far, since only magic-link existed
+      // before). Word it so agency staff know to try the magic link instead
+      // of assuming they mistyped their password.
+      errorEl.textContent = error.message?.toLowerCase().includes('invalid login credentials')
+        ? 'Incorrect email or password — or a password hasn’t been set up for this account yet. Try Magic Link, or contact the City program monitor to set up password login.'
+        : (error.message || 'Log in failed.');
+      return;
+    }
+    await this.establishSession(data.user);
   },
 
   async ensureProfile() {
@@ -1979,23 +2047,40 @@ const App = {
   renderQuarterDetail() {
     const el = document.getElementById('view-quarter');
     const q = this.currentQuarter;
+    this.reportsTab = this.reportsTab === 'narrative' ? 'narrative' : 'overview';
     el.innerHTML = `
       <div class="page-header">
-        <div><div class="page-title">Review & Submit</div><div class="page-subtitle">Review or manage details for the selected quarter.</div></div>
+        <div><div class="page-title">Program Reports</div><div class="page-subtitle">Review readiness, submit the quarter, and manage the quarterly narrative — all in one place.</div></div>
         <button class="btn btn-ghost btn-sm" id="btn-print-quarter">Print / Save PDF</button>
       </div>
       ${this.renderQuarterButtons()}
       ${this.renderQuarterContext(q)}
-      <div class="kpi-row">${this.renderKpis(q)}</div>
-      ${this.renderReadinessPanel(q)}
-      ${this.renderGoalProgress(q)}
-      ${this.renderDataCheckPanel(q)}
-      ${this.isAdmin() ? this.renderAdminActionCard(q) : ''}`;
+      <div class="segmented-row" role="tablist" style="margin:16px 0 18px;">
+        <button type="button" class="segment-btn ${this.reportsTab==='overview'?'active':''}" role="tab" aria-selected="${this.reportsTab==='overview'}" data-reports-tab="overview">Overview & Submit</button>
+        <button type="button" class="segment-btn ${this.reportsTab==='narrative'?'active':''}" role="tab" aria-selected="${this.reportsTab==='narrative'}" data-reports-tab="narrative">Narrative</button>
+      </div>
+      <div id="reports-tab-pane"></div>`;
     this.bindQuarterButtons(el);
-    this.bindSubmitBundleButton(el);
     el.querySelector('#btn-print-quarter').addEventListener('click', () => this.printReport(q));
-    el.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => this.openForm(b.dataset.open)));
-    this.bindAdminActionButtons(el);
+    el.querySelectorAll('[data-reports-tab]').forEach(btn => btn.addEventListener('click', () => {
+      this.reportsTab = btn.dataset.reportsTab;
+      this.renderQuarterDetail();
+    }));
+
+    const pane = document.getElementById('reports-tab-pane');
+    if (this.reportsTab === 'narrative') {
+      this.renderNarrativeTabPane(pane, q);
+    } else {
+      pane.innerHTML = `
+        <div class="kpi-row">${this.renderKpis(q)}</div>
+        ${this.renderReadinessPanel(q)}
+        ${this.renderGoalProgress(q)}
+        ${this.renderDataCheckPanel(q)}
+        ${this.isAdmin() ? this.renderAdminActionCard(q) : ''}`;
+      this.bindSubmitBundleButton(el);
+      el.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => this.openForm(b.dataset.open)));
+      this.bindAdminActionButtons(el);
+    }
   },
 
   renderAdminReview() {
@@ -3631,22 +3716,23 @@ const App = {
     });
   };
 
-  App.renderQuarterlyNarrativePage = function(){
-    const q = this.currentQuarter;
+  // Renders into the shared #reports-tab-pane inside the Program Reports
+  // view (see renderQuarterDetail) rather than owning its own top-level
+  // section — the page header and quarter selector are already rendered
+  // once by the caller, above the Overview/Narrative tab switcher.
+  App.renderNarrativeTabPane = function(pane, q){
     const r = this.data.reports[q] || {};
     const sections = this.parseNarrativeSections(r.narrative_text || '');
     const metrics = this.quarterSummaryMetrics(q);
-    const el = document.getElementById('view-quarterly-narrative');
     const roughNotesBox = `<div class="narrative-rough-notes field-group" style="padding:10px 12px;">
         <span class="narrative-rough-notes-label">Rough notes (optional, de-identified) — used by Generate Draft</span>
         <textarea id="narr-success-notes" class="field-textarea auto-grow" style="min-height:46px;" placeholder="e.g. entered with no income, completed benefits screening, approved for SSI, moved into a subsidized unit after 4 months."></textarea>
       </div>`;
-    el.innerHTML = `<div class="page-header"><div><div class="page-title">Quarterly Narrative</div><div class="page-subtitle">${this.escape(q)} · ${this.escape(this.quarters[q].period)} · Complete the qualitative context and success story for the quarter.</div></div><div style="display:flex;gap:10px;"><button class="btn btn-ghost" id="btn-narrative-open-review">Review & Submit</button><button class="btn btn-gold" id="btn-narrative-save">Save Narrative</button></div></div>
-      ${this.renderQuarterButtons()}
+    pane.innerHTML = `
       <div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div><div><strong>Narrative guidance</strong><br>Use the auto-generated quarter summary below to explain context behind the numbers. Please include a success story from the quarter. Client names should not be included in City-facing narratives unless expressly authorized and appropriate.</div></div>
       <div class="notice amber"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div><strong>Generate Draft is AI-assisted.</strong> Drafts are grounded only in this quarter's numbers (or, for the success story, in the rough notes you provide) — review and edit every draft before saving, and verify any fact before submitting to the City.</div></div>
       <div class="generated-metric-grid" style="grid-template-columns:repeat(3,1fr);">${metrics.map(m=>`<div class="generated-metric"><div class="label">${this.escape(m[0])}</div><div class="value">${this.escape(m[1])}</div></div>`).join('')}</div>
-      <div class="card"><div class="card-header"><div><div class="card-title">Narrative Sections</div><div class="field-hint">These sections will be combined into the quarterly report narrative. Boxes grow as you type.</div></div></div><div class="card-body">
+      <div class="card"><div class="card-header"><div><div class="card-title">Narrative Sections</div><div class="field-hint">These sections will be combined into the quarterly report narrative. Boxes grow as you type.</div></div><button class="btn btn-gold btn-sm" id="btn-narrative-save">Save Narrative</button></div><div class="card-body">
         ${this.narrativeSectionHtml(1,'program_summary','narr-program-summary','Program Summary', sections.program_summary, { placeholder:'Summarize overall program operations during this reporting period.' })}
         ${this.narrativeSectionHtml(2,'program_successes','narr-program-successes','Program Successes', sections.program_successes, { placeholder:'Describe significant accomplishments, partnerships, or notable progress.' })}
         ${this.narrativeSectionHtml(3,'program_challenges','narr-program-challenges','Challenges', sections.program_challenges, { placeholder:'Describe barriers such as housing availability, documentation, staffing, engagement, or other challenges.' })}
@@ -3656,11 +3742,9 @@ const App = {
         <div class="form-row" style="margin-top:4px;"><div class="field-group"><label class="field-label required" for="narr-submitted-by">Prepared By</label><input id="narr-submitted-by" class="field-input" required value="${this.escape(r.narrative_submitted_by || r.signatory_name || this.defaultSignatory())}"></div><div class="field-group"><label class="field-label required" for="narr-date">Date</label><input type="date" id="narr-date" class="field-input" required value="${r.narrative_date || ''}"></div></div>
         <div id="narrative-page-save-state" class="field-hint">Not saved this session.</div>
       </div></div>`;
-    this.bindQuarterButtons(el);
     document.getElementById('btn-narrative-save')?.addEventListener('click', () => this.saveNarrativePage());
-    document.getElementById('btn-narrative-open-review')?.addEventListener('click', () => this.showView('quarter'));
-    el.querySelectorAll('.ai-generate-btn').forEach(btn => btn.addEventListener('click', () => this.generateNarrativeSection(btn.dataset.aiSection, btn.dataset.aiTarget, btn)));
-    this.wireNarrativeAutoGrow(el);
+    pane.querySelectorAll('.ai-generate-btn').forEach(btn => btn.addEventListener('click', () => this.generateNarrativeSection(btn.dataset.aiSection, btn.dataset.aiTarget, btn)));
+    this.wireNarrativeAutoGrow(pane);
   };
 
   App.generateNarrativeSection = async function(section, targetId, btn){
@@ -3762,15 +3846,10 @@ const App = {
     document.getElementById('qr-narrative-body').innerHTML = `<div class="form-section"><div class="form-section-title">Quarterly Narrative</div><div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div><div><strong>Complete the narrative sections.</strong><br>Include context for the quarter, challenges, planned improvements, and one de-identified success story.</div></div>
       <div class="field-group" data-field-group="qr-narrative-text"><label class="field-label required" for="qr-narrative-text">Combined Narrative</label><textarea class="field-textarea" id="qr-narrative-text" required style="min-height:220px;line-height:1.65;">${this.escape(r.narrative_text || '')}</textarea><span class="field-error">Narrative is required before submission.</span></div>
       <div class="form-row"><div class="field-group"><label class="field-label required" for="qr-narrative-name">Submitted By</label><input class="field-input" id="qr-narrative-name" required value="${this.escape(r.narrative_submitted_by || r.signatory_name || this.defaultSignatory())}"></div><div class="field-group"><label class="field-label required" for="qr-narrative-date">Date</label><input type="date" class="field-input" id="qr-narrative-date" required value="${r.narrative_date || ''}"></div></div>
-      <div class="notice amber"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.1 14c.9-1 1.9-2.1 1.9-4a5 5 0 0 0-10 0c0 1.9 1 3 1.9 4 .7.8 1.1 1.2 1.1 2h4c0-.8.4-1.2 1.1-2Z"/></svg></div><div>For easier editing, use the <strong>Quarterly Narrative</strong> page in the left navigation.</div></div>
+      <div class="notice amber"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.1 14c.9-1 1.9-2.1 1.9-4a5 5 0 0 0-10 0c0 1.9 1 3 1.9 4 .7.8 1.1 1.2 1.1 2h4c0-.8.4-1.2 1.1-2Z"/></svg></div><div>For easier editing, use the <strong>Narrative</strong> tab under <strong>Program Reports</strong> in the left navigation.</div></div>
     </div>`;
   };
 
-  const oldShowView2 = App.showView;
-  App.showView = function(view){
-    oldShowView2.call(this, view);
-    if (view === 'quarterly-narrative') this.renderQuarterlyNarrativePage();
-  };
 })();
 
 
