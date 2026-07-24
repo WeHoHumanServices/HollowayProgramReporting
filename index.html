@@ -3103,9 +3103,13 @@ const App = {
     // Wire autosave on existing exit-row edits. Without this, typing into
     // a row never sets the dirty flag and autosave never fires until the
     // user clicks "Save Exit Detail" manually.
-    document.querySelectorAll('#exits-tbody input, #exits-tbody select').forEach(el => {
+    document.querySelectorAll('#exits-tbody input, #exits-tbody select, #exits-tbody textarea').forEach(el => {
       el.addEventListener('input', () => this.markDirty('exits'));
       el.addEventListener('change', () => this.markDirty('exits'));
+    });
+    document.querySelectorAll('#exits-tbody textarea.auto-grow').forEach(ta => {
+      this.autoGrowTextarea(ta);
+      ta.addEventListener('input', () => this.autoGrowTextarea(ta));
     });
     document.getElementById('btn-add-exit')?.addEventListener('click', () => this.addExitDraftRow());
     this.updateReadOnlyStates('exits');
@@ -3127,7 +3131,7 @@ const App = {
         <td><select class="field-select exit-vol"><option></option>${['Voluntary','Involuntary','Unknown'].map(x=>`<option ${e.voluntary_involuntary===x?'selected':''}>${x}</option>`).join('')}</select></td>
         <td><input class="field-input exit-program" value="${this.escape(e.interim_program_name || '')}"></td>
         <td><select class="field-select exit-followup"><option></option>${['Yes','No','No response'].map(x=>`<option ${e.staff_followup===x?'selected':''}>${x}</option>`).join('')}</select></td>
-        <td><input class="field-input exit-notes" value="${this.escape(e.additional_notes != null ? e.additional_notes : (c.exit_notes || ''))}"></td>
+        <td><textarea class="field-textarea auto-grow exit-notes" rows="1" style="min-height:34px;padding:6px 9px;font-size:13px;">${this.escape(e.additional_notes != null ? e.additional_notes : (c.exit_notes || ''))}</textarea></td>
       </tr>`;
     }
     // Legacy/manual row — no client link, keep the original fully-editable behavior.
@@ -3139,7 +3143,7 @@ const App = {
       <td><select class="field-select exit-vol"><option></option>${['Voluntary','Involuntary','Unknown'].map(x=>`<option ${e.voluntary_involuntary===x?'selected':''}>${x}</option>`).join('')}</select></td>
       <td><input class="field-input exit-program" value="${this.escape(e.interim_program_name || '')}"></td>
       <td><select class="field-select exit-followup"><option></option>${['Yes','No','No response'].map(x=>`<option ${e.staff_followup===x?'selected':''}>${x}</option>`).join('')}</select></td>
-      <td><input class="field-input exit-notes" value="${this.escape(e.additional_notes || '')}"></td>
+      <td><textarea class="field-textarea auto-grow exit-notes" rows="1" style="min-height:34px;padding:6px 9px;font-size:13px;">${this.escape(e.additional_notes || '')}</textarea></td>
     </tr>`;
   },
 
@@ -3147,9 +3151,13 @@ const App = {
     const tbody = document.getElementById('exits-tbody');
     tbody.insertAdjacentHTML('beforeend', this.exitRowHtml({}, tbody.children.length + 1, false, null));
     const newRow = tbody.lastElementChild;
-    newRow.querySelectorAll('input, select').forEach(el => {
+    newRow.querySelectorAll('input, select, textarea').forEach(el => {
       el.addEventListener('input', () => this.markDirty('exits'));
       el.addEventListener('change', () => this.markDirty('exits'));
+    });
+    newRow.querySelectorAll('textarea.auto-grow').forEach(ta => {
+      this.autoGrowTextarea(ta);
+      ta.addEventListener('input', () => this.autoGrowTextarea(ta));
     });
     this.markDirty('exits');
   },
