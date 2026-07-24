@@ -818,6 +818,10 @@ th.sortable { cursor:pointer; user-select:none; }
 th.sortable:hover { color:var(--navy); }
 .checkbox-label { display:flex; align-items:center; gap:8px; font-weight:600; cursor:pointer; }
 .checkbox-label input[type="checkbox"] { width:16px; height:16px; }
+.income-callout-slim { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12.5px; color:#7A5200; background:var(--amber-light); border:1px solid #F0C96B; border-radius:8px; padding:7px 14px; margin:10px 0; }
+.income-callout-slim > span { font-weight:700; }
+.chip-link { background:transparent; border:1px solid #D4860A; color:#7A5200; border-radius:999px; padding:2px 10px; font-size:11.5px; font-weight:600; cursor:pointer; }
+.chip-link:hover { background:#D4860A; color:#fff; }
 </style>
 </head>
 
@@ -5667,6 +5671,47 @@ const App = {
     this.closeIncidentForm();
     if(document.getElementById('modal-client')?.classList.contains('open')) this.openClientForm(clientId);
     else this.showView(this.view||'incident-log');
+  };
+})();
+
+
+// ---------- Dashboard income/survey callout: compact version ----------
+/* ============================================================
+   EXTENSION 10 — Replaces the stacked full-width notice cards
+   from EXTENSION 8 with a single slim line. Shows only the
+   metrics still needing entry for the quarter, as small pill
+   links; renders nothing at all once everything is on file.
+   ============================================================ */
+(function(){
+  const oldRenderDashboardForSlimCallout = App.renderDashboard;
+  App.renderDashboard = function(){
+    oldRenderDashboardForSlimCallout.call(this);
+    document.getElementById('dash-income-callout')?.remove();
+    if (!this.canEditQuarter || !this.canEditQuarter()) return;
+    const el = document.getElementById('view-dashboard');
+    const anchor = el?.querySelector('.dash-toprow');
+    if (!anchor) return;
+    const q = this.currentQuarter;
+    const needing = this.MANUAL_QUARTER_METRICS.filter(m => this.metricNeedsEntry(m.id, q));
+    if (!needing.length) return;
+    const chips = needing.map(m => `<button type="button" class="chip-link" data-goto-metric="${m.id}">${this.escape(m.title)}</button>`).join('');
+    anchor.insertAdjacentHTML('afterend', `<div class="income-callout-slim" id="dash-income-callout"><span>Needs ${this.escape(q)} totals:</span>${chips}</div>`);
+  };
+})();
+
+
+// ---------- Remove dashboard income/survey callout entirely ----------
+/* ============================================================
+   EXTENSION 11 — Drops the dashboard banner/pill row from
+   EXTENSION 10. The Scope of Services tab badge, the goal-row
+   quick link, and the row highlight remain as the way to find
+   these fields; the Dashboard itself stays untouched.
+   ============================================================ */
+(function(){
+  const oldRenderDashboardNoCallout = App.renderDashboard;
+  App.renderDashboard = function(){
+    oldRenderDashboardNoCallout.call(this);
+    document.getElementById('dash-income-callout')?.remove();
   };
 })();
 
