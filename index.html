@@ -816,6 +816,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .table-filter-row .field-select, .table-filter-row .field-input { min-width:200px; }
 th.sortable { cursor:pointer; user-select:none; }
 th.sortable:hover { color:var(--navy); }
+.checkbox-label { display:flex; align-items:center; gap:8px; font-weight:600; cursor:pointer; }
+.checkbox-label input[type="checkbox"] { width:16px; height:16px; }
 </style>
 </head>
 
@@ -5286,6 +5288,385 @@ const App = {
     el.querySelector('#incident-filter-client')?.addEventListener('change', (e)=>{ this._incidentFilterClient = e.target.value; this.renderIncidentLog(); });
     el.querySelector('#btn-clear-incident-filter')?.addEventListener('click', ()=>{ this._incidentFilterClient=''; this.renderIncidentLog(); });
     this.wireSortableHeaders(el, this._incidentSort, ()=>this.renderIncidentLog());
+  };
+})();
+
+
+// ---------- Manual quarterly metrics visibility (Income + Survey) ----------
+/* ============================================================
+   EXTENSION 8 — Generalizes the Income visibility treatment
+   (EXTENSION 7) to also cover the Participant Satisfaction
+   Survey totals, which had the same "buried and never actually
+   settable in generated mode" problem (satSatisfied/satTotal
+   were hardcoded to 0 in generatedScopeFromClients).
+   ============================================================ */
+(function(){
+  App.MANUAL_SCOPE_KEYS = new Set(['incomeIncrease','incomeMaintained','satSatisfied','satTotal']);
+
+  App.MANUAL_QUARTER_METRICS = [
+    { id:'income', title:'Income / Benefits Stability', goalKey:'incomeAnnual',
+      fields:[ {col:'income_increase', inputId:'scope-incomeIncrease', label:'Income Increased'}, {col:'income_maintained', inputId:'scope-incomeMaintained', label:'Income Maintained'} ] },
+    { id:'survey', title:'Participant Satisfaction Survey', goalKey:'satisfactionAnnual',
+      fields:[ {col:'satisfaction_satisfied', inputId:'scope-satSatisfied', label:'Satisfied Responses'}, {col:'satisfaction_total', inputId:'scope-satTotal', label:'Total Responses'} ] }
+  ];
+
+  App.generatedScopeFromClients = function(q=this.currentQuarter){
+    const m=this.clientMetrics(q); const r=this.data.reports[q]||{};
+    return {
+      activeResidents:m.activeAtEnd.length, residentsServed:m.served.length, unduplicatedYTD:this.ytdClientsServed(q).length,
+      newIntakes:m.intakes.length, bedNightsAvail:m.available, bedNightsOcc:m.occupied, phExits:m.phExits.length, avgDaysToPH:m.avgLos,
+      suppServicesEngaged:new Set(m.services.map(s=>s.client_id)).size,
+      incomeIncrease:Number(r.income_increase||0), incomeMaintained:Number(r.income_maintained||0),
+      satSatisfied:Number(r.satisfaction_satisfied||0), satTotal:Number(r.satisfaction_total||0),
+      exitsTemp:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Temporary') || String(c.exit_destination_type||'').includes('Emergency Shelter') || String(c.exit_destination_type||'').includes('Hotel')).length,
+      exitsInstitutional:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Institutional')).length,
+      exitsHomeless:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Homeless')).length,
+      exitsUnknown:m.exits.filter(c=>!c.exit_destination_type || String(c.exit_destination_type||'').includes('Unknown')).length,
+      exitsFamilyFriends:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Family/Friends')).length,
+      exitsPartner:m.exits.filter(c=>String(c.exit_destination_type||'').includes('Spouse/Partner')).length,
+      positiveNonPermanent:m.positiveNonPermanent.length
+    };
+  };
+
+  App.metricNeedsEntry = function(metricId, q=this.currentQuarter){
+    const metric = this.MANUAL_QUARTER_METRICS.find(m=>m.id===metricId);
+    if (!metric) return false;
+    const r = this.data.reports[q] || {};
+    return !metric.fields.some(f => Number(r[f.col]||0) > 0);
+  };
+
+  App.goToMetricEntry = function(metricId){
+    const metric = this.MANUAL_QUARTER_METRICS.find(m=>m.id===metricId);
+    this.openForm('quarterly');
+    this.switchTab('qr-scope');
+    setTimeout(()=>{
+      if (!metric) return;
+      metric.fields.forEach((f,idx)=>{
+        const el = document.getElementById(f.inputId);
+        if (!el) return;
+        if (idx===0) { el.scrollIntoView({behavior:'smooth', block:'center'}); el.focus(); }
+        const row = el.closest('tr');
+        if (row) { row.classList.add('income-flash'); setTimeout(()=>row.classList.remove('income-flash'), 3200); }
+      });
+    }, 120);
+  };
+
+  const oldRenderDashboardForMetrics = App.renderDashboard;
+  App.renderDashboard = function(){
+    oldRenderDashboardForMetrics.call(this);
+    document.getElementById('dash-income-callout')?.remove();
+    if (!this.canEditQuarter || !this.canEditQuarter()) return;
+    const el = document.getElementById('view-dashboard');
+    const anchor = el?.querySelector('.dash-toprow');
+    if (!anchor) return;
+    const q = this.currentQuarter;
+    const r = this.data.reports[q] || {};
+    const rowsHtml = this.MANUAL_QUARTER_METRICS.map(metric=>{
+      const needs = this.metricNeedsEntry(metric.id, q);
+      const summary = metric.fields.map(f=>`${f.label}: ${Number(r[f.col]||0)}`).join(' · ');
+      return `<div class="income-callout ${needs?'':'done'}" style="margin:0;">
+        <div class="income-callout-text"><strong>${needs?'Needed for '+this.escape(q)+': ':this.escape(q)+' on file — '}${this.escape(metric.title)}</strong>${needs?'Agency-reported total for the quarter.':this.escape(summary)}</div>
+        <button type="button" class="btn ${needs?'btn-gold':'btn-ghost'} btn-sm" data-goto-metric="${metric.id}">${needs?'Enter Now':'Update'}</button>
+      </div>`;
+    }).join('<div style="height:8px;"></div>');
+    anchor.insertAdjacentHTML('afterend', `<div id="dash-income-callout" style="display:flex;flex-direction:column;gap:0;">${rowsHtml}</div>`);
+  };
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-goto-metric]');
+    if (btn) App.goToMetricEntry(btn.dataset.gotoMetric);
+  });
+
+  const previousRenderQuarterlyFormForMetrics = App.renderQuarterlyForm;
+  App.renderQuarterlyForm = function(){
+    previousRenderQuarterlyFormForMetrics.call(this);
+    const tab = document.getElementById('tab-qr-scope');
+    if (!tab) return;
+    tab.querySelector('.tab-needs-badge')?.remove();
+    const needCount = this.MANUAL_QUARTER_METRICS.filter(m=>this.metricNeedsEntry(m.id, this.currentQuarter)).length;
+    if (needCount > 0) {
+      const names = this.MANUAL_QUARTER_METRICS.filter(m=>this.metricNeedsEntry(m.id, this.currentQuarter)).map(m=>m.title).join(', ');
+      tab.insertAdjacentHTML('beforeend', `<span class="tab-needs-badge" title="${this.escape(names)} — not yet entered">Needs Input</span>`);
+    }
+  };
+
+  App.renderGoalProgress = function(q){
+    const goals = this.annualGoals(q);
+    const metricByGoalKey = {};
+    this.MANUAL_QUARTER_METRICS.forEach(m=>{ metricByGoalKey[m.goalKey] = m; });
+    return `<div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><div class="card-title">Annual Goals & Progress</div><span class="badge badge-gray">Through ${q}</span></div>
+      <div class="card-body">
+        <div class="goal-list">
+          ${goals.map(g => {
+            const pct = this.goalPercent(g);
+            const status = this.goalStatus(g);
+            const cls = pct >= 90 ? 'green' : pct >= 60 ? 'amber' : 'red';
+            const metric = metricByGoalKey[g.key];
+            const quickLink = metric ? `<button type="button" class="btn btn-ghost btn-sm" data-goto-metric="${metric.id}" style="margin-top:6px;">Enter this quarter's totals →</button>` : '';
+            return `<div class="goal-row"><div class="goal-meta"><div><div class="goal-name">${this.escape(g.name)}</div><div class="field-hint">${this.escape(g.desc)}</div>${quickLink}</div><div style="text-align:right;"><strong>${this.escape(String(g.actual))}</strong> / ${this.escape(String(g.target))}<br><span class="badge ${status === 'On Track' ? 'badge-green' : status === 'In Progress' ? 'badge-amber' : 'badge-red'}">${status}</span></div></div><div class="goal-bar"><div class="goal-fill ${cls}" style="width:${pct}%"></div></div></div>`;
+          }).join('')}
+        </div>
+        <p class="field-hint" style="margin-top:10px;">Annual goals are shown for program monitoring and should be interpreted with care when counts are small or the contract year is still in progress.</p>
+      </div>
+    </div>`;
+  };
+})();
+
+
+// ---------- Incident Log: interim-housing best-practice fields + attachments ----------
+/* ============================================================
+   EXTENSION 9 — Expands the incident record to match common
+   interim/transitional housing incident-report practice
+   (category taxonomy, severity, status, immediate action taken,
+   law enforcement involvement, witnesses, follow-up tracking),
+   adds document/photo attachments via Supabase Storage, and
+   removes the "does not feed program report calculations"
+   framing from the incident views.
+   ============================================================ */
+(function(){
+  App.incidentCategoryOptions = function(){
+    return ['Behavioral Issue','Verbal Altercation','Physical Altercation','Property Damage','Substance Use','Medical Emergency','Safety/Security Concern','Rule Violation','Grievance','Missing / AWOL','Theft','Other'];
+  };
+  App.incidentSeverityOptions = function(){ return ['Low','Medium','High','Critical']; };
+  App.incidentStatusOptions = function(){ return ['Open','Under Review','Resolved','Escalated']; };
+
+  App.incidentCategoryBadgeClass = function(cat){
+    const red = new Set(['Physical Altercation','Property Damage','Substance Use','Medical Emergency','Safety/Security Concern','Missing / AWOL','Theft']);
+    const amber = new Set(['Behavioral Issue','Verbal Altercation','Rule Violation']);
+    if (cat === 'Grievance') return 'badge-navy';
+    if (red.has(cat)) return 'badge-red';
+    if (amber.has(cat)) return 'badge-amber';
+    return 'badge-gray';
+  };
+  App.incidentSeverityBadgeClass = function(sev){
+    if (sev === 'Low') return 'badge-green';
+    if (sev === 'Medium') return 'badge-amber';
+    if (sev === 'High' || sev === 'Critical') return 'badge-red';
+    return 'badge-gray';
+  };
+  App.incidentStatusBadgeClass = function(status){
+    if (status === 'Resolved') return 'badge-green';
+    if (status === 'Open') return 'badge-amber';
+    if (status === 'Escalated') return 'badge-red';
+    return 'badge-navy';
+  };
+
+  // ---- Attachments ---------------------------------------------------------
+  const previousLoadAllForAttachments = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAllForAttachments.call(this);
+    if(!this.data) this.data={};
+    const incidentIds = (this.data.clientIncidents||[]).map(i=>i.id).filter(Boolean);
+    if (!incidentIds.length) { this.data.incidentAttachments=[]; return; }
+    const {data,error} = await this.sb.from('holloway_incident_attachments').select('*').in('incident_id', incidentIds).order('created_at',{ascending:false});
+    if (error) { console.warn('incident attachments unavailable', error); this.data.incidentAttachments=[]; }
+    else this.data.incidentAttachments = data||[];
+  };
+
+  App.attachmentsForIncident = function(incidentId){
+    return (this.data.incidentAttachments||[]).filter(a=>a.incident_id===incidentId);
+  };
+
+  App.downloadIncidentAttachment = async function(path, filename){
+    const {data,error} = await this.sb.storage.from('incident-attachments').createSignedUrl(path, 3600);
+    if (error) { this.toast('Download failed: '+error.message, {error:true}); return; }
+    window.open(data.signedUrl, '_blank');
+  };
+
+  App.removeIncidentAttachment = function(attachmentId, path){
+    this.confirm('Remove this attachment? This cannot be undone.', async () => {
+      await this.sb.storage.from('incident-attachments').remove([path]);
+      await this.sb.from('holloway_incident_attachments').delete().eq('id', attachmentId);
+      await this.loadAll();
+      if (document.getElementById('modal-incident')?.classList.contains('open')) this.openIncidentForm(this.currentIncidentId, this.currentIncidentClientId);
+      if (this.view === 'incident-log') this.renderIncidentLog();
+    });
+  };
+
+  App.renderIncidentAttachmentsList = function(incidentId){
+    if (!incidentId) return `<div class="field-hint">Attachments can be added once the incident is saved for the first time — select files below and save; they'll upload automatically.</div>`;
+    const files = this.attachmentsForIncident(incidentId);
+    if (!files.length) return `<div class="field-hint">No files attached yet.</div>`;
+    return `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>File</th><th>Uploaded</th><th>Actions</th></tr></thead><tbody>
+      ${files.map(f=>`<tr><td>${this.escape(f.file_name)}</td><td>${this.formatDate(this.dateOnly(f.created_at))}</td><td><div class="client-actions"><button type="button" class="btn btn-ghost btn-sm" data-download-attachment="${this.escape(f.id)}">Download</button><button type="button" class="btn btn-ghost btn-sm" data-remove-attachment="${this.escape(f.id)}">Remove</button></div></td></tr>`).join('')}
+    </tbody></table></div>`;
+  };
+
+  // ---- Incident Log (top-level) --------------------------------------------
+  App.renderIncidentLog = function(){
+    const el=document.getElementById('view-incident-log');
+    if(!el) return;
+    this._incidentSort = this._incidentSort || {key:'date', dir:'desc'};
+    this._incidentFilterClient = this._incidentFilterClient || '';
+    const clientById = {};
+    (this.data.clients||[]).forEach(c=>{ clientById[c.id]=c; });
+    let incidents=(this.data.clientIncidents||[]).slice();
+    if (this._incidentFilterClient) incidents = incidents.filter(i=>i.client_id===this._incidentFilterClient);
+    const accessors = {
+      date: i=>i.incident_date||'',
+      client: i=>{ const c=clientById[i.client_id]; return c ? (this.clientName(c)||this.clientDisplayId(c)) : (i.client_id||''); },
+      category: i=>i.category||'',
+      severity: i=>({Low:0,Medium:1,High:2,Critical:3}[i.severity]??-1),
+      status: i=>i.status||'',
+      staff: i=>i.staff_name||''
+    };
+    incidents = this.applySort(incidents, this._incidentSort, accessors);
+    const clientIdsWithIncidents = Array.from(new Set((this.data.clientIncidents||[]).map(i=>i.client_id)));
+    const filterOptions = clientIdsWithIncidents
+      .map(id=>({ id, label: clientById[id] ? `${this.clientDisplayId(clientById[id])} · ${this.clientName(clientById[id])}` : id }))
+      .sort((a,b)=>a.label.localeCompare(b.label));
+    const rows = incidents.map(i=>{
+      const c = clientById[i.client_id];
+      const clientLabel = c ? `${this.escape(this.clientDisplayId(c))} · ${this.escape(this.clientName(c))}` : this.escape(i.client_id||'—');
+      const attCount = this.attachmentsForIncident(i.id).length;
+      return `<tr>
+        <td>${this.formatDate(this.dateOnly(i.incident_date))}</td>
+        <td>${clientLabel}</td>
+        <td><span class="badge ${this.incidentCategoryBadgeClass(i.category)}">${this.escape(i.category||'—')}</span></td>
+        <td><span class="badge ${this.incidentSeverityBadgeClass(i.severity)}">${this.escape(i.severity||'—')}</span></td>
+        <td><span class="badge ${this.incidentStatusBadgeClass(i.status)}">${this.escape(i.status||'—')}</span></td>
+        <td>${this.escape(i.staff_name||'—')}</td>
+        <td style="max-width:320px;">${this.escape(i.description||'')}</td>
+        <td>${attCount ? `📎 ${attCount}` : '—'}</td>
+        <td><div class="client-actions">${c?`<button class="btn btn-ghost btn-sm" data-open-incident-client="${c.id}">Open Client</button>`:''}<button class="btn btn-ghost btn-sm" data-edit-incident="${this.escape(i.id)}">Edit</button></div></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="9" class="empty-table-state">No incidents match the current filter.</td></tr>';
+    el.innerHTML = `<div class="page-header"><div><div class="page-title">Incident Log</div><div class="page-subtitle">Documentation of behavioral issues, grievances, and other incidents for the caseload.</div></div><button class="btn btn-gold" id="btn-new-incident">+ Log Incident</button></div>
+      <div class="table-filter-row" style="margin-top:16px;">
+        <div class="field-group" style="margin:0;"><label class="field-label" for="incident-filter-client" style="margin-bottom:4px;">Filter by client</label><select id="incident-filter-client" class="field-select"><option value="">All clients (${(this.data.clientIncidents||[]).length})</option>${filterOptions.map(o=>`<option value="${this.escape(o.id)}" ${this._incidentFilterClient===o.id?'selected':''}>${this.escape(o.label)}</option>`).join('')}</select></div>
+        ${this._incidentFilterClient ? `<button class="btn btn-ghost btn-sm" id="btn-clear-incident-filter" style="margin-top:18px;">Clear filter</button>` : ''}
+        <span class="field-hint" style="margin-top:18px;">${incidents.length} shown</span>
+      </div>
+      <div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._incidentSort,'date','Date')}${this.sortableHeader(this._incidentSort,'client','Client')}${this.sortableHeader(this._incidentSort,'category','Category')}${this.sortableHeader(this._incidentSort,'severity','Severity')}${this.sortableHeader(this._incidentSort,'status','Status')}${this.sortableHeader(this._incidentSort,'staff','Staff')}<th>Description</th><th>Files</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    el.querySelector('#btn-new-incident')?.addEventListener('click',()=>this.openIncidentForm());
+    el.querySelectorAll('[data-edit-incident]').forEach(b=>b.addEventListener('click',()=>this.openIncidentForm(b.dataset.editIncident)));
+    el.querySelectorAll('[data-open-incident-client]').forEach(b=>b.addEventListener('click',()=>this.openClientForm(b.dataset.openIncidentClient)));
+    el.querySelector('#incident-filter-client')?.addEventListener('change', (e)=>{ this._incidentFilterClient = e.target.value; this.renderIncidentLog(); });
+    el.querySelector('#btn-clear-incident-filter')?.addEventListener('click', ()=>{ this._incidentFilterClient=''; this.renderIncidentLog(); });
+    this.wireSortableHeaders(el, this._incidentSort, ()=>this.renderIncidentLog());
+  };
+
+  // ---- Incident History panel (embedded in client profile) -----------------
+  App.renderIncidentHistoryPanel = function(clientId){
+    if(!clientId) return `<div class="form-section"><div class="form-section-title">Incident History</div><div class="field-hint">Save the client record first, then log incidents.</div></div>`;
+    const rows=this.incidentsForClient(clientId);
+    return `<div class="form-section" id="client-incident-history-section"><div class="form-section-title">Incident History</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;"><div class="field-hint">${rows.length} incident${rows.length===1?'':'s'} on file</div><button class="btn btn-gold btn-sm" id="btn-add-incident" type="button">+ Log Incident</button></div>
+      ${rows.length ? `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Date</th><th>Category</th><th>Severity</th><th>Status</th><th>Staff</th><th>Description</th><th>Files</th><th>Actions</th></tr></thead><tbody>${rows.map(i=>`<tr><td>${this.formatDate(this.dateOnly(i.incident_date))}</td><td><span class="badge ${this.incidentCategoryBadgeClass(i.category)}">${this.escape(i.category||'—')}</span></td><td><span class="badge ${this.incidentSeverityBadgeClass(i.severity)}">${this.escape(i.severity||'—')}</span></td><td><span class="badge ${this.incidentStatusBadgeClass(i.status)}">${this.escape(i.status||'—')}</span></td><td>${this.escape(i.staff_name||'—')}</td><td>${this.escape(i.description||'')}</td><td>${this.attachmentsForIncident(i.id).length ? '📎 '+this.attachmentsForIncident(i.id).length : '—'}</td><td><button class="btn btn-ghost btn-sm" data-edit-incident="${this.escape(i.id)}" type="button">Edit</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="notice amber"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>No incidents have been logged for this client.</div></div>`}
+    </div>`;
+  };
+
+  // ---- Modal (create/edit) --------------------------------------------------
+  App.ensureIncidentModal = function(){
+    const existing = document.getElementById('modal-incident');
+    if (existing) existing.remove();
+    const modal=document.createElement('div');
+    modal.id='modal-incident';
+    modal.className='form-overlay';
+    modal.setAttribute('role','dialog');
+    modal.setAttribute('aria-modal','true');
+    modal.setAttribute('aria-labelledby','incident-title');
+    modal.innerHTML=`<div class="form-modal wide">
+      <div class="form-modal-header"><div><div class="form-modal-title" id="incident-title">Incident Report</div><div class="form-modal-meta"></div></div><button class="form-close-btn" data-close-incident="1">✕</button></div>
+      <div class="form-gold-bar"></div>
+      <div class="form-body" id="incident-body"></div>
+      <div class="form-footer"><div class="save-state" id="incident-save-state">Not saved this session</div><div style="display:flex;gap:10px;"><button class="btn btn-ghost" data-close-incident="1">Close</button><button class="btn btn-gold" id="btn-save-incident">Save Incident</button></div></div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.querySelectorAll('[data-close-incident]').forEach(b=>b.addEventListener('click',()=>this.closeIncidentForm()));
+    modal.querySelector('#btn-save-incident').addEventListener('click',()=>this.saveIncidentForm());
+  };
+
+  App.openIncidentForm = function(incidentId=null, clientId=null){
+    this.ensureIncidentModal();
+    this.currentIncidentId=incidentId;
+    this.currentIncidentClientId=clientId;
+    const i=incidentId ? (this.data.clientIncidents||[]).find(x=>x.id===incidentId)||{} : {client_id:clientId||this.currentClientId||'', incident_date:this.today ? this.today() : new Date().toISOString().slice(0,10), category:'Behavioral Issue', severity:'Low', status:'Open', staff_name:this.user?.email||''};
+    document.getElementById('incident-title').textContent=incidentId?'Edit Incident Report':'Log Incident';
+    document.getElementById('incident-body').innerHTML=`
+      <div class="form-section"><div class="form-section-title">Incident Detail</div><div class="client-form-grid">
+        <div class="field-group full"><label class="field-label required">Client</label><select id="in-client" class="field-select">${this.clientOptionList(i.client_id)}</select></div>
+        <div class="field-group"><label class="field-label required">Incident Date</label><input id="in-date" type="date" class="field-input" value="${this.dateOnly(i.incident_date)||new Date().toISOString().slice(0,10)}"></div>
+        <div class="field-group"><label class="field-label required">Category</label><select id="in-category" class="field-select">${this.incidentCategoryOptions().map(x=>`<option value="${this.escape(x)}" ${i.category===x?'selected':''}>${this.escape(x)}</option>`).join('')}</select></div>
+        <div class="field-group"><label class="field-label required">Severity</label><select id="in-severity" class="field-select">${this.incidentSeverityOptions().map(x=>`<option value="${this.escape(x)}" ${(i.severity||'Low')===x?'selected':''}>${this.escape(x)}</option>`).join('')}</select></div>
+        <div class="field-group"><label class="field-label required">Status</label><select id="in-status" class="field-select">${this.incidentStatusOptions().map(x=>`<option value="${this.escape(x)}" ${(i.status||'Open')===x?'selected':''}>${this.escape(x)}</option>`).join('')}</select></div>
+        <div class="field-group"><label class="field-label">Staff</label><input id="in-staff" class="field-input" value="${this.escape(i.staff_name||this.user?.email||'')}"></div>
+        <div class="field-group full"><label class="field-label required">Description</label><textarea id="in-description" class="field-textarea" style="min-height:120px;">${this.escape(i.description||'')}</textarea><div class="field-hint">Describe what happened, in enough detail to stand alone as a record if referenced later.</div></div>
+        <div class="field-group full"><label class="field-label">Immediate Action Taken</label><textarea id="in-action" class="field-textarea" style="min-height:80px;">${this.escape(i.immediate_action||'')}</textarea><div class="field-hint">De-escalation, staff response, referrals made, etc.</div></div>
+        <div class="field-group full"><label class="field-label">Witnesses</label><input id="in-witnesses" class="field-input" value="${this.escape(i.witnesses||'')}"><div class="field-hint">Staff and/or other clients present.</div></div>
+      </div></div>
+      <div class="form-section"><div class="form-section-title">Law Enforcement & Follow-Up</div><div class="client-form-grid">
+        <div class="field-group"><label class="field-label checkbox-label"><input type="checkbox" id="in-le-involved" ${i.law_enforcement_involved?'checked':''}> Law enforcement involved</label></div>
+        <div class="field-group"><label class="field-label">LE Report Number</label><input id="in-le-report" class="field-input" value="${this.escape(i.law_enforcement_report_number||'')}"></div>
+        <div class="field-group"><label class="field-label checkbox-label"><input type="checkbox" id="in-followup-required" ${i.follow_up_required?'checked':''}> Follow-up required</label></div>
+        <div class="field-group full"><label class="field-label">Follow-Up Notes</label><textarea id="in-followup-notes" class="field-textarea" style="min-height:70px;">${this.escape(i.follow_up_notes||'')}</textarea></div>
+      </div></div>
+      <div class="form-section"><div class="form-section-title">Attachments</div>
+        <div id="incident-attachments-existing">${this.renderIncidentAttachmentsList(incidentId)}</div>
+        <div style="margin-top:10px;"><label class="field-label">Add files</label><input type="file" id="in-files" multiple><div class="field-hint">Photos, police reports, witness statements, etc. Uploaded when you save.</div></div>
+      </div>`;
+    document.getElementById('incident-save-state').textContent='Not saved this session';
+    document.getElementById('modal-incident').classList.add('open');
+    document.getElementById('incident-attachments-existing').querySelectorAll('[data-download-attachment]').forEach(b=>{
+      b.addEventListener('click', ()=>{ const a=this.attachmentsForIncident(incidentId).find(x=>x.id===b.dataset.downloadAttachment); if(a) this.downloadIncidentAttachment(a.file_path, a.file_name); });
+    });
+    document.getElementById('incident-attachments-existing').querySelectorAll('[data-remove-attachment]').forEach(b=>{
+      b.addEventListener('click', ()=>{ const a=this.attachmentsForIncident(incidentId).find(x=>x.id===b.dataset.removeAttachment); if(a) this.removeIncidentAttachment(a.id, a.file_path); });
+    });
+  };
+
+  App.closeIncidentForm = function(){
+    document.getElementById('modal-incident')?.classList.remove('open');
+    this.currentIncidentId=null;
+    this.currentIncidentClientId=null;
+  };
+
+  App.saveIncidentForm = async function(){
+    const clientId=document.getElementById('in-client')?.value||'';
+    const incidentDate=document.getElementById('in-date')?.value||'';
+    const category=document.getElementById('in-category')?.value||'Behavioral Issue';
+    const severity=document.getElementById('in-severity')?.value||'Low';
+    const status=document.getElementById('in-status')?.value||'Open';
+    const description=(document.getElementById('in-description')?.value||'').trim();
+    if(!clientId || !incidentDate || !description){ document.getElementById('incident-save-state').textContent='Client, incident date, and description are required.'; return; }
+    const id=this.currentIncidentId || (crypto.randomUUID ? crypto.randomUUID() : 'incident_'+Date.now());
+    document.getElementById('incident-save-state').textContent='Saving...';
+    const payload={
+      id,
+      program_id:this.program.id,
+      fiscal_year:this.fiscalYear,
+      client_id:clientId,
+      incident_date:incidentDate,
+      category, severity, status,
+      description,
+      immediate_action:(document.getElementById('in-action')?.value||'').trim()||null,
+      witnesses:(document.getElementById('in-witnesses')?.value||'').trim()||null,
+      law_enforcement_involved: !!document.getElementById('in-le-involved')?.checked,
+      law_enforcement_report_number:(document.getElementById('in-le-report')?.value||'').trim()||null,
+      follow_up_required: !!document.getElementById('in-followup-required')?.checked,
+      follow_up_notes:(document.getElementById('in-followup-notes')?.value||'').trim()||null,
+      staff_name:(document.getElementById('in-staff')?.value||'').trim()||null,
+      updated_by:this.user?.email||null,
+      updated_at:new Date().toISOString()
+    };
+    const {error}=await this.sb.from('holloway_client_incidents').upsert(payload,{onConflict:'id'});
+    if(error){ document.getElementById('incident-save-state').textContent='Save failed: '+error.message; return; }
+    const files = document.getElementById('in-files')?.files;
+    if (files && files.length) {
+      document.getElementById('incident-save-state').textContent='Uploading files...';
+      for (const file of files) {
+        const path = `${this.program.id}/${id}/${Date.now()}-${file.name}`;
+        const upload = await this.sb.storage.from('incident-attachments').upload(path, file, { upsert:true });
+        if (upload.error) { this.toast('Upload failed for '+file.name+': '+upload.error.message, {error:true}); continue; }
+        await this.sb.from('holloway_incident_attachments').insert({ id:(crypto.randomUUID?crypto.randomUUID():'att_'+Date.now()+Math.random()), incident_id:id, file_path:path, file_name:file.name, uploaded_by:this.user?.email||null });
+      }
+    }
+    document.getElementById('incident-save-state').textContent='Saved.';
+    await this.loadAll();
+    this.closeIncidentForm();
+    if(document.getElementById('modal-client')?.classList.contains('open')) this.openClientForm(clientId);
+    else this.showView(this.view||'incident-log');
   };
 })();
 
