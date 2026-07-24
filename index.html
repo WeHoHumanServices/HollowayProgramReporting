@@ -878,6 +878,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
           <div class="sidebar-item" data-view="services"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V7a2 2 0 0 1 4 0v4"/><path d="M11 10V6a2 2 0 0 1 4 0v5"/><path d="M15 10V8a2 2 0 0 1 4 0v6c0 4.42-3.58 8-8 8h-1a7 7 0 0 1-7-7v-3a2 2 0 0 1 4 0v2"/></svg>Services</div>
           <div class="sidebar-item" data-view="client-exits"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg>Exits</div>
           <div class="sidebar-item" data-view="housing-followups"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg>Housing Follow-Ups</div>
+          <div class="sidebar-item" data-view="incident-log"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Incident Log</div>
           <div class="sidebar-item" id="nav-review" data-view="admin-review" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review Queue</div>
           <div class="sidebar-item" id="nav-access" data-view="access" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1"/></svg>Access Management</div>
         </div>
@@ -894,6 +895,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
       <section id="view-services" class="view-section"></section>
       <section id="view-client-exits" class="view-section"></section>
       <section id="view-housing-followups" class="view-section"></section>
+      <section id="view-incident-log" class="view-section"></section>
       <section id="view-quarter" class="view-section"></section>
       <section id="view-admin-review" class="view-section"></section>
       <section id="view-access" class="view-section"></section>
@@ -1208,7 +1210,8 @@ const App = {
     activity: [],
     clients: [],
     clientServices: [],
-    clientUpdates: []
+    clientUpdates: [],
+    clientIncidents: []
   },
   saveTimers: {},
   dirty: { quarterly:false, roster:false, exits:false },
@@ -4779,6 +4782,245 @@ const App = {
       printBtn.insertAdjacentHTML('afterend', '<button class="btn btn-ghost btn-sm" id="btn-export-excel">Export to Excel</button>');
       el.querySelector('#btn-export-excel')?.addEventListener('click', () => this.exportDataToExcel());
     }
+  };
+})();
+
+
+// ---------- Incident Log + Participation Indicator ----------
+/* ============================================================
+   EXTENSION 6 — Behavioral incident log (separate from routine
+   service notes) and a per-client participation indicator.
+   Wraps loadAll, showView, openClientForm, renderClients.
+   ============================================================ */
+(function(){
+  // ---- Participation indicator -----------------------------------------
+  App.clientParticipation = function(c){
+    const exited = this.clientStatus(c) === 'Exited';
+    if (exited) return { label:'Exited', cssClass:'badge-gray', hint:'Client has exited the program.' };
+    const services = (this.data.clientServices||[]).filter(s=>s.client_id===c.id);
+    if (!services.length) {
+      const entry = this.dateOnly(c.entry_date);
+      const daysSinceEntry = entry ? -this.daysUntil(entry) : null;
+      if (daysSinceEntry !== null && daysSinceEntry <= 14) {
+        return { label:'New — Pending First Contact', cssClass:'badge-navy', hint:'Entered within the last 14 days; no service contacts logged yet.' };
+      }
+      return { label:'No Contacts Logged', cssClass:'badge-red', hint:'No service contacts on file for this client.' };
+    }
+    const dates = services.map(s=>this.dateOnly(s.service_date)).filter(Boolean).sort();
+    const lastContact = dates[dates.length-1];
+    const daysSince = -this.daysUntil(lastContact);
+    const cutoff = new Date(this.today()+'T00:00:00'); cutoff.setDate(cutoff.getDate()-30);
+    const cutoffStr = cutoff.toISOString().slice(0,10);
+    const contactsLast30 = services.filter(s=>(this.dateOnly(s.service_date)||'') >= cutoffStr).length;
+    let out;
+    if (daysSince <= 14) out = { label:'Active', cssClass:'badge-green' };
+    else if (daysSince <= 30) out = { label:'Low Engagement', cssClass:'badge-amber' };
+    else out = { label:'Disengaged', cssClass:'badge-red' };
+    out.hint = `Last contact ${daysSince} day${daysSince===1?'':'s'} ago · ${contactsLast30} contact${contactsLast30===1?'':'s'} in the last 30 days.`;
+    out.daysSince = daysSince;
+    out.contactsLast30 = contactsLast30;
+    return out;
+  };
+
+  // ---- Incident data helpers --------------------------------------------
+  App.incidentsForClient = function(clientId){
+    return (this.data.clientIncidents||[]).filter(i=>i.client_id===clientId)
+      .sort((a,b)=>String(b.incident_date||'').localeCompare(String(a.incident_date||'')));
+  };
+
+  App.incidentCategoryOptions = function(){ return ['Behavioral Issue','Grievance','Other Incident']; };
+
+  App.incidentCategoryBadgeClass = function(cat){
+    if (cat === 'Grievance') return 'badge-navy';
+    if (cat === 'Behavioral Issue') return 'badge-amber';
+    return 'badge-gray';
+  };
+
+  // ---- loadAll: fetch incidents ------------------------------------------
+  const previousLoadAllForIncidents = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAllForIncidents.call(this);
+    if(!this.data) this.data={};
+    const pid=this.program?.id;
+    if(!pid){ this.data.clientIncidents=[]; return; }
+    const {data,error}=await this.sb.from('holloway_client_incidents')
+      .select('*')
+      .eq('program_id',pid)
+      .eq('fiscal_year',this.fiscalYear)
+      .order('incident_date',{ascending:false});
+    if(error){ console.warn('client incidents unavailable', error); this.data.clientIncidents=[]; }
+    else this.data.clientIncidents=data||[];
+  };
+
+  // ---- showView: render incident log page --------------------------------
+  const previousShowViewForIncidents = App.showView;
+  App.showView = function(view){
+    previousShowViewForIncidents.call(this, view);
+    if (view === 'incident-log') this.renderIncidentLog();
+  };
+
+  // ---- Incident Log (top-level view) --------------------------------------
+  App.renderIncidentLog = function(){
+    const el=document.getElementById('view-incident-log');
+    if(!el) return;
+    const incidents=(this.data.clientIncidents||[]).slice()
+      .sort((a,b)=>String(b.incident_date||'').localeCompare(String(a.incident_date||'')));
+    const clientById = {};
+    (this.data.clients||[]).forEach(c=>{ clientById[c.id]=c; });
+    const rows = incidents.map(i=>{
+      const c = clientById[i.client_id];
+      const clientLabel = c ? `${this.escape(this.clientDisplayId(c))} · ${this.escape(this.clientName(c))}` : this.escape(i.client_id||'—');
+      return `<tr>
+        <td>${this.formatDate(this.dateOnly(i.incident_date))}</td>
+        <td>${clientLabel}</td>
+        <td><span class="badge ${this.incidentCategoryBadgeClass(i.category)}">${this.escape(i.category||'—')}</span></td>
+        <td>${this.escape(i.staff_name||'—')}</td>
+        <td style="max-width:360px;">${this.escape(i.description||'')}</td>
+        <td><div class="client-actions">${c?`<button class="btn btn-ghost btn-sm" data-open-incident-client="${c.id}">Open Client</button>`:''}<button class="btn btn-ghost btn-sm" data-edit-incident="${this.escape(i.id)}">Edit</button></div></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6" class="empty-table-state">No incidents logged yet.</td></tr>';
+    el.innerHTML = `<div class="page-header"><div><div class="page-title">Incident Log</div><div class="page-subtitle">Behavioral issues, grievances, and other incidents — kept separate from routine service notes for easy reference (e.g. if an exit decision is later challenged).</div></div><button class="btn btn-gold" id="btn-new-incident">+ Log Incident</button></div>
+      <div class="notice navy" style="margin-top:16px;"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg></div><div><strong>${incidents.length} incident${incidents.length===1?'':'s'} on file.</strong> These records are pulled out of the day-to-day services log so they're easy to find and reference on their own — they do not feed program report calculations.</div></div>
+      <div class="client-table-wrap" style="margin-top:16px;"><table class="client-table"><thead><tr><th>Date</th><th>Client</th><th>Category</th><th>Staff</th><th>Description</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    el.querySelector('#btn-new-incident')?.addEventListener('click',()=>this.openIncidentForm());
+    el.querySelectorAll('[data-edit-incident]').forEach(b=>b.addEventListener('click',()=>this.openIncidentForm(b.dataset.editIncident)));
+    el.querySelectorAll('[data-open-incident-client]').forEach(b=>b.addEventListener('click',()=>this.openClientForm(b.dataset.openIncidentClient)));
+  };
+
+  // ---- Incident History panel (embedded in client profile) ---------------
+  App.renderIncidentHistoryPanel = function(clientId){
+    if(!clientId) return `<div class="form-section"><div class="form-section-title">Incident History</div><div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg></div><div>Save the client record first, then log incidents. Incident records are kept separately from the services log for easy reference.</div></div></div>`;
+    const rows=this.incidentsForClient(clientId);
+    return `<div class="form-section" id="client-incident-history-section"><div class="form-section-title">Incident History</div>
+      <div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg></div><div><strong>Kept separately from routine service notes.</strong> Useful reference if an exit decision is later challenged. Not used in program report calculations.</div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;"><div class="field-hint">${rows.length} incident${rows.length===1?'':'s'} on file</div><button class="btn btn-gold btn-sm" id="btn-add-incident" type="button">+ Log Incident</button></div>
+      ${rows.length ? `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Date</th><th>Category</th><th>Staff</th><th>Description</th><th>Actions</th></tr></thead><tbody>${rows.map(i=>`<tr><td>${this.formatDate(this.dateOnly(i.incident_date))}</td><td><span class="badge ${this.incidentCategoryBadgeClass(i.category)}">${this.escape(i.category||'—')}</span></td><td>${this.escape(i.staff_name||'—')}</td><td>${this.escape(i.description||'')}</td><td><button class="btn btn-ghost btn-sm" data-edit-incident="${this.escape(i.id)}" type="button">Edit</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="notice amber"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>No incidents have been logged for this client.</div></div>`}
+    </div>`;
+  };
+
+  const previousOpenClientFormForIncidents = App.openClientForm;
+  App.openClientForm = function(id=null){
+    previousOpenClientFormForIncidents.call(this,id);
+    const body=document.getElementById('client-body');
+    if(!body) return;
+    const incidentHtml=this.renderIncidentHistoryPanel(id);
+    const exitSection=[...body.querySelectorAll('.form-section-title')].find(el=>/exit/i.test(el.textContent||''))?.closest('.form-section');
+    if(exitSection) exitSection.insertAdjacentHTML('beforebegin', incidentHtml);
+    else body.insertAdjacentHTML('beforeend', incidentHtml);
+    body.querySelector('#btn-add-incident')?.addEventListener('click',()=>this.openIncidentForm(null,id));
+    body.querySelectorAll('[data-edit-incident]').forEach(btn=>btn.addEventListener('click',()=>this.openIncidentForm(btn.dataset.editIncident,id)));
+
+    // Participation badge next to the client title
+    if (id) {
+      const c=(this.data.clients||[]).find(x=>x.id===id);
+      const metaEl=document.querySelector('#modal-client .form-modal-header .form-modal-meta');
+      if (c && metaEl) {
+        const part=this.clientParticipation(c);
+        metaEl.innerHTML = `Client-based reporting source record · <span class="badge ${part.cssClass}" title="${this.escape(part.hint||'')}">${this.escape(part.label)}</span>`;
+      }
+    }
+  };
+
+  // ---- Incident modal (create/edit) ---------------------------------------
+  App.currentIncidentId = null;
+  App.ensureIncidentModal = function(){
+    if(document.getElementById('modal-incident')) return;
+    const modal=document.createElement('div');
+    modal.id='modal-incident';
+    modal.className='form-overlay';
+    modal.setAttribute('role','dialog');
+    modal.setAttribute('aria-modal','true');
+    modal.setAttribute('aria-labelledby','incident-title');
+    modal.innerHTML=`<div class="form-modal">
+      <div class="form-modal-header"><div><div class="form-modal-title" id="incident-title">Incident</div><div class="form-modal-meta">Behavioral issue / grievance record — kept separate from routine service notes</div></div><button class="form-close-btn" data-close-incident="1">✕</button></div>
+      <div class="form-gold-bar"></div>
+      <div class="form-body" id="incident-body"></div>
+      <div class="form-footer"><div class="save-state" id="incident-save-state">Not saved this session</div><div style="display:flex;gap:10px;"><button class="btn btn-ghost" data-close-incident="1">Close</button><button class="btn btn-gold" id="btn-save-incident">Save Incident</button></div></div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.querySelectorAll('[data-close-incident]').forEach(b=>b.addEventListener('click',()=>this.closeIncidentForm()));
+    modal.querySelector('#btn-save-incident').addEventListener('click',()=>this.saveIncidentForm());
+  };
+
+  App.openIncidentForm = function(incidentId=null, clientId=null){
+    this.ensureIncidentModal();
+    this.currentIncidentId=incidentId;
+    const i=incidentId ? (this.data.clientIncidents||[]).find(x=>x.id===incidentId)||{} : {client_id:clientId||this.currentClientId||'', incident_date:this.today ? this.today() : new Date().toISOString().slice(0,10), category:'Behavioral Issue', staff_name:this.user?.email||''};
+    document.getElementById('incident-title').textContent=incidentId?'Edit Incident':'Log Incident';
+    document.getElementById('incident-body').innerHTML=`<div class="form-section"><div class="form-section-title">Incident Detail</div><div class="client-form-grid">
+      <div class="field-group full"><label class="field-label required">Client</label><select id="in-client" class="field-select">${this.clientOptionList(i.client_id)}</select></div>
+      <div class="field-group"><label class="field-label required">Incident Date</label><input id="in-date" type="date" class="field-input" value="${this.dateOnly(i.incident_date)||new Date().toISOString().slice(0,10)}"></div>
+      <div class="field-group"><label class="field-label required">Category</label><select id="in-category" class="field-select">${this.incidentCategoryOptions().map(x=>`<option value="${this.escape(x)}" ${i.category===x?'selected':''}>${this.escape(x)}</option>`).join('')}</select></div>
+      <div class="field-group"><label class="field-label">Staff</label><input id="in-staff" class="field-input" value="${this.escape(i.staff_name||this.user?.email||'')}"></div>
+      <div class="field-group full"><label class="field-label required">Description</label><textarea id="in-description" class="field-textarea" style="min-height:150px;">${this.escape(i.description||'')}</textarea><div class="field-hint">Describe what happened, in enough detail to stand alone as a record if referenced later.</div></div>
+    </div></div>`;
+    document.getElementById('incident-save-state').textContent='Not saved this session';
+    document.getElementById('modal-incident').classList.add('open');
+  };
+
+  App.closeIncidentForm = function(){
+    document.getElementById('modal-incident')?.classList.remove('open');
+    this.currentIncidentId=null;
+  };
+
+  App.saveIncidentForm = async function(){
+    const clientId=document.getElementById('in-client')?.value||'';
+    const incidentDate=document.getElementById('in-date')?.value||'';
+    const category=document.getElementById('in-category')?.value||'Behavioral Issue';
+    const description=(document.getElementById('in-description')?.value||'').trim();
+    if(!clientId || !incidentDate || !description){ document.getElementById('incident-save-state').textContent='Client, incident date, and description are required.'; return; }
+    const id=this.currentIncidentId || (crypto.randomUUID ? crypto.randomUUID() : 'incident_'+Date.now());
+    const payload={
+      id,
+      program_id:this.program.id,
+      fiscal_year:this.fiscalYear,
+      client_id:clientId,
+      incident_date:incidentDate,
+      category,
+      description,
+      staff_name:(document.getElementById('in-staff')?.value||'').trim()||null,
+      updated_by:this.user?.email||null,
+      updated_at:new Date().toISOString()
+    };
+    const {error}=await this.sb.from('holloway_client_incidents').upsert(payload,{onConflict:'id'});
+    if(error){ document.getElementById('incident-save-state').textContent='Save failed: '+error.message; return; }
+    document.getElementById('incident-save-state').textContent='Saved.';
+    await this.loadAll();
+    this.closeIncidentForm();
+    if(document.getElementById('modal-client')?.classList.contains('open')) this.openClientForm(clientId);
+    else this.showView(this.view||'incident-log');
+  };
+
+  // ---- Active Caseload: add Participation column --------------------------
+  App.renderClients = function(){
+    const el=document.getElementById('view-clients');
+    this._caseloadSort = this._caseloadSort || {key:null, dir:'asc'};
+    const activeRaw=(this.data.clients||[]).filter(c=>this.clientStatus(c)!=='Exited');
+    const accessors = {
+      hmis: c=>this.clientDisplayId(c),
+      name: c=>this.clientName(c)||'',
+      status: c=>this.simpleClientStatus(c),
+      housing: c=>c.housing_plan_status||'',
+      los: c=>this.clientBedNights(c,this.dateOnly(c.entry_date),this.today()),
+      entry: c=>this.dateOnly(c.entry_date)||'',
+      room: c=>c.room_assignment||'',
+      participation: c=>this.clientParticipation(c).label
+    };
+    const active = this.applySort(activeRaw, this._caseloadSort, accessors);
+    const duplicates = this.duplicateRoomAssignments(activeRaw);
+    const duplicateNotice = duplicates.length ? `<div class="notice amber"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div><div><strong>Duplicate room/bed assignments:</strong> ${duplicates.map(([k,v])=>`${this.escape(k)} (${v})`).join(', ')}. Please verify active resident assignments.</div></div>` : '';
+    const rows=active.map(c=>{
+      const assignment=String(c.room_assignment||'').trim();
+      const isDuplicate = assignment && duplicates.some(([k])=>k===assignment);
+      const part=this.clientParticipation(c);
+      return `<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.statusBadge(this.simpleClientStatus(c).toLowerCase().replace(' ','-'))}</td><td>${this.escape(c.housing_plan_status||'—')}</td><td>${this.clientBedNights(c,this.dateOnly(c.entry_date),this.today()).toLocaleString()}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.escape(c.room_assignment||'—')}${isDuplicate?' <span class="badge badge-amber">Duplicate</span>':''}</td><td><span class="badge ${part.cssClass}" title="${this.escape(part.hint||'')}">${this.escape(part.label)}</span></td><td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button><button class="btn btn-ghost btn-sm" data-add-service="${c.id}">Add Service</button><button class="btn btn-ghost btn-sm" data-add-update="${c.id}">Add Update</button></div></td></tr>`;
+    }).join('') || '<tr><td colspan="9" class="empty-table-state">No active client records entered yet.</td></tr>';
+    el.innerHTML=`<div class="page-header"><div><div class="page-title">Active Caseload</div><div class="page-subtitle">Daily client workspace. Quarterly reporting is generated from these source records.</div></div><button class="btn btn-gold" id="btn-new-client">+ Add Client</button></div>${duplicateNotice}<div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._caseloadSort,'hmis','HMIS ID')}${this.sortableHeader(this._caseloadSort,'name','Name')}${this.sortableHeader(this._caseloadSort,'status','Status')}${this.sortableHeader(this._caseloadSort,'housing','Housing Progress')}${this.sortableHeader(this._caseloadSort,'los','LOS')}${this.sortableHeader(this._caseloadSort,'entry','Entry')}${this.sortableHeader(this._caseloadSort,'room','Room / Bed')}${this.sortableHeader(this._caseloadSort,'participation','Participation')}<th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    el.querySelector('#btn-new-client').addEventListener('click',()=>this.openClientForm());
+    el.querySelectorAll('[data-edit-client]').forEach(b=>b.addEventListener('click',()=>this.openClientForm(b.dataset.editClient)));
+    el.querySelectorAll('[data-add-service]').forEach(b=>b.addEventListener('click',()=>this.openServiceForm(null,b.dataset.addService)));
+    el.querySelectorAll('[data-add-update]').forEach(b=>b.addEventListener('click',()=>this.openClientUpdateForm(b.dataset.addUpdate)));
+    this.wireSortableHeaders(el, this._caseloadSort, ()=>this.renderClients());
   };
 })();
 
