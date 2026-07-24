@@ -1856,7 +1856,18 @@ const App = {
     return 'Other';
   },
   generatedDemographicsFromClients(q=this.currentQuarter) {
-    const clients = this.clientMetrics(q).served || [];
+    return this.demographicsForClientList(this.clientMetrics(q).served || []);
+  },
+  // YTD demographics must be built from the deduplicated YTD-served client
+  // list (ytdClientsServed), NOT by summing each quarter's demographic
+  // snapshot. A resident active across multiple quarters appears in every
+  // quarter's "served" list, so summing per-quarter snapshots double- (or
+  // triple-, quadruple-) counts them and produces a YTD demographic total
+  // larger than the unduplicated Persons Served YTD figure.
+  generatedDemographicsYtdFromClients(q=this.currentQuarter) {
+    return this.demographicsForClientList(this.ytdClientsServed(q));
+  },
+  demographicsForClientList(clients=[]) {
     const ageGender = this.blankAgeGender();
     const ethnicity = Object.fromEntries(this.ethnicityKeys.map(k => [k, 0]));
     const language = Object.fromEntries(this.languageKeys.map(k => [k, 0]));
@@ -3626,10 +3637,8 @@ const App = {
   calcAgeGenderYtd(q, age, currentRow=null) {
     const out = {male:0,female:0,nb:0,unk:0};
     if (this.useClientGeneratedReporting()) {
-      this.thruQuarters(q).forEach(qq => {
-        const row = this.generatedDemographicsFromClients(qq).ageGender[age] || {};
-        ['male','female','nb','unk'].forEach(k => out[k] += Number(row[k] || 0));
-      });
+      const row = this.generatedDemographicsYtdFromClients(q).ageGender[age] || {};
+      ['male','female','nb','unk'].forEach(k => out[k] = Number(row[k] || 0));
       return out;
     }
     this.priorQuarters(q).forEach(qq => {
@@ -3642,12 +3651,10 @@ const App = {
   },
   calcSimpleDemoYtd(q,col,key,currentVal=0) {
     if (this.useClientGeneratedReporting()) {
-      return this.thruQuarters(q).reduce((sum,qq) => {
-        const obj = col === 'demographics_ethnicity'
-          ? this.generatedDemographicsFromClients(qq).ethnicity
-          : this.generatedDemographicsFromClients(qq).language;
-        return sum + Number(obj[key] || 0);
-      },0);
+      const obj = col === 'demographics_ethnicity'
+        ? this.generatedDemographicsYtdFromClients(q).ethnicity
+        : this.generatedDemographicsYtdFromClients(q).language;
+      return Number(obj[key] || 0);
     }
     const prior = this.priorQuarters(q).reduce((sum,qq) => {
       const obj = col === 'demographics_ethnicity'
@@ -3858,13 +3865,27 @@ const App = {
     el.querySelectorAll('[data-quick-service]').forEach(b=>b.addEventListener('click',()=>this.openServiceForm(null,null,b.dataset.quickService)));
   };
 
+  App.renderFollowUpSection = function(rows, type, label){
+    const typeRows = rows.filter(f=>f.followup_type===type);
+    const typeDue = typeRows.filter(f=>this.followUpStatus(f)!=='complete');
+    const typeComplete = typeRows.filter(f=>this.followUpStatus(f)==='complete');
+    const typeOverdue = typeRows.filter(f=>this.followUpStatus(f)==='overdue');
+    const html = typeRows.map(f=>{const c=f.client||{}; const st=this.followUpStatus(f); return `<tr><td><strong>${this.escape(c.id||'—')}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.formatDate(f.due_date)}</td><td><span class="followup-status ${st}">${this.escape(this.followUpLabel(f))}</span></td><td>${this.escape(f.housing_status||'—')}</td><td>${this.formatDate(f.completed_date)}</td><td><button class="btn btn-ghost btn-sm" data-followup-client="${c.id}" data-followup-type="${this.escape(f.followup_type)}">${st==='complete'?'Edit':'Complete'}</button></td></tr>`}).join('') || `<tr><td colspan="7" style="text-align:center;padding:24px;" class="field-hint">No ${this.escape(label.toLowerCase())} are currently expected.</td></tr>`;
+    return `<div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><div class="card-title">${this.escape(label)}</div><span class="badge badge-gray">${typeDue.length} open · ${typeComplete.length} completed${typeOverdue.length?` · ${typeOverdue.length} overdue`:''}</span></div>
+      <div class="card-body" style="padding:0;">
+        <div class="client-table-wrap"><table class="client-table"><thead><tr><th>Client ID</th><th>Name</th><th>Due Date</th><th>Status</th><th>Housing Status</th><th>Completed</th><th></th></tr></thead><tbody>${html}</tbody></table></div>
+      </div>
+    </div>`;
+  };
+
   App.renderHousingFollowUps = function(){
     const el=document.getElementById('view-housing-followups');
     const rows=this.expectedFollowUps();
     const due=rows.filter(f=>this.followUpStatus(f)!=='complete');
     const complete=rows.filter(f=>this.followUpStatus(f)==='complete');
-    const html=rows.map(f=>{const c=f.client||{}; const st=this.followUpStatus(f); return `<tr><td><strong>${this.escape(c.id||'—')}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.escape(f.followup_type)}</td><td>${this.formatDate(f.due_date)}</td><td><span class="followup-status ${st}">${this.escape(this.followUpLabel(f))}</span></td><td>${this.escape(f.housing_status||'—')}</td><td>${this.formatDate(f.completed_date)}</td><td><button class="btn btn-ghost btn-sm" data-followup-client="${c.id}" data-followup-type="${this.escape(f.followup_type)}">${st==='complete'?'Edit':'Complete'}</button></td></tr>`}).join('') || '<tr><td colspan="8" style="text-align:center;padding:24px;" class="field-hint">No permanent housing follow-ups are currently expected.</td></tr>';
-    el.innerHTML=`<div class="page-header"><div><div class="page-title">Housing Follow-Ups</div><div class="page-subtitle">Track 6-month and 12-month housing status checks for clients placed in permanent housing.</div></div></div><div class="generated-metric-grid"><div class="generated-metric"><div class="label">Open Follow-Ups</div><div class="value">${due.length}</div></div><div class="generated-metric"><div class="label">Completed</div><div class="value">${complete.length}</div></div><div class="generated-metric"><div class="label">Overdue</div><div class="value">${rows.filter(f=>this.followUpStatus(f)==='overdue').length}</div></div><div class="generated-metric"><div class="label">PH Clients</div><div class="value">${this.phExitClients().length}</div></div></div><div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg></div><div><strong>Purpose:</strong> after a client exits to documented permanent housing, staff should confirm housing status at 6 months and 12 months. This helps the City understand whether placements remain stable beyond the point of exit.</div></div><div class="client-table-wrap"><table class="client-table"><thead><tr><th>Client ID</th><th>Name</th><th>Follow-Up</th><th>Due Date</th><th>Status</th><th>Housing Status</th><th>Completed</th><th></th></tr></thead><tbody>${html}</tbody></table></div>`;
+    const overdue=rows.filter(f=>this.followUpStatus(f)==='overdue');
+    el.innerHTML=`<div class="page-header"><div><div class="page-title">Housing Follow-Ups</div><div class="page-subtitle">Track 6-month and 12-month housing status checks for clients placed in permanent housing.</div></div></div><div class="generated-metric-grid"><div class="generated-metric"><div class="label">Open Follow-Ups</div><div class="value">${due.length}</div></div><div class="generated-metric"><div class="label">Completed</div><div class="value">${complete.length}</div></div><div class="generated-metric"><div class="label">Overdue</div><div class="value">${overdue.length}</div></div><div class="generated-metric"><div class="label">PH Clients</div><div class="value">${this.phExitClients().length}</div></div></div><div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg></div><div><strong>Purpose:</strong> after a client exits to documented permanent housing, staff should confirm housing status at 6 months and 12 months. This helps the City understand whether placements remain stable beyond the point of exit.</div></div>${this.renderFollowUpSection(rows,'6-month','6-Month Follow-Ups')}${this.renderFollowUpSection(rows,'12-month','12-Month Follow-Ups')}`;
     el.querySelectorAll('[data-followup-client]').forEach(b=>b.addEventListener('click',()=>this.openFollowUpForm(b.dataset.followupClient,b.dataset.followupType)));
   };
 
