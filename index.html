@@ -786,7 +786,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .demo-bar-label { font-size:11.5px; color:var(--gray-800); width:88px; flex:0 0 88px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .demo-bar-track { flex:1; background:var(--gray-100); border-radius:4px; height:8px; }
 .demo-bar-fill { height:8px; border-radius:4px; }
-.demo-bar-pct { font-size:10.5px; color:var(--gray-500); width:44px; text-align:right; }
+.demo-bar-pct { font-size:10.5px; color:var(--gray-500); width:64px; flex:0 0 64px; text-align:right; white-space:nowrap; }
 @media (max-width:800px) { .demo-grid { grid-template-columns:1fr; gap:18px; } }
 
 .attention-chip-clear { background:var(--green-light); color:var(--green); border-radius:999px; padding:6px 13px; font-size:11.5px; font-weight:700; }
@@ -2049,18 +2049,20 @@ const App = {
     return { age, eth, lang };
   },
 
-  renderDemoBarGroup(title, rows, accentVar) {
-    const SUPPRESS_BELOW = 5;
+  renderDemoBarGroup(title, rows, accentVar, opts={}) {
     const total = rows.reduce((a,b)=>a+b.count,0);
-    const top = rows.filter(r=>r.count>0).sort((a,b)=>b.count-a.count).slice(0,5);
-    if (!top.length) return `<div><div class="demo-group-title">${this.escape(title)}</div><p class="field-hint">No data recorded yet.</p></div>`;
-    const rowsHtml = top.map(r => {
-      const suppressed = r.count < SUPPRESS_BELOW;
+    let list = rows.filter(r=>r.count>0);
+    // Age bands stay in their natural smallest-to-largest order; other
+    // dimensions are ranked by count (largest group first) and capped to
+    // the top 5 to keep the card compact.
+    list = opts.preserveOrder ? list : list.sort((a,b)=>b.count-a.count).slice(0,5);
+    if (!list.length) return `<div><div class="demo-group-title">${this.escape(title)}</div><p class="field-hint">No data recorded yet.</p></div>`;
+    const rowsHtml = list.map(r => {
       const pct = total ? Math.round((r.count/total)*100) : 0;
       return `<div class="demo-bar-row">
         <span class="demo-bar-label">${this.escape(r.label)}</span>
-        <div class="demo-bar-track"><div class="demo-bar-fill" style="width:${suppressed?0:pct}%;background:${accentVar};"></div></div>
-        <span class="demo-bar-pct">${suppressed ? `<${SUPPRESS_BELOW}` : pct+'%'}</span>
+        <div class="demo-bar-track"><div class="demo-bar-fill" style="width:${pct}%;background:${accentVar};"></div></div>
+        <span class="demo-bar-pct">${r.count} · ${pct}%</span>
       </div>`;
     }).join('');
     return `<div><div class="demo-group-title">${this.escape(title)}</div>${rowsHtml}</div>`;
@@ -2068,14 +2070,12 @@ const App = {
 
   renderParticipantDemographics(q=this.currentQuarter) {
     const d = this.participantDemographicsYtd(q);
-    const anySuppressed = [...d.age, ...d.eth, ...d.lang].some(r=>r.count>0 && r.count<5);
     return `<div class="card"><div class="card-body">
       <div class="demo-grid">
-        ${this.renderDemoBarGroup('Age', d.age, 'var(--navy)')}
+        ${this.renderDemoBarGroup('Age', d.age, 'var(--navy)', {preserveOrder:true})}
         ${this.renderDemoBarGroup('Race / Ethnicity', d.eth, 'var(--gold)')}
         ${this.renderDemoBarGroup('Primary Language', d.lang, 'var(--green)')}
       </div>
-      ${anySuppressed ? `<p class="field-hint" style="margin-top:12px;border-top:1px solid var(--gray-100);padding-top:10px;">Groups with fewer than 5 participants are suppressed to protect client privacy.</p>` : ''}
     </div></div>`;
   },
 
