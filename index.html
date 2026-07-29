@@ -853,7 +853,7 @@ th.sortable:hover { color:var(--navy); }
         </div>
         <button class="login-submit" id="login-password-submit-btn">Log In →</button>
         <button type="button" class="login-link-btn" id="login-forgot-btn">Forgot your password?</button>
-        <div class="login-footer">No password yet? Sign in with a Magic Link, then set one from Account Settings.</div>
+        <div class="login-footer">Trouble signing in? Use a Magic Link, or contact the City program monitor.</div>
       </div>
 
       <!-- Shown only when the user arrives from a password-reset email
@@ -1541,7 +1541,7 @@ const App = {
       // before). Word it so agency staff know to try the magic link instead
       // of assuming they mistyped their password.
       errorEl.textContent = error.message?.toLowerCase().includes('invalid login credentials')
-        ? 'Incorrect email or password — or a password hasn’t been set up for this account yet. Try Magic Link, or contact the City program monitor to set up password login.'
+        ? 'Incorrect email or password. Use "Forgot your password?" to reset it, or sign in with a Magic Link.'
         : (error.message || 'Log in failed.');
       return;
     }
