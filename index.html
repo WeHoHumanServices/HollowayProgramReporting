@@ -50,6 +50,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .login-body { padding: 28px 32px; }
 .login-submit { width: 100%; padding: 11px; background: var(--navy); color: var(--white); border: none; border-radius: var(--radius); font-weight: 700; cursor: pointer; }
 .login-footer { font-size: 12px; text-align: center; margin-top: 16px; color: var(--gray-400); }
+.login-link-btn { display:block; width:100%; margin-top:12px; background:none; border:none; padding:0; color:var(--navy); font-size:12px; font-weight:600; text-decoration:underline; cursor:pointer; text-align:center; }
+.login-link-btn:hover { color:var(--navy-light); }
 
 .topbar { background: var(--navy); color: var(--white); display: flex; align-items: center; justify-content: space-between; padding: 0 28px; height: 58px; border-bottom: 3px solid var(--gold); position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,.18); }
 .topbar-brand { display: flex; align-items: center; gap: 14px; }
@@ -60,7 +62,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .brand-program { font-family: var(--font-sans); font-size:15px; }
 .brand-sub { font-size:10.5px; color:rgba(255,255,255,.65); letter-spacing:.05em; text-transform:uppercase; }
 .topbar-right { display:flex; align-items:center; gap:14px; }
-.user-pill { display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.15); border-radius:20px; padding:4px 12px 4px 6px; font-size:12.5px; }
+.user-pill { display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.15); border-radius:20px; padding:4px 12px 4px 6px; font-size:12.5px; color:var(--white); cursor:pointer; }
+.user-pill:hover { background:rgba(255,255,255,.18); border-color:rgba(255,255,255,.28); }
 .user-avatar { width:24px; height:24px; font-size:11px; }
 .logout-btn { font-size:12px; color:rgba(255,255,255,.7); background:none; border:none; cursor:pointer; }
 .deadline-chip { font-size: 12px; border-radius: 18px; padding: 4px 10px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); }
@@ -849,7 +852,24 @@ th.sortable:hover { color:var(--navy); }
           <input type="password" id="login-password" class="field-input" autocomplete="current-password" required placeholder="••••••••" />
         </div>
         <button class="login-submit" id="login-password-submit-btn">Log In →</button>
-        <div class="login-footer">Password login must be enabled for your account by the City program monitor.</div>
+        <button type="button" class="login-link-btn" id="login-forgot-btn">Forgot your password?</button>
+        <div class="login-footer">No password yet? Sign in with a Magic Link, then set one from Account Settings.</div>
+      </div>
+
+      <!-- Shown only when the user arrives from a password-reset email
+           (Supabase appends type=recovery to the redirect URL). -->
+      <div id="login-mode-recovery" style="display:none;">
+        <div class="field-group">
+          <label class="field-label required" for="recovery-password">New Password</label>
+          <input type="password" id="recovery-password" class="field-input" autocomplete="new-password" required placeholder="••••••••" />
+        </div>
+        <div class="field-group" style="margin-top:12px;">
+          <label class="field-label required" for="recovery-password-confirm">Confirm New Password</label>
+          <input type="password" id="recovery-password-confirm" class="field-input" autocomplete="new-password" required placeholder="••••••••" />
+        </div>
+        <div class="field-hint" style="margin-top:8px;">At least 10 characters.</div>
+        <button class="login-submit" id="recovery-submit-btn" style="margin-top:16px;">Set Password &amp; Sign In →</button>
+        <div class="login-footer">This reset link can only be used once.</div>
       </div>
       <p id="login-error" style="color:#C0392B;font-size:12px;margin:12px 0 0;"></p>
     </div>
@@ -868,7 +888,7 @@ th.sortable:hover { color:var(--navy); }
     <div class="topbar-right">
       <span id="deadline-chip" class="deadline-chip"></span>
       <span class="badge badge-navy" id="topbar-fy">FY 2025–26</span>
-      <div class="user-pill"><div class="user-avatar" id="user-avatar">U</div><span id="user-name">User</span></div>
+      <button type="button" class="user-pill" id="user-pill-btn" title="Account settings" aria-haspopup="dialog"><div class="user-avatar" id="user-avatar">U</div><span id="user-name">User</span></button>
       <button class="logout-btn" id="logout-btn">Sign out</button>
     </div>
   </header>
@@ -1063,6 +1083,33 @@ th.sortable:hover { color:var(--navy); }
   </div>
 </div>
 
+<!-- Account Settings Modal -->
+<div id="modal-account" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="account-title">
+  <div class="form-modal" style="max-width:520px;">
+    <div class="form-modal-header">
+      <div><div class="form-modal-title" id="account-title">Account Settings</div><div class="form-modal-meta" id="account-meta"></div></div>
+      <button class="form-close-btn" data-close="account">✕</button>
+    </div>
+    <div class="form-gold-bar"></div>
+    <div class="form-body">
+      <div class="field-group">
+        <label class="field-label" for="account-password">New Password</label>
+        <input type="password" id="account-password" class="field-input" autocomplete="new-password" placeholder="••••••••" />
+      </div>
+      <div class="field-group" style="margin-top:14px;">
+        <label class="field-label" for="account-password-confirm">Confirm New Password</label>
+        <input type="password" id="account-password-confirm" class="field-input" autocomplete="new-password" placeholder="••••••••" />
+      </div>
+      <div class="field-hint" style="margin-top:10px;">At least 10 characters. Once set, you can sign in with your email and password instead of waiting on a Magic Link.</div>
+      <p id="account-error" style="font-size:12px;margin:12px 0 0;"></p>
+    </div>
+    <div class="form-footer">
+      <div class="save-state" id="account-save-state"></div>
+      <div style="display:flex;gap:10px;"><button class="btn btn-ghost" data-close="account">Close</button><button class="btn btn-gold" id="btn-save-account-password">Save Password</button></div>
+    </div>
+  </div>
+</div>
+
 <!-- Confirmation Modal -->
 <div id="confirm-modal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
   <div class="confirm-card">
@@ -1244,7 +1291,18 @@ const App = {
   currentServiceId: null,
 
   init() {
+    // Supabase's password-reset email returns the user here with
+    // "#...&type=recovery" in the URL. createClient() consumes and clears that
+    // hash as soon as it is constructed, so read the flag BEFORE creating the
+    // client — otherwise checkSession() sees a perfectly valid session and
+    // signs them straight into the app without ever asking for a new password.
+    this.recoveryMode = /[#&]type=recovery/.test(window.location.hash || '');
     this.sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Belt-and-braces: also catch the event, in case the hash was already
+    // stripped (some email clients / redirects rewrite it).
+    this.sb.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') { this.recoveryMode = true; this.showRecovery(); }
+    });
     this.bindStaticEvents();
     this.checkSession();
   },
@@ -1256,6 +1314,13 @@ const App = {
     document.getElementById('login-password-submit-btn').addEventListener('click', () => this.loginWithPassword());
     document.getElementById('login-email-pw').addEventListener('keydown', e => { if (e.key === 'Enter') this.loginWithPassword(); });
     document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') this.loginWithPassword(); });
+    document.getElementById('login-forgot-btn').addEventListener('click', () => this.requestPasswordReset());
+    document.getElementById('recovery-submit-btn').addEventListener('click', () => this.submitNewPassword());
+    document.getElementById('recovery-password').addEventListener('keydown', e => { if (e.key === 'Enter') this.submitNewPassword(); });
+    document.getElementById('recovery-password-confirm').addEventListener('keydown', e => { if (e.key === 'Enter') this.submitNewPassword(); });
+    document.getElementById('user-pill-btn').addEventListener('click', () => this.openAccountModal());
+    document.getElementById('btn-save-account-password').addEventListener('click', () => this.saveAccountPassword());
+    document.getElementById('account-password-confirm').addEventListener('keydown', e => { if (e.key === 'Enter') this.saveAccountPassword(); });
     document.getElementById('logout-btn').addEventListener('click', () => this.logout());
 
     document.querySelectorAll('.sidebar-item[data-view]').forEach(el => {
@@ -1303,6 +1368,12 @@ const App = {
   async checkSession() {
     document.getElementById('loading-screen').style.display = 'flex';
     const { data: { session } } = await this.sb.auth.getSession();
+    // A recovery link produces a real session, but the user hasn't proven
+    // anything beyond inbox access — make them set a password first.
+    if (this.recoveryMode) {
+      this.showRecovery();
+      return;
+    }
     if (!session) {
       this.showLogin();
       return;
@@ -1338,9 +1409,21 @@ const App = {
 
   setLoginMode(mode) {
     document.querySelectorAll('[data-login-mode]').forEach(b => b.classList.toggle('active', b.dataset.loginMode === mode));
-    document.getElementById('login-mode-magic').style.display = mode === 'password' ? 'none' : 'block';
+    document.getElementById('login-mode-toggle').style.display = mode === 'recovery' ? 'none' : '';
+    document.getElementById('login-mode-magic').style.display = mode === 'magic' ? 'block' : 'none';
     document.getElementById('login-mode-password').style.display = mode === 'password' ? 'block' : 'none';
-    document.getElementById('login-error').textContent = '';
+    document.getElementById('login-mode-recovery').style.display = mode === 'recovery' ? 'block' : 'none';
+    const err = document.getElementById('login-error');
+    err.textContent = '';
+    err.style.color = '#C0392B';
+  },
+
+  showRecovery() {
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+    this.setLoginMode('recovery');
+    setTimeout(() => document.getElementById('recovery-password')?.focus(), 50);
   },
 
   showApp() {
@@ -1542,6 +1625,126 @@ const App = {
     t.textContent = msg;
     region.appendChild(t);
     setTimeout(() => t.remove(), opts.duration || 3500);
+  },
+
+  // Minimum length is enforced here for a clear inline message; Supabase
+  // enforces its own project-level minimum server-side regardless.
+  MIN_PASSWORD_LENGTH: 10,
+
+  async requestPasswordReset() {
+    const email = document.getElementById('login-email-pw').value.trim().toLowerCase();
+    const errorEl = document.getElementById('login-error');
+    errorEl.style.color = '#C0392B';
+    if (!email) { errorEl.textContent = 'Enter your email address above, then choose "Forgot your password?".'; return; }
+
+    const btn = document.getElementById('login-forgot-btn');
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = 'Sending\u2026';
+
+    const { error } = await this.sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname
+    });
+
+    btn.disabled = false;
+    btn.textContent = label;
+
+    if (error && !/user not found/i.test(error.message || '')) {
+      errorEl.textContent = error.message || 'The reset email could not be sent.';
+      return;
+    }
+    // Deliberately identical wording whether or not the address exists, so the
+    // form can't be used to probe which staff emails are provisioned.
+    errorEl.style.color = '#2D7A4F';
+    errorEl.textContent = 'If that address has an account, a password reset link is on its way.';
+  },
+
+  async submitNewPassword() {
+    const pw = document.getElementById('recovery-password').value;
+    const confirm = document.getElementById('recovery-password-confirm').value;
+    const errorEl = document.getElementById('login-error');
+    errorEl.style.color = '#C0392B';
+
+    const problem = this.validateNewPassword(pw, confirm);
+    if (problem) { errorEl.textContent = problem; return; }
+    errorEl.textContent = '';
+
+    const btn = document.getElementById('recovery-submit-btn');
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = 'Saving\u2026';
+
+    const { data, error } = await this.sb.auth.updateUser({ password: pw });
+
+    btn.disabled = false;
+    btn.textContent = label;
+
+    if (error) {
+      errorEl.textContent = /session|expired|invalid/i.test(error.message || '')
+        ? 'This reset link has expired or was already used. Request a new one from the Password tab.'
+        : (error.message || 'The password could not be updated.');
+      return;
+    }
+
+    this.recoveryMode = false;
+    // Drop the recovery hash so a refresh doesn't reopen this screen.
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    this.setLoginMode('password');
+    await this.establishSession(data.user);
+    this.toast('Password updated.');
+  },
+
+  validateNewPassword(pw, confirm) {
+    if (!pw || !confirm) return 'Enter and confirm your new password.';
+    if (pw.length < this.MIN_PASSWORD_LENGTH) return `Password must be at least ${this.MIN_PASSWORD_LENGTH} characters.`;
+    if (pw !== confirm) return 'The two passwords do not match.';
+    return null;
+  },
+
+  openAccountModal() {
+    // No role gate: setting your own password is available to every signed-in
+    // user, including read-only viewers.
+    this.focusReturn = document.activeElement;
+    document.getElementById('account-meta').textContent = this.user?.email || '';
+    document.getElementById('account-password').value = '';
+    document.getElementById('account-password-confirm').value = '';
+    document.getElementById('account-error').textContent = '';
+    document.getElementById('account-save-state').textContent = '';
+    const modal = document.getElementById('modal-account');
+    modal.classList.add('open');
+    this._installFocusTrap(modal);
+    setTimeout(() => document.getElementById('account-password')?.focus(), 50);
+  },
+
+  async saveAccountPassword() {
+    const pw = document.getElementById('account-password').value;
+    const confirm = document.getElementById('account-password-confirm').value;
+    const errorEl = document.getElementById('account-error');
+    errorEl.style.color = '#C0392B';
+
+    const problem = this.validateNewPassword(pw, confirm);
+    if (problem) { errorEl.textContent = problem; return; }
+    errorEl.textContent = '';
+
+    const btn = document.getElementById('btn-save-account-password');
+    btn.disabled = true;
+    document.getElementById('account-save-state').textContent = 'Saving\u2026';
+
+    const { error } = await this.sb.auth.updateUser({ password: pw });
+
+    btn.disabled = false;
+
+    if (error) {
+      document.getElementById('account-save-state').textContent = '';
+      errorEl.textContent = error.message || 'The password could not be updated.';
+      return;
+    }
+
+    document.getElementById('account-password').value = '';
+    document.getElementById('account-password-confirm').value = '';
+    document.getElementById('account-save-state').textContent = 'Password saved';
+    this.toast('Password updated. You can now sign in with your email and password.');
+    setTimeout(() => this.closeForm('account'), 900);
   },
 
   async logout() {
