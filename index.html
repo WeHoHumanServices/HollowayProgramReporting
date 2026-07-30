@@ -779,14 +779,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .perf-strip-value { font-size:18px; font-weight:750; color:var(--navy); margin-top:4px; }
 @media (max-width:800px) { .perf-hero-row, .perf-strip-row { grid-template-columns:1fr 1fr; } .perf-hero { border-right:none; padding-right:0; } }
 
-.demo-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:22px; }
+.demo-summary-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:22px; }
 .demo-group-title { font-size:11px; font-weight:700; letter-spacing:.03em; color:var(--gray-500); margin-bottom:10px; }
 .demo-bar-row { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
 .demo-bar-label { font-size:11.5px; color:var(--gray-800); width:88px; flex:0 0 88px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .demo-bar-track { flex:1; background:var(--gray-100); border-radius:4px; height:8px; }
 .demo-bar-fill { height:8px; border-radius:4px; }
 .demo-bar-pct { font-size:10.5px; color:var(--gray-500); width:64px; flex:0 0 64px; text-align:right; white-space:nowrap; }
-@media (max-width:800px) { .demo-grid { grid-template-columns:1fr; gap:18px; } }
+@media (max-width:800px) { .demo-summary-grid { grid-template-columns:1fr; gap:18px; } }
 
 .attention-chip-clear { background:var(--green-light); color:var(--green); border-radius:999px; padding:6px 13px; font-size:11.5px; font-weight:700; }
 .attention-chip { position:relative; }
@@ -2350,7 +2350,7 @@ const App = {
   renderParticipantDemographics(q=this.currentQuarter) {
     const d = this.participantDemographicsYtd(q);
     return `<div class="card"><div class="card-body">
-      <div class="demo-grid">
+      <div class="demo-summary-grid">
         ${this.renderDemoBarGroup('Age', d.age, 'var(--navy)', {preserveOrder:true})}
         ${this.renderDemoBarGroup('Race / Ethnicity', d.eth, 'var(--gold)')}
         ${this.renderDemoBarGroup('Primary Language', d.lang, 'var(--green)')}
