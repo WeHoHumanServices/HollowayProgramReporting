@@ -2742,7 +2742,7 @@ const App = {
   renderEngagementReviewCard() {
     if (!this.isAdmin()) return '';
     const d = this.engagementReviewDefaults();
-    const src = this._erSources || { caseNotes:true, services:true, exits:true, followups:true };
+    const src = this._erSources || { caseNotes:true, services:true, incidents:true, exits:true, followups:true };
     const cb = (k,label) => `<label class="checkbox-label"><input type="checkbox" data-er-source="${k}" ${src[k]?'checked':''}> ${label}</label>`;
     return `<div class="card" id="engagement-review-card">
       <div class="card-header"><div class="card-title">Engagement Review<span class="er-badge">AI-assisted</span></div></div>
@@ -2752,7 +2752,7 @@ const App = {
         <div class="er-controls">
           <div class="field-group"><label class="field-label" for="er-from">From</label><input type="date" id="er-from" class="field-input" value="${d.from}"></div>
           <div class="field-group"><label class="field-label" for="er-to">To</label><input type="date" id="er-to" class="field-input" value="${d.to}"></div>
-          <div class="field-group"><label class="field-label">Include</label><div class="er-sources">${cb('caseNotes','Case notes')}${cb('services','Service contacts')}${cb('exits','Exits')}${cb('followups','Follow-ups')}</div></div>
+          <div class="field-group"><label class="field-label">Include</label><div class="er-sources">${cb('caseNotes','Case notes')}${cb('services','Service contacts')}${cb('incidents','Incidents')}${cb('exits','Exits')}${cb('followups','Follow-ups')}</div></div>
           <button class="btn btn-gold" id="btn-run-er" type="button">Generate Review</button>
           ${this._erResultHtml ? '<button class="btn btn-ghost" id="btn-copy-er" type="button">Copy</button>' : ''}
         </div>
@@ -2864,11 +2864,12 @@ const App = {
   renderNotesChatCard() {
     if (!this.isAdmin()) return '';
     const starters = [
-      'How many case notes are there, and how many residents do they cover?',
-      'Show case notes per resident, highest first.',
+      'How many service contacts are there, and how many residents do they cover?',
       'What are the top issues coming up in the notes?',
+      'Summarise the incidents — categories, severity, anything involving law enforcement.',
       'Which HMIS IDs had the most contacts, and which the fewest?',
-      'How did engagement change month to month?'
+      'What is the average length of stay, and who is still in the program?',
+      'Which current residents had no contact logged in this window?'
     ];
     return `<div class="card" id="notes-chat-card">
       <div class="card-header">
@@ -2879,7 +2880,7 @@ const App = {
         </div>
       </div>
       <div class="card-body">
-        <p class="field-hint" style="margin-bottom:11px;">Answers cover the date range and record types set in Engagement Review above. Residents are identified by HMIS ID and staff by name; client names are withheld. Counts and rankings are calculated from the database rather than estimated by the model. Changing the dates starts a new conversation.</p>
+        <p class="field-hint" style="margin-bottom:11px;">Answers cover the date range and record types set in Engagement Review above, plus the resident roster — tenure and current census are program-to-date, not limited to the window. Residents are identified by HMIS ID and staff by name; client names are withheld. Counts and rankings are calculated from the database rather than estimated by the model. Changing the dates starts a new conversation.</p>
         <div class="chat-starters">${starters.map(x => `<button class="chat-starter" type="button" data-chat-starter="${this.escape(x)}">${this.escape(x)}</button>`).join('')}</div>
         <div id="chat-log" class="chat-log"></div>
         <div class="chat-input-row">
@@ -2942,7 +2943,7 @@ const App = {
     const picked = [];
     document.querySelectorAll('[data-er-source]').forEach(x => {
       if (!x.checked) return;
-      picked.push({ caseNotes:'Case notes', services:'Service contacts', exits:'Exits', followups:'Follow-ups' }[x.dataset.erSource] || x.dataset.erSource);
+      picked.push({ caseNotes:'Case notes', services:'Service contacts', incidents:'Incidents', exits:'Exits', followups:'Follow-ups' }[x.dataset.erSource] || x.dataset.erSource);
     });
 
     const e = v => this.escape(String(v == null ? '' : v));
@@ -2954,7 +2955,7 @@ const App = {
       ['Reporting window', `${this.formatDate(from)} to ${this.formatDate(to)}`],
       ['Records included', picked.join(', ') || '—'],
       ['Records in window', this._chatCounts
-        ? `${c.caseNotes || 0} case notes, ${c.services || 0} service contacts, ${c.exits || 0} exits, ${c.followups || 0} follow-ups, ${c.clients || 0} residents`
+        ? `${c.caseNotes || 0} case notes, ${c.services || 0} service contacts, ${c.incidents || 0} incidents, ${c.exits || 0} exits, ${c.followups || 0} follow-ups, ${c.clients || 0} residents`
         : 'not recorded'],
       ['Exported by', this.user?.email || '—'],
       ['Exported', this.formatDateTime(new Date().toISOString())],
@@ -3076,6 +3077,7 @@ const App = {
         <span class="er-chip">${esc(this.formatDate(data.period?.dateFrom))} – ${esc(this.formatDate(data.period?.dateTo))}</span>
         <span class="er-chip">${c.caseNotes || 0} case notes</span>
         <span class="er-chip">${c.services || 0} service contacts</span>
+        <span class="er-chip">${c.incidents || 0} incidents</span>
         <span class="er-chip">${c.exits || 0} exits</span>
         <span class="er-chip">${c.followups || 0} follow-ups</span>
         <span class="er-chip">${c.clients || 0} residents</span>
