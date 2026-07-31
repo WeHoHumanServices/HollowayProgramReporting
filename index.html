@@ -876,6 +876,23 @@ th.sortable:hover { color:var(--navy); }
 .er-block.er-challenge h4 { color:var(--red); }
 .er-cols { display:grid; grid-template-columns:repeat(2,1fr); gap:22px; }
 @media (max-width:800px) { .er-cols { grid-template-columns:1fr; } .er-controls .field-input { min-width:0; width:100%; } }
+
+/* ── AI NOTES CHAT (city admin only) ── */
+.chat-starters { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px; }
+.chat-starter { background:#fff; border:1.5px solid var(--border); border-radius:999px; padding:5px 13px; font-size:11.5px; font-weight:700; color:var(--navy); cursor:pointer; font-family:inherit; transition:all .15s ease; }
+.chat-starter:hover { background:#EEF2FA; border-color:#B9CBEA; }
+.chat-log { max-height:440px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius); background:var(--gray-50); padding:14px; margin-bottom:12px; }
+.chat-msg { margin-bottom:14px; }
+.chat-msg:last-child { margin-bottom:0; }
+.chat-who { font-size:9.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:var(--gray-400); margin-bottom:4px; }
+.chat-bubble { font-size:13.5px; line-height:1.62; color:var(--gray-800); white-space:pre-wrap; overflow-wrap:break-word; background:#fff; border:1px solid var(--border); border-radius:10px; padding:10px 13px; }
+.chat-user .chat-bubble { background:#EEF2FA; border-color:#DCE6F7; color:var(--navy); font-weight:600; }
+.chat-user .chat-who { color:var(--navy); }
+.chat-thinking { color:var(--gray-400); font-style:italic; }
+.chat-input-row { display:flex; gap:10px; align-items:flex-end; }
+.chat-input { flex:1; min-height:52px; resize:vertical; font-family:inherit; }
+.chat-input-row .btn { flex-shrink:0; }
+@media (max-width:800px) { .chat-input-row { flex-direction:column; align-items:stretch; } }
 </style>
 </head>
 
@@ -2681,8 +2698,10 @@ const App = {
             <button class="btn btn-danger btn-sm" data-q="${q}" data-admin-action="void">Void</button>
           </div></td></tr>`).join('') : '<tr><td colspan="7" class="field-hint" style="text-align:center;">No bundles match the current filters.</td></tr>'}</tbody></table>
       </div></div>
-      ${this.renderEngagementReviewCard()}`;
+      ${this.renderEngagementReviewCard()}
+      ${this.renderNotesChatCard()}`;
     this.bindEngagementReview(el);
+    this.bindNotesChat(el);
     el.querySelector('#btn-refresh-admin').addEventListener('click', async () => { await this.loadAll(); this.renderAdminReview(); });
     el.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
       const field = th.dataset.sort;
@@ -2742,6 +2761,18 @@ const App = {
     const btn = el.querySelector('#btn-run-er');
     if (!btn) return;
     btn.addEventListener('click', () => this.runEngagementReview());
+    // The chat answers about one fixed window. If that window moves, the
+    // existing thread no longer describes the same data, so drop it rather
+    // than let answers straddle two ranges.
+    const resetChat = () => {
+      if (!(this._chatMsgs || []).length) return;
+      this._chatMsgs = [];
+      this._chatKey = null;
+      this.renderChatTranscript();
+      this.toast('Date range changed — chat cleared.');
+    };
+    ['#er-from','#er-to'].forEach(sel => el.querySelector(sel)?.addEventListener('change', resetChat));
+    el.querySelectorAll('[data-er-source]').forEach(x => x.addEventListener('change', resetChat));
     const copy = el.querySelector('#btn-copy-er');
     if (copy) copy.addEventListener('click', () => {
       const text = el.querySelector('#er-result')?.innerText || '';
@@ -2801,6 +2832,138 @@ const App = {
       out.innerHTML = `<div class="notice red"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>Review failed: ${this.escape(e?.message || String(e))}</div></div>`;
     } finally {
       btn.disabled = false; btn.textContent = label;
+    }
+  },
+
+
+  // ══════════════════════════════════════════════════════════════════════
+  // ASK ABOUT THESE NOTES  —  CITY ADMIN ONLY
+  //
+  // Multi-turn chat over the same window the Engagement Review card is set to.
+  // Calls the `notes-chat` Edge Function, which de-identifies the records and
+  // computes every countable figure (totals, notes per resident, per staff,
+  // per month, service mix, exit reasons) in SQL/TypeScript before the model
+  // sees them — the model is told to read numbers out of that block rather
+  // than tally records itself, because LLMs miscount rows.
+  //
+  // The thread is held in memory only; nothing is written to Supabase.
+  // ══════════════════════════════════════════════════════════════════════
+  chatContextKey() {
+    const from = document.getElementById('er-from')?.value || '';
+    const to = document.getElementById('er-to')?.value || '';
+    const src = [];
+    document.querySelectorAll('[data-er-source]').forEach(x => { if (x.checked) src.push(x.dataset.erSource); });
+    return [from, to, src.sort().join(',')].join('|');
+  },
+
+  renderNotesChatCard() {
+    if (!this.isAdmin()) return '';
+    const starters = [
+      'How many case notes are there, and how many residents do they cover?',
+      'Show case notes per resident, highest first.',
+      'What are the top issues coming up in the notes?',
+      'Which residents have had the fewest contacts?',
+      'How did engagement change month to month?'
+    ];
+    return `<div class="card" id="notes-chat-card">
+      <div class="card-header">
+        <div class="card-title">Ask about these notes<span class="er-badge">AI-assisted</span></div>
+        <button class="btn btn-ghost btn-sm" id="btn-chat-clear" type="button">Clear</button>
+      </div>
+      <div class="card-body">
+        <p class="field-hint" style="margin-bottom:11px;">Answers cover the date range and record types set in Engagement Review above, and use the same de-identified records. Counts and rankings are calculated from the database rather than estimated by the model. Changing the dates starts a new conversation.</p>
+        <div class="chat-starters">${starters.map(x => `<button class="chat-starter" type="button" data-chat-starter="${this.escape(x)}">${this.escape(x)}</button>`).join('')}</div>
+        <div id="chat-log" class="chat-log"></div>
+        <div class="chat-input-row">
+          <textarea id="chat-input" class="field-textarea chat-input" rows="2" placeholder="Ask a question about these records…" aria-label="Ask a question about these records"></textarea>
+          <button class="btn btn-gold" id="btn-chat-send" type="button">Send</button>
+        </div>
+      </div></div>`;
+  },
+
+  bindNotesChat(el) {
+    const send = el.querySelector('#btn-chat-send');
+    if (!send) return;
+    send.addEventListener('click', () => this.sendNotesChat());
+    el.querySelector('#chat-input')?.addEventListener('keydown', e => {
+      // Enter sends, Shift+Enter makes a new line.
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendNotesChat(); }
+    });
+    el.querySelectorAll('[data-chat-starter]').forEach(b =>
+      b.addEventListener('click', () => this.sendNotesChat(b.dataset.chatStarter)));
+    el.querySelector('#btn-chat-clear')?.addEventListener('click', () => {
+      this._chatMsgs = []; this._chatKey = null; this.renderChatTranscript();
+    });
+    this.renderChatTranscript();
+  },
+
+  // Replies are model output derived from free-text notes — escaped, never
+  // injected as markup. CSS white-space:pre-wrap keeps the line breaks.
+  renderChatTranscript() {
+    const box = document.getElementById('chat-log');
+    if (!box) return;
+    const msgs = this._chatMsgs || [];
+    if (!msgs.length && !this._chatBusy) {
+      box.innerHTML = '<p class="field-hint">No questions yet. Try one of the suggestions above, or ask your own.</p>';
+      return;
+    }
+    const bubble = (role, text, cls='') =>
+      `<div class="chat-msg chat-${role}"><div class="chat-who">${role === 'user' ? 'You' : 'Assistant'}</div><div class="chat-bubble ${cls}">${this.escape(text)}</div></div>`;
+    box.innerHTML = msgs.map(m => bubble(m.role, m.content)).join('')
+      + (this._chatBusy ? bubble('assistant', 'Thinking…', 'chat-thinking') : '');
+    box.scrollTop = box.scrollHeight;
+  },
+
+  async sendNotesChat(preset) {
+    if (!this.isAdmin()) { this.toast('City admin only.', { error:true }); return; }
+    if (this._chatBusy) return;
+    const input = document.getElementById('chat-input');
+    const question = String(preset || input?.value || '').trim();
+    if (!question) return;
+
+    const from = document.getElementById('er-from')?.value;
+    const to = document.getElementById('er-to')?.value;
+    if (!from || !to) { this.toast('Set a date range in Engagement Review first.', { error:true }); return; }
+    if (from > to) { this.toast('The start date must be on or before the end date.', { error:true }); return; }
+
+    const sources = {};
+    document.querySelectorAll('[data-er-source]').forEach(x => { sources[x.dataset.erSource] = x.checked; });
+    if (!Object.values(sources).some(Boolean)) { this.toast('Select at least one record type in Engagement Review.', { error:true }); return; }
+
+    // Safety net in case the range moved without firing a change event.
+    const key = this.chatContextKey();
+    if (this._chatKey && this._chatKey !== key) this._chatMsgs = [];
+    this._chatKey = key;
+
+    this._chatMsgs = this._chatMsgs || [];
+    this._chatMsgs.push({ role:'user', content: question });
+    if (input) input.value = '';
+    this._chatBusy = true;
+    const btn = document.getElementById('btn-chat-send');
+    if (btn) btn.disabled = true;
+    this.renderChatTranscript();
+
+    try {
+      const { data, error } = await this.sb.functions.invoke('notes-chat', {
+        body: { dateFrom: from, dateTo: to, sources, messages: this._chatMsgs.slice(-12) }
+      });
+      if (error) {
+        let msg = error.message || 'Unknown error';
+        if (error.context && typeof error.context.json === 'function') {
+          try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (_) {}
+        }
+        throw new Error(msg);
+      }
+      if (!data) throw new Error('No response from the chat service.');
+      if (data.error) throw new Error(data.error);
+      this._chatMsgs.push({ role:'assistant', content: data.reply });
+    } catch (e) {
+      this._chatMsgs.push({ role:'assistant', content: '⚠ ' + (e?.message || String(e)) });
+    } finally {
+      this._chatBusy = false;
+      if (btn) btn.disabled = false;
+      this.renderChatTranscript();
+      document.getElementById('chat-input')?.focus();
     }
   },
 
