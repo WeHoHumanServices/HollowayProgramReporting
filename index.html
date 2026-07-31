@@ -813,6 +813,69 @@ th.sortable { cursor:pointer; user-select:none; }
 th.sortable:hover { color:var(--navy); }
 .checkbox-label { display:flex; align-items:center; gap:8px; font-weight:600; cursor:pointer; }
 .checkbox-label input[type="checkbox"] { width:16px; height:16px; }
+
+/* ── YTD COLUMN EMPHASIS ────────────────────────────────────────────────
+   Year-to-date columns get a soft blue field plus a navy rule at the
+   Quarter | YTD boundary so the two blocks read as distinct groups.
+   Mirrors the shading the PDF export already applies to YTD cells.
+   Screen-only: the print/PDF path builds its own tables and is unaffected. */
+@media screen {
+
+  /* Age & Gender grid — 11 columns: 1 label, 5 Quarter, 5 YTD (cols 7-11) */
+  .demo-grid .demo-cell:nth-child(11n+7):not(.header),
+  .demo-grid .demo-cell:nth-child(11n+8):not(.header),
+  .demo-grid .demo-cell:nth-child(11n+9):not(.header),
+  .demo-grid .demo-cell:nth-child(11n+10):not(.header),
+  .demo-grid .demo-cell:nth-child(11n):not(.header) { background:#EEF2FA; }
+
+  /* YTD Total is the strongest number in the block */
+  .demo-grid .demo-cell:nth-child(11n):not(.header) { background:#E1EAF8; font-weight:800; color:var(--navy); }
+
+  /* Grand Total row outranks the tint, but stays in the same colour family */
+  .demo-grid .demo-cell.total-row:nth-child(11n+7),
+  .demo-grid .demo-cell.total-row:nth-child(11n+8),
+  .demo-grid .demo-cell.total-row:nth-child(11n+9),
+  .demo-grid .demo-cell.total-row:nth-child(11n+10) { background:#DCE6F7 !important; }
+  .demo-grid .demo-cell.total-row:nth-child(11n) { background:#CFDDF4 !important; }
+
+  /* the Quarter | YTD boundary */
+  .demo-grid .demo-cell:nth-child(11n+7) { border-left:2px solid var(--navy); }
+
+  /* Ethnicity / Language tables — YTD is the last column */
+  .svc-table.svc-ytd-last th:last-child { background:#E8EFF9; color:var(--navy); }
+  .svc-table.svc-ytd-last tbody td:last-child { background:#EEF2FA; font-weight:800; color:var(--navy); }
+  .svc-table.svc-ytd-last tr.total-row td:last-child { background:#DCE6F7 !important; }
+  .svc-table.svc-ytd-last th:last-child,
+  .svc-table.svc-ytd-last tbody td:last-child { border-left:2px solid var(--navy); }
+  .svc-table.svc-ytd-last tbody tr:hover:not(.cat-header) td:last-child { background:#E1EAF8; }
+
+  /* Scope of Services table — YTD is the third of four columns */
+  .svc-table.svc-ytd-3 th:nth-child(3) { background:#E8EFF9; color:var(--navy); }
+  .svc-table.svc-ytd-3 tbody td:nth-child(3) { background:#EEF2FA; }
+  .svc-table.svc-ytd-3 tr.total-row td:nth-child(3) { background:#DCE6F7 !important; }
+  .svc-table.svc-ytd-3 th:nth-child(3),
+  .svc-table.svc-ytd-3 tbody td:nth-child(3) { border-left:2px solid var(--navy); }
+  .svc-table.svc-ytd-3 tbody tr:hover:not(.cat-header) td:nth-child(3) { background:#E1EAF8; }
+}
+
+/* ── AI ENGAGEMENT REVIEW (city admin only) ── */
+.er-controls { display:flex; flex-wrap:wrap; align-items:flex-end; gap:14px; margin-bottom:14px; }
+.er-controls .field-group { margin:0; }
+.er-controls .field-input { min-width:160px; }
+.er-sources { display:flex; flex-wrap:wrap; gap:12px; padding-top:5px; }
+.er-sources .checkbox-label { font-size:12.5px; font-weight:600; color:var(--gray-800); }
+.er-badge { display:inline-block; background:var(--navy); color:#fff; font-size:9.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; padding:3px 8px; border-radius:999px; margin-left:8px; vertical-align:2px; }
+.er-meta { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+.er-chip { background:#EEF2FA; color:var(--navy); border:1px solid #DCE6F7; border-radius:999px; padding:4px 11px; font-size:11.5px; font-weight:700; }
+.er-block { margin-bottom:16px; }
+.er-block h4 { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--gray-500); margin:0 0 7px; }
+.er-block p { font-size:13.5px; line-height:1.62; color:var(--gray-800); margin:0; }
+.er-block ul { margin:0; padding-left:18px; }
+.er-block li { font-size:13.5px; line-height:1.6; color:var(--gray-800); margin-bottom:5px; }
+.er-block.er-success h4 { color:var(--green); }
+.er-block.er-challenge h4 { color:var(--red); }
+.er-cols { display:grid; grid-template-columns:repeat(2,1fr); gap:22px; }
+@media (max-width:800px) { .er-cols { grid-template-columns:1fr; } .er-controls .field-input { min-width:0; width:100%; } }
 </style>
 </head>
 
@@ -2617,7 +2680,9 @@ const App = {
             <button class="btn btn-ghost btn-sm" data-q="${q}" data-admin-action="revise">Request Revisions</button>
             <button class="btn btn-danger btn-sm" data-q="${q}" data-admin-action="void">Void</button>
           </div></td></tr>`).join('') : '<tr><td colspan="7" class="field-hint" style="text-align:center;">No bundles match the current filters.</td></tr>'}</tbody></table>
-      </div></div>`;
+      </div></div>
+      ${this.renderEngagementReviewCard()}`;
+    this.bindEngagementReview(el);
     el.querySelector('#btn-refresh-admin').addEventListener('click', async () => { await this.loadAll(); this.renderAdminReview(); });
     el.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
       const field = th.dataset.sort;
@@ -2631,6 +2696,149 @@ const App = {
     this.bindAdminActionButtons(el);
     this.updateReviewQueueBadge();
   },
+
+  // ══════════════════════════════════════════════════════════════════════
+  // AI-ASSISTED ENGAGEMENT REVIEW  —  CITY ADMIN ONLY
+  //
+  // Calls the `review-engagement` Edge Function, which pulls case notes,
+  // service contacts, exits and housing follow-ups for the chosen window,
+  // DE-IDENTIFIES them (residents and staff become "Resident 3" / "Staff 2",
+  // names/emails/phones are stripped) and only then sends them to OpenAI.
+  // No client name ever leaves Supabase, which preserves the same city/agency
+  // privacy boundary as clientName() elsewhere in this file.
+  //
+  // The function re-checks city_admin server-side via current_user_role(), so
+  // the gating below is convenience, not the security boundary.
+  // ══════════════════════════════════════════════════════════════════════
+  engagementReviewDefaults() {
+    const iso = d => d.toISOString().slice(0,10);
+    const to = new Date();
+    const from = new Date(to.getTime() - 89*86400000);
+    return { from: this._erFrom || iso(from), to: this._erTo || iso(to) };
+  },
+
+  renderEngagementReviewCard() {
+    if (!this.isAdmin()) return '';
+    const d = this.engagementReviewDefaults();
+    const src = this._erSources || { caseNotes:true, services:true, exits:true, followups:true };
+    const cb = (k,label) => `<label class="checkbox-label"><input type="checkbox" data-er-source="${k}" ${src[k]?'checked':''}> ${label}</label>`;
+    return `<div class="card" id="engagement-review-card">
+      <div class="card-header"><div class="card-title">Engagement Review<span class="er-badge">AI-assisted</span></div></div>
+      <div class="card-body">
+        <div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div>
+          <div><strong>City Admin only — not visible to agency users.</strong><br>Records are de-identified before review: residents and staff are replaced with pseudonyms and names, emails and phone numbers are stripped, so no client identity leaves your database. Treat the output as a drafting aid and verify anything you rely on against the underlying records.</div></div>
+        <div class="er-controls">
+          <div class="field-group"><label class="field-label" for="er-from">From</label><input type="date" id="er-from" class="field-input" value="${d.from}"></div>
+          <div class="field-group"><label class="field-label" for="er-to">To</label><input type="date" id="er-to" class="field-input" value="${d.to}"></div>
+          <div class="field-group"><label class="field-label">Include</label><div class="er-sources">${cb('caseNotes','Case notes')}${cb('services','Service contacts')}${cb('exits','Exits')}${cb('followups','Follow-ups')}</div></div>
+          <button class="btn btn-gold" id="btn-run-er" type="button">Generate Review</button>
+          ${this._erResultHtml ? '<button class="btn btn-ghost" id="btn-copy-er" type="button">Copy</button>' : ''}
+        </div>
+        <div id="er-result">${this._erResultHtml || '<p class="field-hint">Pick a date range and generate a review of the engagement activity recorded in that window.</p>'}</div>
+      </div></div>`;
+  },
+
+  bindEngagementReview(el) {
+    const btn = el.querySelector('#btn-run-er');
+    if (!btn) return;
+    btn.addEventListener('click', () => this.runEngagementReview());
+    const copy = el.querySelector('#btn-copy-er');
+    if (copy) copy.addEventListener('click', () => {
+      const text = el.querySelector('#er-result')?.innerText || '';
+      navigator.clipboard?.writeText(text).then(
+        () => this.toast('Review copied to clipboard.'),
+        () => this.toast('Could not copy.', { error:true })
+      );
+    });
+  },
+
+  async runEngagementReview() {
+    if (!this.isAdmin()) { this.toast('City admin only.', { error:true }); return; }
+    const fromEl = document.getElementById('er-from');
+    const toEl = document.getElementById('er-to');
+    const out = document.getElementById('er-result');
+    const btn = document.getElementById('btn-run-er');
+    if (!fromEl || !toEl || !out || !btn) return;
+
+    const from = fromEl.value, to = toEl.value;
+    if (!from || !to) { this.toast('Choose a start and end date.', { error:true }); return; }
+    if (from > to) { this.toast('The start date must be on or before the end date.', { error:true }); return; }
+
+    const sources = {};
+    document.querySelectorAll('[data-er-source]').forEach(x => { sources[x.dataset.erSource] = x.checked; });
+    if (!Object.values(sources).some(Boolean)) { this.toast('Select at least one record type to include.', { error:true }); return; }
+
+    this._erFrom = from; this._erTo = to; this._erSources = sources;
+
+    const label = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Reviewing…';
+    out.innerHTML = '<p class="field-hint">Reviewing records — this usually takes 10–20 seconds.</p>';
+    try {
+      const { data, error } = await this.sb.functions.invoke('review-engagement', {
+        body: { dateFrom: from, dateTo: to, sources }
+      });
+      if (error) {
+        let msg = error.message || 'Unknown error';
+        // supabase-js surfaces a non-2xx as FunctionsHttpError; the JSON body
+        // with our real message is on error.context.
+        if (error.context && typeof error.context.json === 'function') {
+          try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (_) {}
+        }
+        throw new Error(msg);
+      }
+      if (!data) throw new Error('No response from the review service.');
+      if (data.error) {
+        this._erResultHtml = '';
+        out.innerHTML = `<div class="notice amber"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>${this.escape(data.error)}</div></div>`;
+        return;
+      }
+      this._erResultHtml = this.engagementReviewHtml(data);
+      out.innerHTML = this._erResultHtml;
+      this.renderAdminReview();
+      document.getElementById('engagement-review-card')?.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    } catch (e) {
+      this._erResultHtml = '';
+      out.innerHTML = `<div class="notice red"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>Review failed: ${this.escape(e?.message || String(e))}</div></div>`;
+    } finally {
+      btn.disabled = false; btn.textContent = label;
+    }
+  },
+
+  // All model output is escaped — it is untrusted text derived from free-form
+  // case notes and must never be injected as markup.
+  engagementReviewHtml(data) {
+    const r = data.review || {};
+    const c = data.counts || {};
+    const esc = v => this.escape(String(v == null ? '' : v));
+    const list = (items) => (items && items.length)
+      ? `<ul>${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`
+      : '<p class="field-hint">Nothing in the records for this window supported an entry here.</p>';
+    const block = (title, inner, cls='') => `<div class="er-block ${cls}"><h4>${title}</h4>${inner}</div>`;
+    const para = (t) => t ? `<p>${esc(t)}</p>` : '<p class="field-hint">Not enough in the records to summarise.</p>';
+
+    return `
+      <div class="er-meta">
+        <span class="er-chip">${esc(this.formatDate(data.period?.dateFrom))} – ${esc(this.formatDate(data.period?.dateTo))}</span>
+        <span class="er-chip">${c.caseNotes || 0} case notes</span>
+        <span class="er-chip">${c.services || 0} service contacts</span>
+        <span class="er-chip">${c.exits || 0} exits</span>
+        <span class="er-chip">${c.followups || 0} follow-ups</span>
+        <span class="er-chip">${c.clients || 0} residents</span>
+      </div>
+      ${data.truncated ? '<div class="notice amber"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>That range held more records than fit in a single review. The summary below covers the earliest records in the window — narrow the dates for full coverage.</div></div>' : ''}
+      ${block('Summary', para(r.summary))}
+      ${block('Engagement activity', para(r.engagement))}
+      <div class="er-cols">
+        ${block('Successes', list(r.successes), 'er-success')}
+        ${block('Challenges', list(r.challenges), 'er-challenge')}
+      </div>
+      <div class="er-cols">
+        ${block('Recurring themes', list(r.themes))}
+        ${block('Data gaps', list(r.dataGaps))}
+      </div>
+      <p class="field-hint">Generated ${esc(this.formatDateTime(data.generatedAt))} · model ${esc(data.model)} · de-identified before review. AI-generated — verify against the underlying records before relying on it.</p>`;
+  },
+
 
   updateReviewQueueBadge() {
     const navItem = document.getElementById('nav-review');
@@ -2943,7 +3151,7 @@ const App = {
       yTotal += Number(ytd || 0);
       return `<tr><th scope="row" style="text-align:left;font-weight:600;">${this.escape(k)}</th><td style="text-align:right;">${readonly ? `<strong>${current}</strong>` : `<input type="number" min="0" class="demo-input" data-demo="${prefix}" data-key="${this.escape(k)}" value="${current}" aria-label="${this.escape(k)} this quarter">`}</td><td data-ytd-simple="${prefix}" data-key="${this.escape(k)}" style="text-align:right;font-weight:800;color:var(--navy);">${ytd}</td></tr>`;
     }).join('');
-    return `<div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;"><table class="svc-table"><thead><tr><th scope="col">Category</th><th scope="col" style="width:80px;text-align:right;">Qtr</th><th scope="col" style="width:80px;text-align:right;">YTD</th></tr></thead><tbody>
+    return `<div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;"><table class="svc-table svc-ytd-last"><thead><tr><th scope="col">Category</th><th scope="col" style="width:80px;text-align:right;">Qtr</th><th scope="col" style="width:80px;text-align:right;">YTD</th></tr></thead><tbody>
       ${rows}
       <tr class="total-row"><td>Grand Total</td><td class="total-cell" data-simple-q-total="${prefix}" style="text-align:right;">${qTotal}</td><td class="total-cell" data-simple-ytd-total="${prefix}" style="text-align:right;">${yTotal}</td></tr>
       </tbody></table></div>`;
@@ -2959,7 +3167,7 @@ const App = {
     const cumulative = new Set(CONFIG.CUMULATIVE_SCOPE_KEYS);
     let last = '';
     document.getElementById('qr-scope-body').innerHTML = `<div class="notice ${generatedMode ? 'green' : 'navy'}"><div aria-hidden="true">${generatedMode ? '<svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>' : '<svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg>'}</div><div><strong>Scope of Services</strong><br>${generatedMode ? 'Most metrics are calculated from client records and will be saved into the submitted quarterly report. Providers should update client records, services, exits, and HMIS backup documentation rather than manually typing totals here. Income Increased / Income Maintained are the exception — agency staff report those two as an aggregate count for the quarter.' : 'YTD fields are calculated only for cumulative metrics. Snapshot and service fields remain quarter-specific.'}</div></div>
-      <table class="svc-table"><thead><tr><th scope="col">Metric</th><th scope="col">This Quarter</th><th scope="col">YTD / Display</th><th scope="col">Source / Notes</th></tr></thead><tbody>
+      <table class="svc-table svc-ytd-3"><thead><tr><th scope="col">Metric</th><th scope="col">This Quarter</th><th scope="col">YTD / Display</th><th scope="col">Source / Notes</th></tr></thead><tbody>
       ${CONFIG.SCOPE_ROWS.map(row => {
         const cat = row.category, key = row.key, label = row.label, mode = row.mode, hint = row.hint || '';
         const header = cat !== last ? (last=cat, `<tr class="cat-header"><td colspan="4">${this.escape(cat)}</td></tr>`) : '';
