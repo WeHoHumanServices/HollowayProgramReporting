@@ -6035,6 +6035,551 @@ const App = {
 })();
 
 
+
+
+// ---------- Client deletion + duplicate prevention ----------
+/* ============================================================
+   EXTENSION 9 — Lets agency staff permanently delete a client
+   record, and flags likely duplicate entries before and after
+   they are created.
+
+   Deletion runs through the holloway_delete_client() RPC, which
+   re-checks the caller server-side (active agency user, never a
+   city admin), snapshots the record into holloway_client_deletions,
+   and removes dependent rows that have no ON DELETE CASCADE
+   foreign key (incidents, incident attachments, case notes,
+   housing follow-ups). Attachment FILES are removed from storage
+   here first, because the database cannot see the bucket.
+
+   Duplicate detection flags four things:
+     1. HMIS IDs that differ by a single character or transposition
+        (e.g. 67E54D9E0 vs 6E54D9E0)
+     2. The same client name on two records
+     3. The same age + gender + entry date fingerprint
+     4. Impossible dates (e.g. 0025-10-09 for 2025-10-09)
+   ============================================================ */
+(function(){
+  const css = `
+    .dup-alert{border:1px solid #F0C96B;background:var(--amber-light);border-radius:var(--radius-lg);padding:14px 16px;margin:0 0 16px}
+    .dup-alert-title{font-size:12px;font-weight:900;color:#7A5200;text-transform:uppercase;letter-spacing:.05em}
+    .dup-alert-sub{font-size:12.5px;color:#7A5200;margin:3px 0 8px}
+    .dup-group{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-top:8px}
+    .dup-group-why{font-size:11px;font-weight:900;color:var(--gray-600);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+    .dup-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--gray-100);font-size:12.5px;flex-wrap:wrap}
+    .dup-row:last-child{border-bottom:none}
+    .dup-meta{color:var(--gray-400);font-size:11.5px;margin-top:2px}
+    .btn-link-danger{color:var(--red)!important}
+    .dup-form-note{border:1px solid #F0C96B;background:var(--amber-light);color:#7A5200;border-radius:var(--radius);padding:10px 12px;margin-top:12px;font-size:12.5px}
+    .dup-form-note.block{border-color:#E0B4AC;background:var(--red-light);color:#8C2F22}
+    .dup-form-note ul{margin:6px 0 0 16px;padding:0}
+    .dup-form-note li{margin:2px 0}
+    .del-impact{display:grid;gap:0;margin:10px 0 14px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+    .del-impact div{display:flex;justify-content:space-between;font-size:12.5px;padding:8px 11px;border-bottom:1px solid var(--gray-100);background:var(--white)}
+    .del-impact div:last-child{border-bottom:none}
+    .del-impact .del-zero{color:var(--gray-400)}
+    #dc-confirm-input{letter-spacing:.08em;font-weight:800;text-transform:uppercase}
+  `;
+  const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+  /* ---------------- duplicate detection helpers ---------------- */
+
+  App.normalizeKey = function(v){ return String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9]/g, ''); };
+
+  // Order-insensitive name key so "Castelliano, Cynthia" and
+  // "Cynthia Castelliano" are recognised as the same person.
+  App.nameKey = function(v){
+    return String(v == null ? '' : v)
+      .toLowerCase()
+      .replace(/[^a-z\s]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+      .sort()
+      .join(' ');
+  };
+
+  App.editDistance = function(a, b){
+    a = String(a || ''); b = String(b || '');
+    const m = a.length, n = b.length;
+    if (!m) return n;
+    if (!n) return m;
+    let prev = new Array(n + 1), cur = new Array(n + 1);
+    for (let j = 0; j <= n; j++) prev[j] = j;
+    for (let i = 1; i <= m; i++){
+      cur[0] = i;
+      for (let j = 1; j <= n; j++){
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      }
+      const swap = prev; prev = cur; cur = swap;
+    }
+    return prev[n];
+  };
+
+  // True when two HMIS IDs are close enough that one is probably a typo of the
+  // other: a single inserted/dropped/changed character, or two swapped ones.
+  App.idsLookAlike = function(a, b){
+    const x = this.normalizeKey(a), y = this.normalizeKey(b);
+    if (!x || !y || x === y) return false;
+    if (x.length < 4 || y.length < 4) return false;
+    if (Math.abs(x.length - y.length) > 1) return false;
+    if (this.editDistance(x, y) <= 1) return true;
+    if (x.length === y.length){
+      const diffs = [];
+      for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) diffs.push(i);
+      if (diffs.length === 2 && diffs[1] === diffs[0] + 1
+          && x[diffs[0]] === y[diffs[1]] && x[diffs[1]] === y[diffs[0]]) return true;
+    }
+    return false;
+  };
+
+  // A date is unusable if it is not a real ISO date or the year is impossible.
+  // Catches the 0025-10-09 typo pattern for 2025-10-09.
+  App.dateLooksWrong = function(d){
+    const s = String(d || '');
+    if (!s) return false;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (!m) return true;
+    const y = Number(m[1]);
+    if (y < 1900) return true;
+    if (y > new Date().getFullYear() + 1) return true;
+    const dt = new Date(s + 'T00:00:00');
+    if (isNaN(dt.getTime())) return true;
+    return false;
+  };
+
+  // Best-guess repair of a mistyped year, used ONLY for duplicate comparison
+  // so a 0025 typo still lines up with the 2025 record it duplicates.
+  App.repairedDateKey = function(d){
+    const s = this.dateOnly(d) || '';
+    const m = /^(\d{1,4})-(\d{2})-(\d{2})$/.exec(s);
+    if (!m) return '';
+    let y = Number(m[1]);
+    if (y < 100) y += 2000;
+    else if (y < 1900) y = 2000 + (y % 100);
+    return String(y).padStart(4, '0') + '-' + m[2] + '-' + m[3];
+  };
+
+  App.daysApart = function(a, b){
+    if (!a || !b) return null;
+    const da = new Date(a + 'T00:00:00'), db = new Date(b + 'T00:00:00');
+    if (isNaN(da.getTime()) || isNaN(db.getTime())) return null;
+    return Math.abs(Math.round((da - db) / 86400000));
+  };
+
+  // Why (if at all) two client records look like the same person.
+  App.duplicateReasons = function(a, b){
+    const reasons = [];
+    if (!a || !b) return reasons;
+    const idA = this.clientDisplayId(a), idB = this.clientDisplayId(b);
+    if (this.idsLookAlike(idA, idB)) reasons.push('HMIS IDs differ by one character');
+
+    const nameA = this.nameKey(a.client_name), nameB = this.nameKey(b.client_name);
+    if (nameA && nameB && nameA === nameB) reasons.push('Same client name');
+
+    const entryA = this.repairedDateKey(a.entry_date), entryB = this.repairedDateKey(b.entry_date);
+    const gap = this.daysApart(entryA, entryB);
+    const sameAge = a.age && b.age && Number(a.age) === Number(b.age);
+    const sameGender = a.gender && b.gender && a.gender === b.gender;
+    // Names that are both present and different are strong evidence of two
+    // different people, so the demographic fingerprint is ignored in that case.
+    const namesConflict = !!(nameA && nameB && nameA !== nameB);
+    if (sameAge && sameGender && gap === 0 && !namesConflict) reasons.push('Same age, gender and entry date');
+
+    return reasons;
+  };
+
+  // All clients (active and exited) grouped into sets that look like the same
+  // person. Union-find so a chain of matches collapses into one group.
+  App.findDuplicateClientGroups = function(){
+    const list = (this.data.clients || []).filter(c => c && c.id);
+    if (list.length < 2) return [];
+    const parent = new Map(list.map(c => [c.id, c.id]));
+    const find = (x) => { while (parent.get(x) !== x){ parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
+    const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb); };
+    const pairs = [];
+    for (let i = 0; i < list.length; i++){
+      for (let j = i + 1; j < list.length; j++){
+        const reasons = this.duplicateReasons(list[i], list[j]);
+        if (reasons.length){ union(list[i].id, list[j].id); pairs.push([list[i].id, reasons]); }
+      }
+    }
+    const groups = new Map();
+    list.forEach(c => {
+      const root = find(c.id);
+      if (!groups.has(root)) groups.set(root, { members: [], reasons: new Set() });
+      groups.get(root).members.push(c);
+    });
+    pairs.forEach(([id, reasons]) => {
+      const g = groups.get(find(id));
+      if (g) reasons.forEach(r => g.reasons.add(r));
+    });
+    return [...groups.values()]
+      .filter(g => g.members.length > 1)
+      .map(g => ({ members: g.members, reasons: [...g.reasons] }));
+  };
+
+  // Duplicate candidates for a record being typed into the intake form.
+  App.potentialDuplicatesFor = function(candidate, excludeId = null){
+    return (this.data.clients || [])
+      .filter(c => c.id !== excludeId)
+      .map(c => ({ client: c, reasons: this.duplicateReasons(candidate, c) }))
+      .filter(x => x.reasons.length);
+  };
+
+  App.clientsWithBadDates = function(){
+    return (this.data.clients || []).filter(c =>
+      this.dateLooksWrong(this.dateOnly(c.entry_date)) ||
+      this.dateLooksWrong(this.dateOnly(c.exit_date)) ||
+      this.dateLooksWrong(this.dateOnly(c.expected_exit_date)));
+  };
+
+  /* ---------------- duplicate banner on the list views ---------------- */
+
+  App.duplicateAlertHtml = function(){
+    const groups = this.findDuplicateClientGroups();
+    const badDates = this.clientsWithBadDates();
+    if (!groups.length && !badDates.length) return '';
+    const canDelete = !this.isAdmin();
+    const memberRow = (c) => `<div class="dup-row">
+        <div>
+          <strong>${this.escape(this.clientDisplayId(c))}</strong> · ${this.escape(this.clientName(c) || '—')}
+          <div class="dup-meta">Entry ${this.formatDate(c.entry_date)} · ${this.escape(this.simpleClientStatus(c))} · Age ${this.escape(String(c.age || '—'))} · Added ${this.formatDate(c.created_at)}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" data-dup-open="${this.escape(c.id)}">Open</button>
+          ${canDelete ? `<button class="btn btn-ghost btn-sm btn-link-danger" data-dup-delete="${this.escape(c.id)}">Delete</button>` : ''}
+        </div>
+      </div>`;
+    const groupHtml = groups.map(g => `<div class="dup-group">
+        <div class="dup-group-why">Possible duplicate · ${this.escape(g.reasons.join(' · '))}</div>
+        ${g.members.map(memberRow).join('')}
+      </div>`).join('');
+    const dateHtml = badDates.length ? `<div class="dup-group">
+        <div class="dup-group-why">Impossible dates — usually a mistyped year</div>
+        ${badDates.map(c => `<div class="dup-row">
+          <div><strong>${this.escape(this.clientDisplayId(c))}</strong> · ${this.escape(this.clientName(c) || '—')}
+            <div class="dup-meta">Entry ${this.escape(this.dateOnly(c.entry_date) || '—')} · Exit ${this.escape(this.dateOnly(c.exit_date) || '—')}</div>
+          </div>
+          <div><button class="btn btn-ghost btn-sm" data-dup-open="${this.escape(c.id)}">Fix</button></div>
+        </div>`).join('')}
+      </div>` : '';
+    const counts = [];
+    if (groups.length) counts.push(`${groups.length} possible duplicate${groups.length === 1 ? '' : ' set'}`);
+    if (badDates.length) counts.push(`${badDates.length} record${badDates.length === 1 ? '' : 's'} with an impossible date`);
+    return `<div class="dup-alert" id="dup-alert">
+      <div class="dup-alert-title">Data check — ${this.escape(counts.join(' · '))}</div>
+      <div class="dup-alert-sub">Open each record to compare. Keep the one with the complete history and delete the other so quarterly counts are not double-reported.</div>
+      ${groupHtml}${dateHtml}
+    </div>`;
+  };
+
+  App.injectDuplicateAlert = function(el){
+    if (!el) return;
+    el.querySelector('#dup-alert')?.remove();
+    const html = this.duplicateAlertHtml();
+    if (!html) return;
+    const header = el.querySelector('.page-header');
+    if (header) header.insertAdjacentHTML('afterend', html);
+    else el.insertAdjacentHTML('afterbegin', html);
+    el.querySelectorAll('[data-dup-open]').forEach(b => b.addEventListener('click', () => this.openClientForm(b.dataset.dupOpen)));
+    el.querySelectorAll('[data-dup-delete]').forEach(b => b.addEventListener('click', () => this.openDeleteClient(b.dataset.dupDelete)));
+  };
+
+  App.injectDeleteButtons = function(el){
+    if (!el || this.isAdmin()) return;
+    el.querySelectorAll('[data-edit-client]').forEach(b => {
+      const holder = b.closest('.client-actions') || b.parentElement;
+      if (!holder || holder.querySelector('[data-delete-client]')) return;
+      const id = b.dataset.editClient;
+      const del = document.createElement('button');
+      del.className = 'btn btn-ghost btn-sm btn-link-danger';
+      del.dataset.deleteClient = id;
+      del.textContent = 'Delete';
+      del.title = 'Permanently delete this client record';
+      del.addEventListener('click', () => this.openDeleteClient(id));
+      holder.appendChild(del);
+    });
+  };
+
+  const baseRenderClients = App.renderClients;
+  App.renderClients = function(){
+    baseRenderClients.call(this);
+    const el = document.getElementById('view-clients');
+    this.injectDuplicateAlert(el);
+    this.injectDeleteButtons(el);
+  };
+
+  const baseRenderClientExits = App.renderClientExits;
+  App.renderClientExits = function(){
+    baseRenderClientExits.call(this);
+    const el = document.getElementById('view-client-exits');
+    this.injectDuplicateAlert(el);
+    this.injectDeleteButtons(el);
+  };
+
+  /* ---------------- delete flow ---------------- */
+
+  App.ensureDeleteClientModal = function(){
+    if (document.getElementById('modal-deleteclient')) return;
+    const holder = document.createElement('div');
+    holder.innerHTML = `<div id="modal-deleteclient" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="deleteclient-title">
+      <div class="form-modal">
+        <div class="form-modal-header">
+          <div>
+            <div class="form-modal-title" id="deleteclient-title">Delete Client Record</div>
+            <div class="form-modal-meta">Permanent — this cannot be undone</div>
+          </div>
+          <button class="form-close-btn" id="dc-close" aria-label="Close">✕</button>
+        </div>
+        <div class="form-gold-bar"></div>
+        <div class="form-body" id="deleteclient-body"></div>
+        <div class="form-footer">
+          <div class="save-state" id="deleteclient-state"></div>
+          <div style="display:flex;gap:10px;">
+            <button class="btn btn-ghost" id="dc-cancel">Cancel</button>
+            <button class="btn btn-danger" id="dc-confirm" disabled>Delete Permanently</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(holder.firstElementChild);
+    document.getElementById('dc-close').addEventListener('click', () => this.closeDeleteClient());
+    document.getElementById('dc-cancel').addEventListener('click', () => this.closeDeleteClient());
+  };
+
+  App.closeDeleteClient = function(){
+    document.getElementById('modal-deleteclient')?.classList.remove('open');
+  };
+
+  App.clientLinkedCounts = async function(id){
+    const count = async (table) => {
+      try {
+        const { count: n } = await this.sb.from(table).select('*', { count: 'exact', head: true }).eq('client_id', id);
+        return n || 0;
+      } catch (e) { return 0; }
+    };
+    const [services, updates, incidents, notes, followups] = await Promise.all([
+      count('holloway_client_services'),
+      count('holloway_client_quarterly_updates'),
+      count('holloway_client_incidents'),
+      count('holloway_case_notes'),
+      count('holloway_housing_followups')
+    ]);
+    return { services, updates, incidents, notes, followups };
+  };
+
+  App.openDeleteClient = async function(id){
+    if (this.isAdmin()){ this.toast('City admin accounts are read-only and cannot delete client records.', { error: true }); return; }
+    const c = (this.data.clients || []).find(x => x.id === id);
+    if (!c){ this.toast('Client record not found — refresh and try again.', { error: true }); return; }
+    this.ensureDeleteClientModal();
+    const label = this.clientDisplayId(c);
+    const state = document.getElementById('deleteclient-state');
+    const confirmBtn = document.getElementById('dc-confirm');
+    state.textContent = '';
+    confirmBtn.disabled = true;
+    document.getElementById('deleteclient-body').innerHTML = `<div class="field-hint">Checking linked records…</div>`;
+    document.getElementById('modal-deleteclient').classList.add('open');
+
+    const counts = await this.clientLinkedCounts(id);
+    const row = (n, label) => `<div><span>${this.escape(label)}</span><span class="${n ? '' : 'del-zero'}"><strong>${n}</strong></span></div>`;
+    const total = counts.services + counts.updates + counts.incidents + counts.notes + counts.followups;
+    document.getElementById('deleteclient-body').innerHTML = `
+      <div class="notice red">
+        <div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
+        <div>You are about to permanently delete <strong>${this.escape(label)}</strong>${this.isAdmin() ? '' : ` (${this.escape(this.clientName(c) || 'no name on file')})`}, entered ${this.formatDate(c.entry_date)}. Quarterly figures generated from this record will change.</div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Linked records that will be deleted with it</div>
+        <div class="del-impact">
+          ${row(counts.services, 'Service contacts')}
+          ${row(counts.updates, 'Quarterly income / benefits updates')}
+          ${row(counts.incidents, 'Incidents (and their attachments)')}
+          ${row(counts.notes, 'Case notes')}
+          ${row(counts.followups, 'Housing follow-ups')}
+        </div>
+        <div class="field-hint">${total ? 'A snapshot of everything above is written to the deletion log before removal.' : 'This record has no linked activity — safe to remove.'}</div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Confirm</div>
+        <div class="field-group">
+          <label class="field-label">Reason <span class="field-hint">optional, stored in the deletion log</span></label>
+          <input id="dc-reason" class="field-input" placeholder="e.g. duplicate of 67E54D9E0" maxlength="200">
+        </div>
+        <div class="field-group">
+          <label class="field-label required">Type <strong>${this.escape(label)}</strong> to confirm</label>
+          <input id="dc-confirm-input" class="field-input" autocomplete="off" spellcheck="false" placeholder="${this.escape(label)}">
+        </div>
+      </div>`;
+
+    const input = document.getElementById('dc-confirm-input');
+    const matches = () => this.normalizeKey(input.value) === this.normalizeKey(label);
+    input.addEventListener('input', () => { confirmBtn.disabled = !matches(); });
+    input.focus();
+    confirmBtn.onclick = () => {
+      if (!matches()) return;
+      this.deleteClientNow(id, document.getElementById('dc-reason')?.value || null);
+    };
+  };
+
+  // Storage files are invisible to the database, so clear them first.
+  App.purgeIncidentAttachments = async function(clientId){
+    try {
+      const { data: incidents } = await this.sb.from('holloway_client_incidents').select('id').eq('client_id', clientId);
+      const ids = (incidents || []).map(i => i.id).filter(Boolean);
+      if (!ids.length) return;
+      const { data: atts } = await this.sb.from('holloway_incident_attachments').select('file_path').in('incident_id', ids);
+      const paths = (atts || []).map(a => a.file_path).filter(Boolean);
+      if (paths.length) await this.sb.storage.from('incident-attachments').remove(paths);
+    } catch (e) { console.warn('attachment cleanup skipped', e); }
+  };
+
+  // Fallback for environments where the RPC has not been deployed yet.
+  App.deleteClientFallback = async function(id){
+    const { data: incidents } = await this.sb.from('holloway_client_incidents').select('id').eq('client_id', id);
+    const incidentIds = (incidents || []).map(i => i.id).filter(Boolean);
+    if (incidentIds.length) await this.sb.from('holloway_incident_attachments').delete().in('incident_id', incidentIds);
+    await this.sb.from('holloway_client_incidents').delete().eq('client_id', id);
+    await this.sb.from('holloway_case_notes').delete().eq('client_id', id);
+    await this.sb.from('holloway_housing_followups').delete().eq('client_id', id);
+    await this.sb.from('holloway_client_services').delete().eq('client_id', id);
+    await this.sb.from('holloway_client_quarterly_updates').delete().eq('client_id', id);
+    await this.sb.from('holloway_client_identity').delete().eq('client_id', id);
+    const { error } = await this.sb.from('holloway_clients').delete().eq('id', id);
+    if (error) throw error;
+  };
+
+  App.deleteClientNow = async function(id, reason){
+    const state = document.getElementById('deleteclient-state');
+    const confirmBtn = document.getElementById('dc-confirm');
+    confirmBtn.disabled = true;
+    state.textContent = 'Deleting…';
+    try {
+      await this.purgeIncidentAttachments(id);
+      const { error } = await this.sb.rpc('holloway_delete_client', { p_client_id: id, p_reason: reason || null });
+      if (error){
+        const missing = error.code === 'PGRST202' || /could not find the function|does not exist/i.test(error.message || '');
+        if (!missing) throw error;
+        await this.deleteClientFallback(id);
+      }
+      this.closeDeleteClient();
+      if (document.getElementById('modal-client')?.classList.contains('open')) this.closeForm('client');
+      this.toast(`Client ${id} deleted.`);
+      await this.loadAll();
+      this.showView(this.view || 'clients');
+    } catch (e){
+      state.textContent = 'Delete failed: ' + (e?.message || String(e));
+      confirmBtn.disabled = false;
+    }
+  };
+
+  /* ---------------- duplicate + date guards inside the client form ---------------- */
+
+  App.clientFormCandidate = function(){
+    return {
+      id: (document.getElementById('cf-hmis-id')?.value || '').trim(),
+      hmis_unique_identifier: (document.getElementById('cf-hmis-id')?.value || '').trim(),
+      entry_date: document.getElementById('cf-entry-date')?.value || null,
+      age: Number(document.getElementById('cf-age')?.value || 0) || null,
+      gender: document.getElementById('cf-gender')?.value || null,
+      client_name: (document.getElementById('cf-client-name')?.value || '').trim() || null
+    };
+  };
+
+  App.renderClientFormNote = function(html, kind){
+    const body = document.getElementById('client-body');
+    if (!body) return;
+    document.getElementById('cf-dup-note')?.remove();
+    if (!html) return;
+    const note = document.createElement('div');
+    note.id = 'cf-dup-note';
+    note.className = 'dup-form-note' + (kind === 'block' ? ' block' : '');
+    note.innerHTML = html;
+    const anchor = document.getElementById('cf-quality') || body.lastElementChild;
+    anchor.insertAdjacentElement('beforebegin', note);
+    note.querySelectorAll('[data-dup-open]').forEach(b => b.addEventListener('click', () => this.openClientForm(b.dataset.dupOpen)));
+    note.querySelector('#cf-dup-save-anyway')?.addEventListener('click', () => {
+      this._dupAckFor = this.normalizeKey(this.clientFormCandidate().id);
+      this.saveClient();
+    });
+  };
+
+  App.checkClientFormDuplicates = function(opts = {}){
+    const candidate = this.clientFormCandidate();
+    if (!candidate.id && !candidate.entry_date){ this.renderClientFormNote(''); return { blocked: false, matches: [] }; }
+
+    const badDates = [];
+    const entry = document.getElementById('cf-entry-date')?.value || '';
+    const exit = document.getElementById('cf-exit-date')?.value || '';
+    const expected = document.getElementById('cf-expected-exit')?.value || '';
+    if (this.dateLooksWrong(entry)) badDates.push(`Entry date <strong>${this.escape(entry)}</strong>`);
+    if (this.dateLooksWrong(exit)) badDates.push(`Exit date <strong>${this.escape(exit)}</strong>`);
+    if (this.dateLooksWrong(expected)) badDates.push(`Expected exit date <strong>${this.escape(expected)}</strong>`);
+    if (badDates.length){
+      this.renderClientFormNote(`<strong>Check these dates before saving.</strong><ul>${badDates.map(d => `<li>${d} — the year is not possible.</li>`).join('')}</ul>`, 'block');
+      return { blocked: true, matches: [], reason: 'dates' };
+    }
+
+    const exact = (this.data.clients || []).find(c => c.id !== this.currentClientId && this.normalizeKey(c.id) === this.normalizeKey(candidate.id));
+    if (exact){
+      this.renderClientFormNote(`<strong>HMIS ID ${this.escape(this.clientDisplayId(exact))} is already on file</strong> (entered ${this.formatDate(exact.entry_date)}). Saving would overwrite that record. <button type="button" class="btn btn-ghost btn-sm" data-dup-open="${this.escape(exact.id)}">Open existing record</button>`, 'block');
+      return { blocked: true, matches: [], reason: 'exact' };
+    }
+
+    const matches = this.potentialDuplicatesFor(candidate, this.currentClientId);
+    if (!matches.length){ this.renderClientFormNote(''); return { blocked: false, matches: [] }; }
+
+    // Only a brand-new record is held back; editing an existing one just shows
+    // the note so staff are not blocked from correcting the record they kept.
+    const acknowledged = this._dupAckFor && this._dupAckFor === this.normalizeKey(candidate.id);
+    const blocking = !!(opts.onSave && !acknowledged && !this.currentClientId);
+    const list = matches.map(m => `<li><strong>${this.escape(this.clientDisplayId(m.client))}</strong> · ${this.escape(this.clientName(m.client) || '—')} · entered ${this.formatDate(m.client.entry_date)} — ${this.escape(m.reasons.join(', '))} <button type="button" class="btn btn-ghost btn-sm" data-dup-open="${this.escape(m.client.id)}">Open</button></li>`).join('');
+    const saveAnyway = blocking
+      ? `<div style="margin-top:8px;"><button type="button" class="btn btn-ghost btn-sm" id="cf-dup-save-anyway">This is a different person — save anyway</button></div>`
+      : '';
+    const heading = this.currentClientId ? 'Another record looks like the same person.' : 'This may already be on file.';
+    this.renderClientFormNote(`<strong>${heading}</strong><ul>${list}</ul>${saveAnyway}`, blocking ? 'block' : '');
+    return { blocked: blocking, matches };
+  };
+
+  const baseOpenClientForm = App.openClientForm;
+  App.openClientForm = function(id = null){
+    baseOpenClientForm.call(this, id);
+    this._dupAckFor = null;
+    this.closeDeleteClient();
+
+    document.getElementById('btn-delete-client')?.remove();
+    const actions = document.querySelector('#modal-client .form-footer > div:last-child');
+    if (id && actions && !this.isAdmin()){
+      const del = document.createElement('button');
+      del.id = 'btn-delete-client';
+      del.className = 'btn btn-danger';
+      del.textContent = 'Delete Client';
+      del.addEventListener('click', () => this.openDeleteClient(id));
+      actions.insertBefore(del, actions.firstChild);
+    }
+
+    const check = () => this.checkClientFormDuplicates();
+    ['cf-hmis-id', 'cf-entry-date', 'cf-age', 'cf-client-name'].forEach(f => document.getElementById(f)?.addEventListener('input', check));
+    ['cf-gender', 'cf-exit-date', 'cf-expected-exit'].forEach(f => document.getElementById(f)?.addEventListener('change', check));
+    check();
+  };
+
+  const baseSaveClient = App.saveClient;
+  App.saveClient = async function(){
+    const result = this.checkClientFormDuplicates({ onSave: true });
+    if (result.blocked){
+      const state = document.getElementById('client-save-state');
+      if (state) state.textContent = result.reason === 'dates'
+        ? 'Correct the highlighted date before saving.'
+        : (result.reason === 'exact' ? 'That HMIS ID already exists — open the existing record instead.' : 'Possible duplicate — review the records listed above.');
+      document.getElementById('cf-dup-note')?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    return baseSaveClient.call(this);
+  };
+})();
+
+
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 </body>
