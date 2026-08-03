@@ -6665,6 +6665,78 @@ const App = {
 })();
 
 
+
+
+// ---------- Demographic reconciliation banner ----------
+/* ============================================================
+   EXTENSION 11 — The "Demographic totals" banner sat on its
+   placeholder text ("Awaiting input") because updateDemoReconBanner()
+   only ran from recalculateLiveForm(), which is bound to input
+   events. In client-generated mode the demographic cells are
+   read-only text, so no input event ever fires and the banner
+   never updated.
+
+   A second, related defect: recalculateLiveForm() recomputes the
+   demographic grand totals by reading .value off [data-demo]
+   elements. In read-only mode those are <div>/<strong> cells, not
+   inputs, so typing anywhere else on the form (the narrative box,
+   for instance) zeroed out correctly-generated totals and made the
+   banner report a false mismatch. The rendered totals are now
+   preserved across that call.
+   ============================================================ */
+(function(){
+  const DEMO_CELL_SELECTORS = [
+    '[data-age-total]', '[data-age-grand]', '[data-age-grand-total]',
+    '[data-ytd-age]', '[data-ytd-age-total]', '[data-ytd-age-grand]', '[data-ytd-age-grand-total]',
+    '[data-ytd-simple]', '[data-simple-q-total]', '[data-simple-ytd-total]'
+  ].join(',');
+
+  // Editable mode renders <input data-demo=...>; generated mode renders text cells.
+  App.demoInputsAreEditable = function(){
+    return !!document.querySelector('#modal-quarterly input[data-demo]');
+  };
+
+  App.snapshotDemoCells = function(){
+    return [...document.querySelectorAll('#modal-quarterly ' + DEMO_CELL_SELECTORS)]
+      .map(el => [el, el.textContent]);
+  };
+
+  App.restoreDemoCells = function(snapshot){
+    (snapshot || []).forEach(([el, text]) => { el.textContent = text; });
+  };
+
+  const baseRecalculateLiveForm = App.recalculateLiveForm;
+  App.recalculateLiveForm = function(){
+    const snapshot = this.demoInputsAreEditable() ? null : this.snapshotDemoCells();
+    baseRecalculateLiveForm.call(this);
+    if (snapshot) this.restoreDemoCells(snapshot);
+    this.updateDemoReconBanner();
+  };
+
+  // Run the reconciliation once the form is on screen, so the banner reports a
+  // real result immediately instead of waiting for a keystroke that, in
+  // generated mode, never comes.
+  const baseRenderQuarterlyForm = App.renderQuarterlyForm;
+  App.renderQuarterlyForm = function(){
+    baseRenderQuarterlyForm.call(this);
+    this.updateDemoReconBanner();
+  };
+
+  // Make the read-only case say so explicitly rather than implying staff typed
+  // the numbers in.
+  const baseUpdateDemoReconBanner = App.updateDemoReconBanner;
+  App.updateDemoReconBanner = function(){
+    baseUpdateDemoReconBanner.call(this);
+    const text = document.getElementById('demo-recon-text');
+    if (!text || this.demoInputsAreEditable()) return;
+    if (/All totals reconcile/.test(text.textContent)){
+      const persons = Number(document.getElementById('qr-persons-quarter')?.value || 0);
+      text.textContent = `All totals reconcile (${persons} persons) — generated from client records.`;
+    }
+  };
+})();
+
+
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 </body>
