@@ -4044,11 +4044,18 @@ const App = {
 
   quarterExitTotal(q) {
     const s = this.reportScope(q);
+    // Every exit must land in exactly one bucket or the program-movement
+    // reconciliation (start + intakes - exits = end) comes up short. Exits to
+    // family/friends or a spouse/partner without a lease are "positive
+    // non-permanent" destinations: they have no stored column, but they are
+    // real exits and are counted here from the generated client records.
     return Number(s.phExits || 0)
       + Number(s.exitsTemp || 0)
       + Number(s.exitsInstitutional || 0)
       + Number(s.exitsHomeless || 0)
-      + Number(s.exitsUnknown || 0);
+      + Number(s.exitsUnknown || 0)
+      + Number(s.exitsFamilyFriends || 0)
+      + Number(s.exitsPartner || 0);
   },
 
   priorQuarter(q) {
@@ -4147,9 +4154,10 @@ const App = {
     const serviceRate = serviceDenominator ? Math.round((serviceNumerator / serviceDenominator) * 100) + '%' : '—';
 
     const phQuarter = Number(s.phExits || 0);
-    const nonPhQuarter = Number(s.exitsTemp || 0) + Number(s.exitsInstitutional || 0) + Number(s.exitsHomeless || 0) + Number(s.exitsUnknown || 0);
+    const nonPhKeys = ['exitsTemp','exitsInstitutional','exitsHomeless','exitsUnknown','exitsFamilyFriends','exitsPartner'];
+    const nonPhQuarter = nonPhKeys.reduce((sum,key)=>sum+Number(s[key]||0),0);
     const phYtd = Number(this.calcScopeYtd(q,'phExits') || 0);
-    const nonPhYtd = ['exitsTemp','exitsInstitutional','exitsHomeless','exitsUnknown'].reduce((sum,key)=>sum+Number(this.calcScopeYtd(q,key)||0),0);
+    const nonPhYtd = nonPhKeys.reduce((sum,key)=>sum+Number(this.calcScopeYtd(q,key)||0),0);
     const totalExitsYtd = phYtd + nonPhYtd;
 
     const kpiCards = [
@@ -4216,6 +4224,7 @@ const App = {
       <tr><td>Institutional Setting</td><td>${s.exitsInstitutional || 0}</td><td>${this.calcScopeYtd(q,'exitsInstitutional') || 0}</td></tr>
       <tr><td>Returned to Homelessness</td><td>${s.exitsHomeless || 0}</td><td>${this.calcScopeYtd(q,'exitsHomeless') || 0}</td></tr>
       <tr><td>Unknown / Left Program</td><td>${s.exitsUnknown || 0}</td><td>${this.calcScopeYtd(q,'exitsUnknown') || 0}</td></tr>
+      <tr><td>Family / Friends or Partner (no lease)</td><td>${Number(s.exitsFamilyFriends || 0) + Number(s.exitsPartner || 0)}</td><td>${Number(this.calcScopeYtd(q,'exitsFamilyFriends') || 0) + Number(this.calcScopeYtd(q,'exitsPartner') || 0)}</td></tr>
       <tr class="print-total-row"><td>Total Exits</td><td>${exitsQuarter}</td><td>${totalExitsYtd}</td></tr>`;
 
     const voluntaryCounts = exits.reduce((acc,e) => {
