@@ -6589,6 +6589,82 @@ const App = {
 })();
 
 
+
+
+// ---------- Uploaded roster file visibility ----------
+/* ============================================================
+   EXTENSION 10 — The roster screen stored the uploaded HMIS file
+   but never showed it: the upload zone always read "Click to
+   select roster file", so a quarter could show a green check with
+   no visible evidence of the attachment. This surfaces the file
+   that is already on record, with a signed-URL download, and makes
+   it clear that choosing a new file replaces it.
+   ============================================================ */
+(function(){
+  const css = `
+    .roster-file-current{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
+      border:1px solid var(--border);border-left:4px solid var(--green,#2E7D5B);background:var(--white);
+      border-radius:var(--radius);padding:11px 13px;margin-bottom:10px}
+    .roster-file-current .rf-name{font-weight:800;color:var(--navy);font-size:13px;word-break:break-all}
+    .roster-file-current .rf-meta{font-size:11.5px;color:var(--gray-400);margin-top:2px}
+    .roster-file-missing{border-left-color:var(--red)}
+  `;
+  const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+  App.formatFileSize = function(bytes){
+    const n = Number(bytes || 0);
+    if (!n) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+    return (n / 1048576).toFixed(1) + ' MB';
+  };
+
+  App.downloadRosterFile = async function(path, filename){
+    if (!path){ this.toast('No file path on record for this roster.', { error: true }); return; }
+    const { data, error } = await this.sb.storage.from('hmis-rosters').createSignedUrl(path, 3600);
+    if (error){ this.toast('Download failed: ' + error.message, { error: true }); return; }
+    window.open(data.signedUrl, '_blank');
+  };
+
+  const baseRenderRosterForm = App.renderRosterForm;
+  App.renderRosterForm = function(){
+    baseRenderRosterForm.call(this);
+
+    const q = this.currentQuarter;
+    const r = (this.data.rosters || {})[q] || {};
+    const zone = document.querySelector('#roster-body .upload-zone');
+    if (!zone) return;
+
+    document.getElementById('roster-current-file')?.remove();
+    if (!r.file_path && !r.file_name) return;
+
+    const label = document.getElementById('roster-file-label');
+    if (label){
+      label.innerHTML = `<strong>Replace roster file</strong><br><span class="field-hint">A file is already attached — selecting a new one replaces it.</span>`;
+    }
+
+    const uploaded = r.uploaded_at ? this.formatDateTime(r.uploaded_at) : '';
+    const meta = [uploaded ? 'Uploaded ' + uploaded : '', r.notes ? this.escape(r.notes) : '']
+      .filter(Boolean).join(' · ');
+    const panel = document.createElement('div');
+    panel.id = 'roster-current-file';
+    panel.className = 'roster-file-current' + (r.file_path ? '' : ' roster-file-missing');
+    panel.innerHTML = `
+      <div>
+        <div class="rf-name">📎 ${this.escape(r.file_name || r.file_path.split('/').pop())}</div>
+        <div class="rf-meta">${meta || 'On record for ' + this.escape(q)}</div>
+      </div>
+      ${r.file_path
+        ? `<button type="button" class="btn btn-ghost btn-sm" id="roster-file-download">View / Download</button>`
+        : `<span class="badge badge-red">File missing</span>`}`;
+    zone.parentElement.insertBefore(panel, zone);
+
+    document.getElementById('roster-file-download')?.addEventListener('click',
+      () => this.downloadRosterFile(r.file_path, r.file_name));
+  };
+})();
+
+
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 </body>
