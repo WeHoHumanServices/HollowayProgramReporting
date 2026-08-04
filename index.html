@@ -3954,8 +3954,17 @@ const App = {
         submitted_by:this.profile.id
       };
       const id = row.dataset.exitRow;
-      if (id) await this.sb.from('non_permanent_exits').update(payload).eq('id', id);
-      else await this.sb.from('non_permanent_exits').insert(payload);
+      // Never swallow the result: a rejected row (e.g. a CHECK constraint on
+      // exit_type) used to fail silently while the UI still said "Saved",
+      // which is how the exit detail table ended up empty.
+      const { error: exitRowError } = id
+        ? await this.sb.from('non_permanent_exits').update(payload).eq('id', id)
+        : await this.sb.from('non_permanent_exits').insert(payload);
+      if (exitRowError) {
+        this.setSaveState('exits', 'Save failed: ' + exitRowError.message);
+        this.toast('Exit row ' + (payload.exit_number) + ' could not be saved: ' + exitRowError.message, { error: true });
+        return;
+      }
     }
     await this.loadAll();
     this.dirty.exits = false;
@@ -4227,7 +4236,8 @@ const App = {
       <tr><td>Family / Friends or Partner (no lease)</td><td>${Number(s.exitsFamilyFriends || 0) + Number(s.exitsPartner || 0)}</td><td>${Number(this.calcScopeYtd(q,'exitsFamilyFriends') || 0) + Number(this.calcScopeYtd(q,'exitsPartner') || 0)}</td></tr>
       <tr class="print-total-row"><td>Total Exits</td><td>${exitsQuarter}</td><td>${totalExitsYtd}</td></tr>`;
 
-    const voluntaryCounts = exits.reduce((acc,e) => {
+    const exitDetailRows = this.exitDetailRows(q);
+    const voluntaryCounts = exitDetailRows.reduce((acc,e) => {
       const key = e.voluntary_involuntary || 'Unknown';
       acc[key] = (acc[key] || 0) + 1;
       return acc;
@@ -4285,7 +4295,7 @@ const App = {
       </div>
 
       <div class="print-section"><h2>Non-Permanent Exit Detail</h2>
-        <table class="print-table"><thead><tr><th>#</th><th>Type</th><th>Vol/Invol</th><th>Reason</th><th>Follow-up</th></tr></thead><tbody>${exits.map((e,i)=>`<tr><td>${i+1}</td><td>${this.escape(e.exit_type)}</td><td>${this.escape(e.voluntary_involuntary)}</td><td>${this.escape(e.reason_for_exit)}</td><td>${this.escape(e.staff_followup)}</td></tr>`).join('') || '<tr><td colspan="5">No exits recorded.</td></tr>'}</tbody></table>
+        <table class="print-table"><thead><tr><th>#</th><th>HMIS ID</th><th>Exit Date</th><th>Type</th><th>Reason</th><th>Vol/Invol</th><th>Receiving Program</th><th>Follow-up</th></tr></thead><tbody>${exitDetailRows.map((e,i)=>`<tr><td>${i+1}</td><td>${this.escape(e.label || '—')}</td><td>${e.exit_date ? this.formatDate(e.exit_date) : '—'}</td><td>${this.escape(e.exit_type || '—')}</td><td>${this.escape(e.reason_for_exit || '—')}</td><td>${this.escape(e.voluntary_involuntary || '—')}</td><td>${this.escape(e.interim_program_name || '—')}</td><td>${this.escape(e.staff_followup || '—')}</td></tr>`).join('') || '<tr><td colspan="8">No non-permanent exits this quarter.</td></tr>'}</tbody></table>
       </div>
 
       <div class="print-section"><h2>Narrative Summary</h2>
@@ -6733,6 +6743,73 @@ const App = {
       const persons = Number(document.getElementById('qr-persons-quarter')?.value || 0);
       text.textContent = `All totals reconcile (${persons} persons) — generated from client records.`;
     }
+  };
+})();
+
+
+
+
+// ---------- Non-permanent exit detail for the PDF export ----------
+/* ============================================================
+   EXTENSION 12 — The printed report built its "Non-Permanent Exit
+   Detail" table straight from the non_permanent_exits table, while
+   the on-screen Exits form builds its rows from client records and
+   merely merges the saved row for the editable columns. Any exit
+   that had not been (or could not be) written to that table was
+   therefore missing from the PDF entirely.
+
+   exitDetailRows() reproduces the screen's merge so the export
+   always lists every non-permanent exit in the quarter, with
+   whatever Vol/Invol, receiving program and follow-up detail has
+   been recorded against it.
+   ============================================================ */
+(function(){
+  App.exitDetailRows = function(q = this.currentQuarter){
+    const { start, end } = this.qRange(q);
+    const saved = (this.data.exits || []).filter(e => e.quarter === q);
+    const savedByClient = new Map(saved.filter(e => e.client_id).map(e => [e.client_id, e]));
+
+    // Same rule as renderExitsForm: exited this quarter, not a confirmed
+    // permanent placement, not deceased.
+    const nonPermanent = (this.data.clients || [])
+      .filter(c => c.exit_date
+        && this.dateOnly(c.exit_date) >= start
+        && this.dateOnly(c.exit_date) <= end
+        && !this.isPermanentExit(c)
+        && !this.isDeceasedExit(c))
+      .sort((a,b) => (this.dateOnly(a.exit_date) || '').localeCompare(this.dateOnly(b.exit_date) || ''));
+
+    const linkedIds = new Set(nonPermanent.map(c => c.id));
+
+    const linkedRows = nonPermanent.map(c => {
+      const s = savedByClient.get(c.id) || {};
+      return {
+        label: this.clientDisplayId(c),
+        exit_date: this.dateOnly(c.exit_date),
+        exit_type: this.clientExitTypeText(c) || s.exit_type || '',
+        reason_for_exit: this.clientExitReasonText(c) || s.reason_for_exit || '',
+        voluntary_involuntary: s.voluntary_involuntary || '',
+        interim_program_name: s.interim_program_name || '',
+        staff_followup: s.staff_followup || '',
+        additional_notes: s.additional_notes || c.exit_notes || ''
+      };
+    });
+
+    // Manual/legacy rows with no matching client record are still reported.
+    const manualRows = saved
+      .filter(e => !e.client_id || !linkedIds.has(e.client_id))
+      .map(e => ({
+        label: e.manual_client_label || '—',
+        exit_date: '',
+        exit_type: e.exit_type || '',
+        reason_for_exit: e.reason_for_exit || '',
+        voluntary_involuntary: e.voluntary_involuntary || '',
+        interim_program_name: e.interim_program_name || '',
+        staff_followup: e.staff_followup || '',
+        additional_notes: e.additional_notes || ''
+      }));
+
+    return [...linkedRows, ...manualRows];
   };
 })();
 
