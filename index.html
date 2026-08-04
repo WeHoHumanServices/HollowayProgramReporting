@@ -4190,24 +4190,30 @@ const App = {
     const printDemos = generatedMode ? this.generatedDemographicsFromClients(q) : null;
     let qMaleTotal = 0, qFemaleTotal = 0, qNbTotal = 0, qUnkTotal = 0;
     let yMaleTotal = 0, yFemaleTotal = 0, yNbTotal = 0, yUnkTotal = 0;
-    const ageRowsBase = this.ageBands.map(age => {
+    // Two passes: totals first, so each row can show its share of the YTD total.
+    const ageData = this.ageBands.map(age => {
       const row = printDemos ? printDemos.ageGender[age] : (r.demographics_age_gender?.[age] || {male:0,female:0,nb:0,unk:0});
-      const y = this.calcAgeGenderYtd(q, age, row);
+      return { age, row, y: this.calcAgeGenderYtd(q, age, row) };
+    });
+    ageData.forEach(({row,y}) => {
       qMaleTotal += Number(row.male || 0); qFemaleTotal += Number(row.female || 0); qNbTotal += Number(row.nb || 0); qUnkTotal += Number(row.unk || 0);
       yMaleTotal += Number(y.male || 0); yFemaleTotal += Number(y.female || 0); yNbTotal += Number(y.nb || 0); yUnkTotal += Number(y.unk || 0);
-      return `<tr><td>${age}</td><td>${row.male||0}</td><td>${row.female||0}</td><td>${row.nb||0}</td><td>${row.unk||0}</td><td>${this.sumDemoRow(row)}</td><td class="print-ytd-cell">${y.male||0}</td><td class="print-ytd-cell">${y.female||0}</td><td class="print-ytd-cell">${y.nb||0}</td><td class="print-ytd-cell">${y.unk||0}</td><td class="print-ytd-cell">${this.sumDemoRow(y)}</td></tr>`;
-    }).join('');
-    const ageRows = ageRowsBase + `<tr class="print-total-row"><td>Grand Total</td><td>${qMaleTotal}</td><td>${qFemaleTotal}</td><td>${qNbTotal}</td><td>${qUnkTotal}</td><td>${qMaleTotal+qFemaleTotal+qNbTotal+qUnkTotal}</td><td>${yMaleTotal}</td><td>${yFemaleTotal}</td><td>${yNbTotal}</td><td>${yUnkTotal}</td><td>${yMaleTotal+yFemaleTotal+yNbTotal+yUnkTotal}</td></tr>`;
+    });
+    const ageYGrand = yMaleTotal + yFemaleTotal + yNbTotal + yUnkTotal;
+    const ageRowsBase = ageData.map(({age,row,y}) =>
+      `<tr><td>${age}</td><td>${row.male||0}</td><td>${row.female||0}</td><td>${row.nb||0}</td><td>${row.unk||0}</td><td>${this.sumDemoRow(row)}</td><td class="print-ytd-cell">${y.male||0}</td><td class="print-ytd-cell">${y.female||0}</td><td class="print-ytd-cell">${y.nb||0}</td><td class="print-ytd-cell">${y.unk||0}</td><td class="print-ytd-cell">${this.sumDemoRow(y)}${this.printShare(this.sumDemoRow(y), ageYGrand)}</td></tr>`
+    ).join('');
+    const ageRows = ageRowsBase + `<tr class="print-total-row"><td>Grand Total</td><td>${qMaleTotal}</td><td>${qFemaleTotal}</td><td>${qNbTotal}</td><td>${qUnkTotal}</td><td>${qMaleTotal+qFemaleTotal+qNbTotal+qUnkTotal}</td><td>${yMaleTotal}</td><td>${yFemaleTotal}</td><td>${yNbTotal}</td><td>${yUnkTotal}</td><td>${ageYGrand}</td></tr>`;
 
     const eth = printDemos ? printDemos.ethnicity : this.normalizeEthnicity(r.demographics_ethnicity || {});
     const ethQTotal = Object.values(eth).reduce((a,b)=>a+Number(b||0),0);
     const ethYTotal = this.ethnicityKeys.reduce((sum,k)=>sum+Number(this.calcSimpleDemoYtd(q,'demographics_ethnicity',k,eth[k]||0)||0),0);
-    const ethRows = this.ethnicityKeys.map(k => `<tr><td>${this.escape(k)}</td><td>${eth[k]||0}</td><td class="print-ytd-cell">${this.calcSimpleDemoYtd(q,'demographics_ethnicity',k,eth[k]||0)}</td></tr>`).join('') + `<tr class="print-total-row"><td>Grand Total</td><td>${ethQTotal}</td><td>${ethYTotal}</td></tr>`;
+    const ethRows = this.ethnicityKeys.map(k => { const yv = this.calcSimpleDemoYtd(q,'demographics_ethnicity',k,eth[k]||0); return `<tr><td>${this.escape(k)}</td><td>${eth[k]||0}</td><td class="print-ytd-cell">${yv}${this.printShare(yv, ethYTotal)}</td></tr>`; }).join('') + `<tr class="print-total-row"><td>Grand Total</td><td>${ethQTotal}</td><td>${ethYTotal}</td></tr>`;
 
     const lang = printDemos ? printDemos.language : this.normalizeLanguage(r.demographics_language || {});
     const langQTotal = Object.values(lang).reduce((a,b)=>a+Number(b||0),0);
     const langYTotal = this.languageKeys.reduce((sum,k)=>sum+Number(this.calcSimpleDemoYtd(q,'demographics_language',k,lang[k]||0)||0),0);
-    const langRows = this.languageKeys.map(k => `<tr><td>${this.escape(k)}</td><td>${lang[k]||0}</td><td class="print-ytd-cell">${this.calcSimpleDemoYtd(q,'demographics_language',k,lang[k]||0)}</td></tr>`).join('') + `<tr class="print-total-row"><td>Grand Total</td><td>${langQTotal}</td><td>${langYTotal}</td></tr>`;
+    const langRows = this.languageKeys.map(k => { const yv = this.calcSimpleDemoYtd(q,'demographics_language',k,lang[k]||0); return `<tr><td>${this.escape(k)}</td><td>${lang[k]||0}</td><td class="print-ytd-cell">${yv}${this.printShare(yv, langYTotal)}</td></tr>`; }).join('') + `<tr class="print-total-row"><td>Grand Total</td><td>${langQTotal}</td><td>${langYTotal}</td></tr>`;
 
     const scopeRows = `
       <tr class="print-subhead"><td colspan="3">Current Quarter Activity</td></tr>
@@ -4221,7 +4227,7 @@ const App = {
       <tr><td>Active Residents at Start of Quarter</td><td>${activeStart}</td><td>Quarter movement baseline</td></tr>
       <tr><td>Active Residents at End of Quarter</td><td>${activeEnd}</td><td>${capacity} bed capacity</td></tr>
       <tr><td>Bed Nights Occupied</td><td>${bedNightOcc || 0} of ${bedNightAvail || 0}</td><td>${occupancyRate}</td></tr>
-      <tr class="print-subhead"><td colspan="3">Contract Year Progress</td></tr>
+      <tr class="print-subhead"><td colspan="3">Year-to-Date Totals</td></tr>
       <tr><td>Unduplicated People Served YTD</td><td class="print-ytd-cell">${totalServedYtd}</td><td>Contract year-to-date</td></tr>
       <tr><td>Permanent Housing Exits YTD</td><td>${phYtd}</td><td>Contract year-to-date</td></tr>
       <tr><td>Non-Permanent Exits YTD</td><td>${nonPhYtd}</td><td>Contract year-to-date</td></tr>
@@ -4279,6 +4285,8 @@ const App = {
       <div class="print-section"><h2>Scope of Services</h2>
         <table class="print-table"><thead><tr><th>Metric</th><th>Value</th><th>Period / Note</th></tr></thead><tbody>${scopeRows}</tbody></table>
       </div>
+
+      ${this.contractProgressSectionHtml(q)}
 
       <div class="print-section compact"><h2>Demographics</h2>
         <h3>Age & Gender</h3>
@@ -6887,6 +6895,147 @@ const App = {
   App.saveReviewNotes = async function(q){
     await baseSaveReviewNotes.call(this, q);
     this.toast('Review notes saved.');
+  };
+})();
+
+
+
+
+// ---------- Keep the report row in step with City review ----------
+/* ============================================================
+   EXTENSION 14 — bundleStatus() deliberately refuses to show a
+   quarter as accepted unless quarterly_reports.status is also
+   'accepted' (a guard against stale bundle rows). But
+   updateBundleStatus() only ever wrote to submission_bundles, so
+   a real City acceptance was silently downgraded back to
+   "submitted" everywhere it is displayed — quarter buttons,
+   status badges, the Bundle Status KPI and the readiness label.
+
+   The review decision is now mirrored onto the report row, which
+   is what the rest of the UI reads.
+   ============================================================ */
+(function(){
+  // Review outcome -> quarterly_reports.status
+  const REPORT_STATUS = {
+    accepted: 'accepted',
+    revision_requested: 'draft',   // reopened to the agency for editing
+    voided: 'draft'
+  };
+
+  App.syncReportStatus = async function(q, status){
+    const mapped = REPORT_STATUS[status];
+    const report = this.data.reports[q];
+    if (!mapped || !report?.id) return;
+    const payload = { status: mapped };
+    if (status === 'accepted') {
+      payload.reviewed_at = new Date().toISOString();
+      payload.reviewed_by = this.profile?.id || null;
+    } else {
+      payload.reviewed_at = null;
+      payload.reviewed_by = null;
+    }
+    const { error } = await this.sb.from('quarterly_reports').update(payload).eq('id', report.id);
+    if (error) {
+      this.toast('Quarter status could not be applied to the report record: ' + error.message, { error: true });
+      return;
+    }
+    this.data.reports[q] = { ...report, ...payload };
+  };
+
+  const baseUpdateBundleStatus = App.updateBundleStatus;
+  App.updateBundleStatus = async function(q, status, incrementRevision = false){
+    await baseUpdateBundleStatus.call(this, q, status, incrementRevision);
+    const b = this.data.bundles[q] || {};
+    // Only mirror once the bundle write actually succeeded.
+    if ((b.city_review_status || b.bundle_status) !== status) return;
+    await this.syncReportStatus(q, status);
+    await this.loadAll();
+    this.showView(this.view);
+    if (this.view === 'quarter') this.renderQuarterDetail();
+  };
+})();
+
+
+
+
+// ---------- PDF: YTD shares + contract benchmark progress ----------
+/* ============================================================
+   EXTENSION 15 — Two additions to the printed report:
+
+   1. printShare() renders a percentage next to a YTD count in
+      small grey type, so the count still reads first. Used on the
+      YTD Total column of the age/gender table and the YTD column
+      of the ethnicity and language tables.
+
+   2. contractProgressSectionHtml() replaces a bare list of YTD
+      counts with target-vs-actual progress against the benchmarks
+      the portal already derives (annualGoals). Each row states the
+      basis it is measured on, because the portal mixes YTD
+      measures (PH exits, occupancy) with current-quarter ones
+      (services, income, satisfaction) — leaving that implicit
+      would misrepresent the numbers.
+   ============================================================ */
+(function(){
+  const css = `
+    .print-pct{color:#6B7280;font-weight:600;font-size:.85em;margin-left:4px}
+    .print-goal-name{font-weight:700}
+    .print-goal-basis{display:block;color:#6B7280;font-size:9.5px;font-weight:400;margin-top:1px}
+    .print-goal-track{position:relative;height:7px;border-radius:4px;background:#E9ECF1;overflow:hidden;min-width:70px}
+    .print-goal-fill{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:#1B2F5B;
+      -webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .print-goal-fill.met{background:#2E7D5B}
+    .print-goal-pct{font-weight:800;white-space:nowrap}
+    @media print{
+      .print-goal-track{background:#E9ECF1 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    }
+  `;
+  const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+  App.printShare = function(value, total){
+    const v = Number(value || 0), t = Number(total || 0);
+    if (!t || !v) return '';
+    return `<span class="print-pct">${Math.round((v / t) * 100)}%</span>`;
+  };
+
+  // Which of the derived goals are cumulative for the contract year, and
+  // which the portal computes on the current quarter only.
+  const GOAL_BASIS = {
+    phExitsAnnual:      'Year to date · benchmark 30% of persons served, capped at 12',
+    occupancyAnnual:    'Year to date · bed nights occupied of available',
+    suppServicesAnnual: 'This quarter · participants engaged of residents served',
+    incomeAnnual:       'This quarter · increased or maintained, of residents served',
+    satisfactionAnnual: 'This quarter · satisfied of surveys returned'
+  };
+
+  App.contractProgressSectionHtml = function(q = this.currentQuarter){
+    const goals = (this.annualGoals ? this.annualGoals(q) : []) || [];
+    if (!goals.length) return '';
+
+    const rows = goals.map(g => {
+      const actual = Number(g.actual || 0);
+      const target = Number(g.target || 0);
+      const pct = target > 0 ? Math.round((actual / target) * 100) : null;
+      const capped = pct === null ? 0 : Math.min(100, pct);
+      const met = pct !== null && pct >= 100;
+      return `<tr>
+        <td><span class="print-goal-name">${this.escape(g.name)}</span>
+          <span class="print-goal-basis">${this.escape(GOAL_BASIS[g.key] || '')}</span></td>
+        <td style="text-align:right;">${target ? target.toLocaleString() + this.escape(g.suffix || '') : '—'}</td>
+        <td style="text-align:right;font-weight:800;">${actual.toLocaleString()}</td>
+        <td style="width:110px;">
+          <div class="print-goal-track"><div class="print-goal-fill${met ? ' met' : ''}" style="width:${capped}%"></div></div>
+        </td>
+        <td style="text-align:right;" class="print-goal-pct">${pct === null ? '—' : pct + '%'}</td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="print-section"><h2>Contract Year Progress</h2>
+      <table class="print-table">
+        <thead><tr><th>Measure</th><th style="text-align:right;">Benchmark</th><th style="text-align:right;">Actual</th><th>Progress</th><th style="text-align:right;">%</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p style="font-size:10.5px;color:#555;margin-top:6px;">Benchmarks are the targets calculated by the reporting portal from contract methodology. Permanent housing and occupancy accumulate across the contract year; supportive services, income stability and satisfaction are measured for the quarter shown.</p>
+    </div>`;
   };
 })();
 
