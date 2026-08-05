@@ -4312,6 +4312,8 @@ const App = {
       </div>
 
 
+      ${this.submissionRecordSectionHtml(q)}
+
       <div class="print-footer"><img class="print-footer-logo" src="https://www.governmentjobs.com/AgencyPages/weho/agencyImages/download/weho_white_on_blue.jpg" alt="City of West Hollywood logo" />Prepared for City of West Hollywood Human Services Division · ${this.escape(this.programName())} Reporting Portal</div>`;
     window.print();
   },
@@ -7053,6 +7055,44 @@ const App = {
         <tbody>${rows}</tbody>
       </table>
       <p style="font-size:10.5px;color:#555;margin-top:6px;">Benchmarks are the targets calculated by the reporting portal from contract methodology. Permanent housing, occupancy and 6-month retention accumulate across the contract year; supportive services and income stability are measured for the quarter shown.</p>
+    </div>`;
+  };
+})();
+
+
+// ---------- PDF: submission record ----------
+/* ============================================================
+   EXTENSION 16 — States who submitted the quarter and when, so
+   the printed report carries its own provenance rather than
+   relying on the portal being open to answer the question.
+   Names come from the signatory recorded on the report; the
+   timestamps come from the submission bundle.
+   ============================================================ */
+(function(){
+  App.submissionRecordSectionHtml = function(q = this.currentQuarter){
+    const r = this.data.reports[q] || {};
+    const b = this.data.bundles[q] || {};
+    const submitter = (r.narrative_submitted_by || r.signatory_name || '').trim();
+    const status = (this.bundleStatus(q) || 'incomplete').replaceAll('_', ' ');
+
+    const row = (label, value) => value
+      ? `<tr><td style="width:34%;">${this.escape(label)}</td><td>${this.escape(value)}</td></tr>`
+      : '';
+
+    const rows = [
+      row('Submitted by', submitter || 'Not recorded'),
+      row('Signatory', r.signatory_name || ''),
+      row('Signed', r.signatory_date ? this.formatDate(r.signatory_date) : ''),
+      row('Submitted to City', b.submitted_at ? this.formatDateTime(b.submitted_at) : 'Not yet submitted'),
+      row('Resubmitted', b.resubmitted_at ? this.formatDateTime(b.resubmitted_at) : ''),
+      row('Revisions requested', b.revision_count ? String(b.revision_count) : ''),
+      row('Accepted by City', b.accepted_at ? this.formatDateTime(b.accepted_at) : ''),
+      row('Current status', status),
+      row('Report generated', new Date().toLocaleString())
+    ].filter(Boolean).join('');
+
+    return `<div class="print-section"><h2>Submission Record</h2>
+      <table class="print-table"><tbody>${rows}</tbody></table>
     </div>`;
   };
 })();
