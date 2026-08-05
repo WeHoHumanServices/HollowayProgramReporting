@@ -4311,7 +4311,6 @@ const App = {
         <p style="white-space:pre-wrap;">${this.escape(r.narrative_text || 'No narrative provided.')}</p>
       </div>
 
-      <div class="print-section"><h2>City Review</h2><p>${this.escape(b.city_review_notes || 'No City review notes.')}</p></div>
 
       <div class="print-footer"><img class="print-footer-logo" src="https://www.governmentjobs.com/AgencyPages/weho/agencyImages/download/weho_white_on_blue.jpg" alt="City of West Hollywood logo" />Prepared for City of West Hollywood Human Services Division · ${this.escape(this.programName())} Reporting Portal</div>`;
     window.print();
@@ -7004,11 +7003,30 @@ const App = {
     occupancyAnnual:    'Year to date · bed nights occupied of available',
     suppServicesAnnual: 'This quarter · participants engaged of residents served',
     incomeAnnual:       'This quarter · increased or maintained, of residents served',
-    satisfactionAnnual: 'This quarter · satisfied of surveys returned'
+    satisfactionAnnual: 'This quarter · satisfied of surveys returned',
+    sixMonthRetention:  'Year to date · confirmed still housed of placements reaching the 6-month check'
   };
 
   App.contractProgressSectionHtml = function(q = this.currentQuarter){
-    const goals = (this.annualGoals ? this.annualGoals(q) : []) || [];
+    // Participant satisfaction is reported in the narrative, not tracked as a
+    // contract performance measure, so it is excluded here.
+    let goals = ((this.annualGoals ? this.annualGoals(q) : []) || [])
+      .filter(g => g.key !== 'satisfactionAnnual');
+
+    // 6-month housing retention: placements that reached the check-in and were
+    // confirmed still housed. Stored on the report row.
+    const r = this.data.reports[q] || {};
+    const placements = Number(r.six_month_placements || 0);
+    const stillHoused = Number(r.six_month_housed || 0);
+    if (placements > 0) {
+      goals = goals.concat([{
+        key: 'sixMonthRetention',
+        name: 'Housing retention at 6 months',
+        actual: stillHoused,
+        target: placements,
+        suffix: ' placements'
+      }]);
+    }
     if (!goals.length) return '';
 
     const rows = goals.map(g => {
@@ -7034,7 +7052,7 @@ const App = {
         <thead><tr><th>Measure</th><th style="text-align:right;">Benchmark</th><th style="text-align:right;">Actual</th><th>Progress</th><th style="text-align:right;">%</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p style="font-size:10.5px;color:#555;margin-top:6px;">Benchmarks are the targets calculated by the reporting portal from contract methodology. Permanent housing and occupancy accumulate across the contract year; supportive services, income stability and satisfaction are measured for the quarter shown.</p>
+      <p style="font-size:10.5px;color:#555;margin-top:6px;">Benchmarks are the targets calculated by the reporting portal from contract methodology. Permanent housing, occupancy and 6-month retention accumulate across the contract year; supportive services and income stability are measured for the quarter shown.</p>
     </div>`;
   };
 })();
