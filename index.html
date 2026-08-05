@@ -4656,6 +4656,7 @@ const App = {
       <div class="narrative-section-head">
         <div class="narrative-section-title-wrap"><span class="narrative-section-num" aria-hidden="true">${num}</span><label class="field-label${required?' required':''}" for="${forId}">${this.escape(label)}</label></div>
         <button type="button" class="btn btn-ghost btn-sm ai-generate-btn" data-ai-section="${section}" data-ai-target="${forId}">✨ Generate Draft</button>
+        <button type="button" class="btn btn-ghost btn-sm ai-improve-btn" data-ai-section="${section}" data-ai-target="${forId}">✨ Improve with AI</button>
       </div>
       ${extraBefore}
       <textarea id="${forId}" class="field-textarea auto-grow" ${required?'required':''} placeholder="${this.escape(placeholder)}">${this.escape(value)}</textarea>
@@ -4714,6 +4715,7 @@ const App = {
       </div></div>`;
     document.getElementById('btn-narrative-save')?.addEventListener('click', () => this.saveNarrativePage());
     pane.querySelectorAll('.ai-generate-btn').forEach(btn => btn.addEventListener('click', () => this.generateNarrativeSection(btn.dataset.aiSection, btn.dataset.aiTarget, btn)));
+    pane.querySelectorAll('.ai-improve-btn').forEach(btn => btn.addEventListener('click', () => this.improveNarrativeSection(btn.dataset.aiSection, btn.dataset.aiTarget, btn)));
     this.wireNarrativeAutoGrow(pane);
   };
 
@@ -7094,6 +7096,109 @@ const App = {
     return `<div class="print-section"><h2>Submission Record</h2>
       <table class="print-table"><tbody>${rows}</tbody></table>
     </div>`;
+  };
+})();
+
+
+// ---------- Bed-night capacity starts at program launch ----------
+/* ============================================================
+   EXTENSION 17 — The Holloway program opened on 6 October 2025,
+   five days into Q1. clientMetrics() derived available bed nights
+   from the full quarter (Oct 1 - Dec 31 = 92 days x 20 beds =
+   1,840), crediting the program with 100 bed nights of capacity
+   that did not exist and understating Q1 occupancy. Capacity is
+   now counted from the launch date, which reproduces the 1,740
+   figure reported to the City in the signed Q1 report.
+   ============================================================ */
+(function(){
+  App.PROGRAM_LAUNCH_DATE = '2025-10-06';
+
+  const baseClientMetrics = App.clientMetrics;
+  App.clientMetrics = function(q = this.currentQuarter){
+    const m = baseClientMetrics.call(this, q);
+    const { start, end } = this.qRange(q);
+    const launch = this.PROGRAM_LAUNCH_DATE;
+    const effectiveStart = this.dateMax(start, launch);
+    m.available = effectiveStart > end ? 0 : 20 * this.daysInclusive(effectiveStart, end);
+    return m;
+  };
+})();
+
+
+// ---------- Improve with AI ----------
+/* ============================================================
+   EXTENSION 18 — "Generate Draft" writes a section from metrics.
+   "Improve with AI" instead takes what the user has already
+   written and returns a tightened version of it, passing the
+   existing text to the same generate-narrative function as the
+   source material. The original is kept so a single click undoes
+   the change -- staff must never lose their own wording to an
+   edit they did not want.
+   ============================================================ */
+(function(){
+  App._narrativeUndo = {};
+
+  App.improveNarrativeSection = async function(section, targetId, btn){
+    const target = document.getElementById(targetId);
+    const state = document.getElementById('narrative-page-save-state');
+    if (!target) return;
+
+    const existing = (target.value || '').trim();
+    const label = this.narrativeSectionLabels?.[section] || section;
+    if (existing.length < 40) {
+      if (state) state.textContent = `Write a few sentences in "${label}" first — Improve with AI edits your own wording rather than inventing content.`;
+      return;
+    }
+
+    const originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Improving…';
+    if (state) state.textContent = `Improving "${label}"…`;
+    try {
+      const q = this.currentQuarter;
+      const { data, error } = await this.sb.functions.invoke('generate-narrative', {
+        body: {
+          section,
+          sectionLabel: label,
+          mode: 'improve',
+          existingText: existing,
+          programName: this.programName(),
+          agencyName: this.agencyName(),
+          quarterLabel: q,
+          quarterPeriod: this.quarters[q]?.period || '',
+          metrics: this.quarterSummaryMetrics(q),
+          roughNotes: existing
+        }
+      });
+      if (error || !data || data.error || !data.draft) {
+        if (state) state.textContent = 'AI improve failed: ' + ((data && data.error) || error?.message || 'unknown error');
+        return;
+      }
+      this._narrativeUndo[targetId] = existing;
+      target.value = data.draft;
+      this.autoGrowTextarea(target);
+      this.updateNarrativeSectionWordCount(target);
+      this.markDirty?.('narrative');
+      if (state) {
+        state.innerHTML = `"${this.escape(label)}" improved — review before saving. <button type="button" class="btn btn-ghost btn-sm" data-narr-undo="${this.escape(targetId)}">Undo</button>`;
+        state.querySelector('[data-narr-undo]')?.addEventListener('click', () => this.undoNarrativeImprove(targetId));
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  };
+
+  App.undoNarrativeImprove = function(targetId){
+    const target = document.getElementById(targetId);
+    const prior = this._narrativeUndo[targetId];
+    if (!target || prior == null) return;
+    target.value = prior;
+    delete this._narrativeUndo[targetId];
+    this.autoGrowTextarea(target);
+    this.updateNarrativeSectionWordCount(target);
+    const state = document.getElementById('narrative-page-save-state');
+    if (state) state.textContent = 'Reverted to your original wording.';
   };
 })();
 
