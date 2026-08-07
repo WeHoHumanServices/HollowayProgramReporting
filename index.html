@@ -813,7 +813,29 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .hero-meter-target { position:absolute; top:-3px; width:2px; height:12px; background:var(--navy); border-radius:1px; }
 .hero-meter-target::after { content:'target'; position:absolute; top:13px; left:50%; transform:translateX(-50%); font-size:9px; font-weight:700; letter-spacing:.04em; color:var(--gray-500); }
 
-.perf-strip-link { display:block; width:100%; text-align:left; background:none; border:none; padding:0; cursor:pointer; border-radius:6px; }
+/* ── TRENDS: sparklines + prior-quarter deltas ───────────────────────────
+   Single series per sparkline, so no legend — the metric label above names
+   it. Line sits in the de-emphasis gray with the current quarter marked in
+   the accent; the numbers stay in text tokens rather than wearing the data
+   colour. Delta colour is direction × whether up is good, which is why
+   average length of stay passes goodDirection:'down'.                    */
+.trend-row { display:flex; align-items:center; gap:9px; margin-top:7px; flex-wrap:wrap; }
+.spark { flex:0 0 auto; overflow:visible; }
+.spark circle[fill="transparent"] { cursor:default; }
+.trend-text { display:flex; flex-direction:column; gap:1px; min-width:0; }
+/* gray-400 is only 2.93:1 on white — under the 4.5:1 AA floor for text this
+   small. New trend text uses gray-500 (4.90:1) so it is actually readable. */
+.trend-series { font-size:10.5px; color:var(--gray-500); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.delta { font-size:10.5px; font-weight:700; white-space:nowrap; }
+.delta-good { color:var(--green); }
+.delta-bad  { color:var(--red); }
+.delta-flat { color:var(--gray-500); font-weight:600; }
+@media (max-width:800px) { .trend-series { display:none; } }
+
+/* font/line-height inherit stops the UA button defaults from shifting this
+   tile's label a few pixels below its neighbours in the strip row. */
+.perf-strip-link { display:block; width:100%; text-align:left; background:none; border:none; padding:0; cursor:pointer; border-radius:6px; font:inherit; line-height:inherit; color:inherit; }
+.perf-strip-row > * { align-self:start; }
 .perf-strip-link:hover .perf-strip-value { color:var(--navy-light); }
 .perf-strip-link:hover .strip-go { opacity:1; transform:translateX(2px); }
 .strip-go { font-size:13px; margin-left:6px; color:var(--gray-400); opacity:0; transition:all .15s ease; display:inline-block; }
@@ -2496,6 +2518,85 @@ const App = {
     el.querySelector('#btn-print-current').addEventListener('click', () => this.printReport(q));
   },
 
+  /* ── Quarterly trends ───────────────────────────────────────────────────
+     Four quarters of client records were already in memory and the dashboard
+     never once showed direction. "42%" answers a much weaker question than
+     "42%, up from 31% and 28%." Everything here is derived from records the
+     app already loaded — no new queries.
+
+     Quarters after the current one are omitted rather than plotted as zero:
+     a quarter that has not happened is missing data, and drawing it as 0
+     would read as a collapse in performance.                              */
+  quarterTrends() {
+    const cacheKey = `${(this.data.clients||[]).length}:${(this.data.clientServices||[]).length}:${this.currentQuarter}`;
+    if (this._trendCache && this._trendCache.key === cacheKey) return this._trendCache.value;
+    const order = Object.keys(this.quarters);
+    const upto = Math.max(0, order.indexOf(this.currentQuarter));
+    const series = order.slice(0, upto + 1).map(q => {
+      const m = this.clientMetrics(q);
+      const o = this.outcomeSummary(q, 'quarter');
+      return {
+        q,
+        phRate: o.phRate,
+        countedExits: o.countedExits,
+        phCount: o.byBand?.['Permanent Housing'] || 0,
+        served: m.served.length,
+        occupancy: m.available ? Math.round((m.occupied / m.available) * 100) : null,
+        avgLos: m.avgLos || null,
+        intakes: m.intakes.length,
+        exits: m.exits.length
+      };
+    });
+    this._trendCache = { key: cacheKey, value: series };
+    return series;
+  },
+
+  // 4-point sparkline. Single series, so no legend (the label names it); line in
+  // the de-emphasis gray with the current quarter in the accent, per the stat
+  // tile contract. Null quarters break the line rather than being drawn as zero.
+  sparkline(points, opts={}) {
+    const vals = points.map(p => p.value);
+    const real = vals.filter(v => v != null);
+    if (real.length < 2) return '';
+    const W = opts.width || 68, H = opts.height || 24, PAD = 4;
+    const min = Math.min(...real), max = Math.max(...real);
+    const span = (max - min) || 1;
+    const x = i => PAD + (i / Math.max(1, points.length - 1)) * (W - PAD * 2);
+    const y = v => H - PAD - ((v - min) / span) * (H - PAD * 2);
+
+    // Break the path at gaps instead of interpolating across a quarter with no data.
+    let d = '', pen = false;
+    points.forEach((p, i) => {
+      if (p.value == null) { pen = false; return; }
+      d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)} `;
+      pen = true;
+    });
+    const lastIdx = points.map(p => p.value).reduce((acc, v, i) => v != null ? i : acc, -1);
+    const dot = lastIdx >= 0
+      ? `<circle cx="${x(lastIdx).toFixed(1)}" cy="${y(points[lastIdx].value).toFixed(1)}" r="4" fill="var(--navy)" stroke="var(--white)" stroke-width="2"/>`
+      : '';
+    // Native <title> per point gives a hover readout without any JS.
+    const hits = points.map((p, i) => p.value == null ? '' :
+      `<circle cx="${x(i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="7" fill="transparent"><title>${this.escape(p.label)}: ${this.escape(String(p.display ?? p.value))}</title></circle>`).join('');
+    return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true" focusable="false">
+      <path d="${d.trim()}" fill="none" stroke="var(--gray-400)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${dot}${hits}</svg>`;
+  },
+
+  // Signed delta against the prior quarter. Colour is direction × whether up is
+  // good — occupancy rising is fine, average stay rising is not, so callers pass
+  // goodDirection explicitly rather than assuming up means better.
+  deltaChip(current, prior, opts={}) {
+    if (current == null || prior == null) return '';
+    const diff = Math.round((current - prior) * 10) / 10;
+    const priorQ = opts.priorLabel || 'prior quarter';
+    if (diff === 0) return `<span class="delta delta-flat">no change vs ${this.escape(priorQ)}</span>`;
+    const good = opts.goodDirection === 'down' ? diff < 0 : diff > 0;
+    const arrow = diff > 0 ? '▲' : '▼';
+    const unit = opts.unit || '';
+    return `<span class="delta ${good ? 'delta-good' : 'delta-bad'}"><span aria-hidden="true">${arrow}</span> ${Math.abs(diff)}${unit} vs ${this.escape(priorQ)}</span>`;
+  },
+
   renderProgramPerformance(q=this.currentQuarter, scope='quarter') {
     const qtr = this.outcomeSummary(q, 'quarter');
     const ytd = this.outcomeSummary(q, 'ytd');
@@ -2539,6 +2640,28 @@ const App = {
       : `${other.phRate!=null ? other.phRate+'% YTD' : 'No YTD exits yet'} &middot; ${qtr.byBand?.['Permanent Housing']||0} of ${qtr.countedExits||0} exits this quarter`;
     const meterPct = heroPrimary == null ? 0 : Math.min(100, heroPrimary);
     const targetPct = Math.min(100, target);
+
+    // Trend context. Deltas compare the selected quarter with the one before it;
+    // in YTD scope there is no "prior period" to compare against, so the hero
+    // shows the sparkline only.
+    const trends = this.quarterTrends();
+    const idx = trends.findIndex(t => t.q === q);
+    const cur = idx >= 0 ? trends[idx] : null;
+    const prev = idx > 0 ? trends[idx-1] : null;
+    const spark = (key, fmt) => this.sparkline(trends.map(t => ({
+      label: t.q, value: t[key], display: fmt ? fmt(t[key]) : t[key]
+    })));
+    const phSpark = this.sparkline(trends.map(t => ({
+      label: t.q, value: t.phRate,
+      display: t.phRate==null ? 'no exits' : `${t.phCount} of ${t.countedExits} exits (${t.phRate}%)`
+    })));
+    const phDelta = (scope === 'ytd' || thin) ? '' : this.deltaChip(cur?.phRate, prev?.phRate, { priorLabel: prev?.q, unit:' pts' });
+    // The per-quarter readout uses fractions, not percentages. A quarter with
+    // three exits would render "67%" here and invite exactly the over-reading
+    // the hero's small-n guard exists to prevent; "2 of 3" cannot mislead.
+    const phSeries = trends.map(t => `${t.q} ${t.countedExits ? `${t.phCount}/${t.countedExits}` : '—'}`).join(' · ');
+    const losNow = this.clientMetrics(q).avgLos;
+
     return `<div class="card perf-card"><div class="card-body">
       <div class="perf-hero-row">
         <div class="perf-hero">
@@ -2549,22 +2672,24 @@ const App = {
             <div class="hero-meter-fill tone-${tone}" style="width:${meterPct}%;"></div>
             <div class="hero-meter-target" style="left:${targetPct}%;"></div>
           </div>
+          ${phSpark ? `<div class="trend-row">${phSpark}<div class="trend-text">${phDelta}<span class="trend-series">PH exits ${this.escape(phSeries)}</span></div></div>` : ''}
           <div class="kpi-sub">${heroSub}</div>
         </div>
         <div class="perf-sub">
           <div class="kpi-label">Confirmed retention</div>
           <div class="perf-sub-value">${retention.total ? retention.rate+'%' : '—'}</div>
-          <div class="kpi-sub">6- and 12-month combined</div>
+          <div class="kpi-sub">6- and 12-month combined${retention.total ? ` · ${retention.stable} of ${retention.total} check-ins` : ''}</div>
         </div>
         <div class="perf-sub">
           <div class="kpi-label">Avg length of stay</div>
-          <div class="perf-sub-value">${this.clientMetrics(q).avgLos}</div>
+          <div class="perf-sub-value">${losNow}</div>
+          ${spark('avgLos', v => v==null ? 'no data' : v+' days') ? `<div class="trend-row">${spark('avgLos', v => v==null?'no data':v+' days')}${this.deltaChip(cur?.avgLos, prev?.avgLos, { priorLabel: prev?.q, unit:' d', goodDirection:'down' })}</div>` : ''}
           <div class="kpi-sub">days, served clients</div>
         </div>
       </div>
       <div class="perf-strip-row">
-        <div><div class="kpi-label">Persons served YTD</div><div class="perf-strip-value">${ytdPersons ?? '—'}</div></div>
-        <div><div class="kpi-label">Occupancy</div><div class="perf-strip-value">${this.percent(s.bedNightsOcc, s.bedNightsAvail)}</div></div>
+        <div><div class="kpi-label">Persons served YTD</div><div class="perf-strip-value">${ytdPersons ?? '—'}</div>${spark('served', v=>v==null?'—':v+' served') ? `<div class="trend-row">${spark('served', v=>v==null?'—':v+' served')}${this.deltaChip(cur?.served, prev?.served, { priorLabel: prev?.q })}</div>` : ''}</div>
+        <div><div class="kpi-label">Occupancy</div><div class="perf-strip-value">${this.percent(s.bedNightsOcc, s.bedNightsAvail)}</div>${spark('occupancy', v=>v==null?'—':v+'%') ? `<div class="trend-row">${spark('occupancy', v=>v==null?'—':v+'%')}${this.deltaChip(cur?.occupancy, prev?.occupancy, { priorLabel: prev?.q, unit:' pts' })}</div>` : ''}</div>
         <button type="button" class="perf-strip-link" data-view-shortcut="clients"><div class="kpi-label">Current census</div><div class="perf-strip-value">${active.length}/${capacity}<span class="strip-go" aria-hidden="true">→</span></div><div class="kpi-sub">${Math.max(0,capacity-active.length)} open · view caseload</div></button>
         <div><div class="kpi-label">Income increased</div><div class="perf-strip-value">${incomePct!=null ? incomePct+'%' : '—'}</div><div class="kpi-sub">of residents served this quarter</div></div>
       </div>
@@ -5798,6 +5923,21 @@ const App = {
      shift. This panel sits above the resident list, where the people it
      describes already are.                                              */
 
+  // One definition of "this resident has a contact gap", used by both the census
+  // flag and the caseload filter it drives — when those were written separately
+  // they disagreed, and the chip reported a smaller number than it filtered to.
+  //
+  // A resident with NO services logged is the most disengaged case, but
+  // clientParticipation() only sets daysSince on the has-services branch, so a
+  // daysSince test alone skipped exactly those people. "New — Pending First
+  // Contact" (entered within 14 days) is excluded on purpose: no contact yet is
+  // expected for a new arrival, not a gap.
+  App.hasContactGap = function(c){
+    const p = this.clientParticipation(c);
+    if (p.label === 'No Contacts Logged') return true;
+    return p.daysSince !== undefined && p.daysSince > 14;
+  };
+
   App.censusSnapshot = function(){
     const today = this.today();
     const clients = this.data.clients||[];
@@ -5811,10 +5951,7 @@ const App = {
     const avgLos = losVals.length ? Math.round(losVals.reduce((a,b)=>a+b,0)/losVals.length) : 0;
     const longStay = active.filter(c=>this.clientBedNights(c, this.dateOnly(c.entry_date), today) >= 180);
     const noPlan = active.filter(c=>!c.housing_plan_status || String(c.housing_plan_status).toLowerCase().includes('not'));
-    const quiet = active.filter(c=>{
-      const p = this.clientParticipation(c);
-      return p.daysSince !== undefined && p.daysSince > 14;
-    });
+    const quiet = active.filter(c=>this.hasContactGap(c));
     const plannedExits = active.filter(c=>c.expected_exit_date && this.dateOnly(c.expected_exit_date) <= this.addMonthsDate(today,1));
     return { capacity, active, pending, open: Math.max(0, capacity-active.length), movedIn30, movedOut30, avgLos, longStay, noPlan, quiet, plannedExits };
   };
@@ -5870,7 +6007,7 @@ const App = {
     const term = (cf.q||'').trim().toLowerCase();
     const filtered = activeRaw.filter(c=>{
       if (cf.flag === 'noplan' && c.housing_plan_status && !String(c.housing_plan_status).toLowerCase().includes('not')) return false;
-      if (cf.flag === 'quiet') { const p=this.clientParticipation(c); if (!(p.daysSince !== undefined && p.daysSince > 14)) return false; }
+      if (cf.flag === 'quiet' && !this.hasContactGap(c)) return false;
       if (cf.flag === 'pending' && this.clientStatus(c) !== 'Pending') return false;
       if (term) {
         const hay = `${this.clientDisplayId(c)} ${this.clientName(c)||''} ${c.room_assignment||''} ${c.housing_plan_status||''}`.toLowerCase();
