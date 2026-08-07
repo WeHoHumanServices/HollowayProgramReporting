@@ -864,6 +864,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .quick-group-note { text-transform:none; letter-spacing:0; font-weight:600; color:var(--gray-400); margin-left:6px; }
 .quick-chip-named { border-style:dashed; }
 
+/* ── MULTI-SELECT EXIT REASONS ───────────────────────────────────────── */
+.reason-list { display:grid; grid-template-columns:1fr 1fr; gap:2px 14px; border:1px solid var(--border); border-radius:var(--radius); padding:8px 10px; background:var(--white); }
+.reason-row { display:flex; align-items:center; gap:9px; padding:6px 4px; border-radius:6px; font-size:13px; cursor:pointer; }
+.reason-row:hover { background:var(--gray-100); }
+.reason-row input { width:15px; height:15px; flex:0 0 auto; cursor:pointer; }
+.reason-cell { max-width:210px; }
+.reason-tag { display:inline-block; background:var(--gray-100); border:1px solid var(--border); border-radius:5px; padding:1px 7px; margin:1px 3px 1px 0; font-size:11px; color:var(--gray-800); }
+.reason-tag.reason-more { background:var(--white); color:var(--gray-500); font-weight:700; cursor:default; }
+@media (max-width:800px) { .reason-list { grid-template-columns:1fr; } }
+
 /* ── GROUP SESSIONS / ON-SITE PARTICIPATION ──────────────────────────── */
 .attendee-toolbar { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
 .attendee-count { font-size:11.5px; color:var(--gray-500); margin-left:auto; }
@@ -2413,7 +2423,35 @@ const App = {
     'Deceased',
     'Other Non-Permanent Exit'
   ]; },
-  exitReasonOptions() { return ['Successful housing placement','Family reunification','Partner / spouse reunification','Client choice','Program rule violation','Incarceration','Hospitalization','Deceased','Unknown / lost contact','Other']; },
+  exitReasonOptions() { return ['Successful housing placement','Completed program / extension not granted','Family reunification','Partner / spouse reunification','Client choice','Program rule violation','Incarceration','Hospitalization','Deceased','Unknown / lost contact','Other']; },
+
+  /* Exit reasons are multi-select: a single exit often has more than one true
+     cause, and forcing one hid the rest. The array column exit_reasons is the
+     source of truth; the older single exit_reason column is kept in sync with
+     the first selection because the printed report, the Excel export and any
+     external consumer still read it.
+
+     Reads tolerate three shapes, because all three exist in the data: a real
+     Postgres array, a single legacy string, and null. */
+  clientExitReasons(c = {}) {
+    if (Array.isArray(c.exit_reasons)) return c.exit_reasons.filter(Boolean);
+    if (typeof c.exit_reasons === 'string' && c.exit_reasons.trim()) {
+      // PostgREST can hand back an array literal as a string in some setups.
+      const raw = c.exit_reasons.trim();
+      if (raw.startsWith('{') && raw.endsWith('}')) {
+        return raw.slice(1,-1).split(',').map(v => v.replace(/^"|"$/g,'').trim()).filter(Boolean);
+      }
+      return [raw];
+    }
+    return c.exit_reason ? [c.exit_reason] : [];
+  },
+
+  // Display form: the staff-typed text replaces the bare word "Other".
+  clientExitReasonLabel(c = {}) {
+    const list = this.clientExitReasons(c).map(r =>
+      r === 'Other' && (c.exit_reason_other || '').trim() ? c.exit_reason_other.trim() : r);
+    return list.join(' · ');
+  },
   hmisRaceEthnicityOptions() { return ['American Indian, Alaska Native, or Indigenous','Asian or Asian American','Black, African American, or African','Hispanic/Latina/e/o','Middle Eastern or North African','Native Hawaiian or Pacific Islander','White','Additional Race/Ethnicity Detail','Client doesn’t know','Client prefers not to answer','Data not collected']; },
   hmisYesNoOptions() { return ['Yes','No','Client doesn’t know','Client prefers not to answer','Data not collected']; },
   housingPlanStatusOptions() { return ['Not Started','Assessment','Document Collection','Benefits / Income','Housing Search','Application Submitted','Lease Pending','Move-In Scheduled','Permanently Housed','Inactive / On Hold']; },
@@ -4342,7 +4380,7 @@ const App = {
   // Builds the client-facing exit reason text from a client's own record —
   // this is the "already captured" content that should never need retyping.
   clientExitReasonText(c) {
-    const reason = c.exit_reason === 'Other' ? (c.exit_reason_other || 'Other') : c.exit_reason;
+    const reason = this.clientExitReasonLabel(c) || null;
     return reason || '';
   },
   clientExitTypeText(c) {
@@ -5601,7 +5639,7 @@ const App = {
       if (f.needsOnly && c.exit_destination_type) return false;
       if (f.band !== 'all' && this.exitBandFor(c) !== f.band) return false;
       if (term) {
-        const hay = `${this.clientDisplayId(c)} ${this.clientName(c)||''} ${c.exit_destination_type||''} ${c.room_assignment||''}`.toLowerCase();
+        const hay = `${this.clientDisplayId(c)} ${this.clientName(c)||''} ${c.exit_destination_type||''} ${c.room_assignment||''} ${this.clientExitReasonLabel(c)}`.toLowerCase();
         if (!hay.includes(term)) return false;
       }
       return true;
@@ -5614,6 +5652,7 @@ const App = {
       exit: c=>this.dateOnly(c.exit_date)||'',
       los: c=>this.daysInclusive(this.dateOnly(c.entry_date), this.dateOnly(c.exit_date)),
       destination: c=>c.exit_destination_type||'',
+      reason: c=>this.clientExitReasonLabel(c),
       goal: c=>c.housing_goal_achieved||''
     };
     list = this.applySort(list, this._exitsSort, accessors);
@@ -5628,7 +5667,7 @@ const App = {
     const orderedBands = this.EXIT_BAND_ORDER.filter(b=>groups.has(b))
       .concat([...groups.keys()].filter(b=>!this.EXIT_BAND_ORDER.includes(b)));
 
-    const COLS = 8;
+    const COLS = 9;
     const rowFor = (c) => {
       const destDetail=[c.exit_destination, c.exit_notes].filter(Boolean).join(' — ');
       const destCell = !c.exit_destination_type
@@ -5637,7 +5676,11 @@ const App = {
           ? `<td class="exit-dest-cell" title="${this.escape(destDetail)}">${this.escape(c.exit_destination_type)} <span aria-hidden="true">ⓘ</span></td>`
           : `<td>${this.escape(c.exit_destination_type)}</td>`;
       const los = this.daysInclusive(this.dateOnly(c.entry_date), this.dateOnly(c.exit_date));
-      return `<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.formatDate(c.exit_date)}</td><td>${los.toLocaleString()}</td>${destCell}<td>${this.escape(c.housing_goal_achieved||'—')}</td><td><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button></td></tr>`;
+      const reasons = this.clientExitReasons(c);
+      const reasonCell = reasons.length
+        ? `<td class="reason-cell">${reasons.slice(0,2).map(r=>`<span class="reason-tag">${this.escape(r==='Other'&&(c.exit_reason_other||'').trim()?c.exit_reason_other.trim():r)}</span>`).join('')}${reasons.length>2?`<span class="reason-tag reason-more" title="${this.escape(this.clientExitReasonLabel(c))}">+${reasons.length-2}</span>`:''}</td>`
+        : '<td>—</td>';
+      return `<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.formatDate(c.exit_date)}</td><td>${los.toLocaleString()}</td>${destCell}${reasonCell}<td>${this.escape(c.housing_goal_achieved||'—')}</td><td><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button></td></tr>`;
     };
 
     const body = orderedBands.length
@@ -5669,7 +5712,7 @@ const App = {
         ${(f.band!=='all'||f.q||f.needsOnly) ? '<button type="button" class="btn btn-ghost btn-sm" id="exit-clear">Clear filters</button>' : ''}
         <span class="filter-count">${list.length} shown</span>
       </div>
-      <div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._exitsSort,'hmis','HMIS ID')}${this.sortableHeader(this._exitsSort,'name','Name')}${this.sortableHeader(this._exitsSort,'entry','Entry')}${this.sortableHeader(this._exitsSort,'exit','Exit')}${this.sortableHeader(this._exitsSort,'los','LOS')}${this.sortableHeader(this._exitsSort,'destination','Destination')}${this.sortableHeader(this._exitsSort,'goal','Goal')}<th>Actions</th></tr></thead><tbody>${body}</tbody></table></div>
+      <div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._exitsSort,'hmis','HMIS ID')}${this.sortableHeader(this._exitsSort,'name','Name')}${this.sortableHeader(this._exitsSort,'entry','Entry')}${this.sortableHeader(this._exitsSort,'exit','Exit')}${this.sortableHeader(this._exitsSort,'los','LOS')}${this.sortableHeader(this._exitsSort,'destination','Destination')}${this.sortableHeader(this._exitsSort,'reason','Reason for Exit')}${this.sortableHeader(this._exitsSort,'goal','Goal')}<th>Actions</th></tr></thead><tbody>${body}</tbody></table></div>
       <details class="ops-drawer" style="margin-top:18px;"><summary class="ops-drawer-summary">Outcome breakdown &amp; equity detail</summary><div class="ops-drawer-body">${this.renderOutcomeSummary(this.currentQuarter)}</div></details>`;
 
     const rerender = () => this.renderClientExits();
@@ -5693,6 +5736,7 @@ const App = {
     this.currentClientId=id; const c=id ? (this.data.clients||[]).find(x=>x.id===id) || {} : {};
     const opt=(arr,val)=>arr.map(x=>`<option value="${this.escape(x)}" ${val===x?'selected':''}>${this.escape(x)}</option>`).join('');
     const status=this.simpleClientStatus(c);
+    const selectedReasons=this.clientExitReasons(c);
     const progress=c.housing_plan_status || 'Intake Complete';
     const services=(this.data.clientServices||[]).filter(s=>s.client_id===id).slice(0,5);
     const recent=services.map(s=>`<div class="recent-service-row"><div><strong>${this.escape(s.service_type||'Service')}</strong><br><span class="field-hint">${this.formatDate(s.service_date)}</span></div><span class="field-hint">${Number(s.duration_minutes||0)} min</span></div>`).join('') || '<div class="field-hint">No services recorded yet.</div>';
@@ -5703,7 +5747,7 @@ const App = {
       <div class="form-section"><div class="form-section-title">Intake & Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label required">HMIS ID</label><input id="cf-hmis-id" class="field-input" value="${this.escape(c.id||c.hmis_unique_identifier||c.agency_client_id||'')}" placeholder="HMIS Unique Identifier"></div><div class="field-group"><label class="field-label required">Entry Date</label><input id="cf-entry-date" type="date" class="field-input" value="${this.dateOnly(c.entry_date)}"></div><div class="field-group"><label class="field-label">Current Status</label><div class="segmented-row" data-status-group>${['Active','Scheduled Exit','Exited'].map(v=>`<button type="button" class="segment-btn ${status===v?'active':''}" data-status="${v}">${v}</button>`).join('')}</div><input type="hidden" id="cf-status" value="${this.escape(status)}"></div><div class="field-group"><label class="field-label">Room / Bed Assignment</label><input id="cf-room-number" class="field-input" value="${this.escape(c.room_assignment||'')}" placeholder="e.g., Room 7, 102, Bed A, Unassigned"></div></div></div>
       <div class="form-section"><div class="form-section-title">Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Client Name <span class="field-hint">Agency use only</span></label><input id="cf-client-name" class="field-input" value="${this.escape(c.client_name||'')}"></div><div class="field-group"><label class="field-label">Age</label><input id="cf-age" type="number" class="field-input" value="${c.age||''}"></div><div class="field-group"><label class="field-label">Gender Identity</label><select id="cf-gender" class="field-select"><option></option>${opt(this.hmisGenderOptions(), c.gender)}</select><div id="cf-gender-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify gender identity</label><input id="cf-gender-other" class="field-input" value="${this.escape(c.gender_other||'')}"></div><div class="field-hint">Transgender experience is captured separately below and is not treated as a gender.</div></div><div class="field-group"><label class="field-label">Transgender Experience</label><select id="cf-transgender-status" class="field-select"><option></option>${opt(['Yes','No','Questioning','Client doesn’t know','Client prefers not to answer','Data not collected'], c.transgender_status)}</select></div><div class="field-group"><label class="field-label">Race / Ethnicity</label><select id="cf-race" class="field-select"><option></option>${opt(this.hmisRaceEthnicityOptions(), c.race_ethnicity)}</select><div id="cf-race-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify race/ethnicity</label><input id="cf-race-other" class="field-input" value="${this.escape(c.race_ethnicity_other||'')}"></div></div><div class="field-group"><label class="field-label">Primary Language</label><select id="cf-primary-language" class="field-select"><option></option>${opt(['English','Spanish','Russian','Farsi','Other'], c.primary_language||c.household_language||c.language)}</select><div id="cf-primary-language-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify language</label><input id="cf-primary-language-other" class="field-input" value="${this.escape(c.primary_language_other||'')}"></div></div>${this.yesNoSegment('cf-veteran','Veteran Status',c.veteran)}${this.yesNoSegment('cf-disability','Disability Status',c.disability)}</div><details style="margin-top:12px;"><summary class="field-label" style="cursor:pointer;">Additional Information</summary><div class="client-form-grid" style="margin-top:12px;"><div class="field-group"><label class="field-label">Income at Entry</label><input id="cf-income-entry" type="number" class="field-input" value="${c.income_at_entry||''}"></div></div></details></div>
       <div class="form-section"><div class="form-section-title">Housing & Case Management</div><div class="housing-progress">${this.housingProgressOptions().map(v=>`<button type="button" class="hp-step ${progress===v?'active':''}" data-housing-progress="${this.escape(v)}">○ ${this.escape(v)}</button>`).join('')}</div><input type="hidden" id="cf-housing-plan" value="${this.escape(progress)}"><div class="client-form-grid" style="margin-top:14px;"><div class="field-group"><label class="field-label">Expected Exit Date</label><input id="cf-expected-exit" type="date" class="field-input" value="${this.dateOnly(c.expected_exit_date)}"></div><div class="field-group"><label class="field-label">Housing Assessment Completed</label><input id="cf-housing-assessment" type="date" class="field-input" value="${this.dateOnly(c.housing_assessment_completed)}"></div><div class="field-group"><label class="field-label">Benefits Screening Completed</label><input id="cf-benefits-screening" type="date" class="field-input" value="${this.dateOnly(c.benefits_screening_completed)}"></div><div class="field-group"><label class="field-label">Income Verification Completed</label><input id="cf-income-verification" type="date" class="field-input" value="${this.dateOnly(c.income_verification_completed)}"></div></div></div>
-      <div id="cf-exit-section" class="form-section exit-section ${status==='Exited'?'':'is-hidden'}"><div class="form-section-title">Exit Information</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Exit Date</label><input id="cf-exit-date" type="date" class="field-input" value="${this.dateOnly(c.exit_date)}"></div><div class="field-group"><label class="field-label">Exit Destination</label><select id="cf-exit-type" class="field-select"><option></option>${opt(this.exitDestinationOptions(), c.exit_destination_type)}</select><div id="cf-exit-type-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please describe exit destination</label><input id="cf-exit-type-other" class="field-input" value="${this.escape(c.exit_destination_other||'')}"></div></div><div class="field-group"><label class="field-label">Reason for Exit</label><select id="cf-exit-reason" class="field-select"><option></option>${opt(this.exitReasonOptions(), c.exit_reason)}</select><div id="cf-exit-reason-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify reason for exit</label><input id="cf-exit-reason-other" class="field-input" value="${this.escape(c.exit_reason_other||'')}"></div></div><div class="field-group"><label class="field-label">Specific Destination / Notes</label><input id="cf-exit-destination" class="field-input" value="${this.escape(c.exit_destination||'')}"></div><div class="field-group"><label class="field-label">Income at Exit</label><input id="cf-income-exit" type="number" class="field-input" value="${c.income_at_exit||''}"></div><div class="field-group full"><label class="field-label">Outcome Notes</label><textarea id="cf-exit-notes" class="field-textarea">${this.escape(c.exit_notes||'')}</textarea></div></div></div>
+      <div id="cf-exit-section" class="form-section exit-section ${status==='Exited'?'':'is-hidden'}"><div class="form-section-title">Exit Information</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Exit Date</label><input id="cf-exit-date" type="date" class="field-input" value="${this.dateOnly(c.exit_date)}"></div><div class="field-group"><label class="field-label">Exit Destination</label><select id="cf-exit-type" class="field-select"><option></option>${opt(this.exitDestinationOptions(), c.exit_destination_type)}</select><div id="cf-exit-type-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please describe exit destination</label><input id="cf-exit-type-other" class="field-input" value="${this.escape(c.exit_destination_other||'')}"></div></div><div class="field-group full"><label class="field-label">Reason for Exit</label><div class="field-hint" style="margin-bottom:7px;">Select every reason that applies.</div><div class="reason-list" id="cf-exit-reason-list">${this.exitReasonOptions().map((r,i)=>`<label class="reason-row"><input type="checkbox" class="cf-exit-reason" id="cf-exit-reason-${i}" value="${this.escape(r)}" ${selectedReasons.includes(r)?'checked':''}><span>${this.escape(r)}</span></label>`).join('')}</div><div id="cf-exit-reason-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required" for="cf-exit-reason-other">Please specify reason for exit</label><input id="cf-exit-reason-other" class="field-input" value="${this.escape(c.exit_reason_other||'')}"></div></div><div class="field-group"><label class="field-label">Specific Destination / Notes</label><input id="cf-exit-destination" class="field-input" value="${this.escape(c.exit_destination||'')}"></div><div class="field-group"><label class="field-label">Income at Exit</label><input id="cf-income-exit" type="number" class="field-input" value="${c.income_at_exit||''}"></div><div class="field-group full"><label class="field-label">Outcome Notes</label><textarea id="cf-exit-notes" class="field-textarea">${this.escape(c.exit_notes||'')}</textarea></div></div></div>
       <div class="form-section"><div class="form-section-title">Recent Services</div>${recent}<button class="btn btn-ghost btn-sm" id="cf-add-service" ${id?'':'disabled'}>+ Add Service</button><div class="field-hint" style="margin-top:6px;">Save the client before adding services.</div></div><div class="form-section"><div class="form-section-title">Income / Benefits Updates</div>${recentUpdates}<button class="btn btn-ghost btn-sm" id="cf-add-update" ${id?'':'disabled'}>+ Add Update</button><div class="field-hint" style="margin-top:6px;">Save the client before adding an update. One update per quarter.</div></div><div id="cf-quality" class="data-quality-list"></div>
     </div>${this.reportingSummaryHtml({...c,housing_plan_status:progress})}</div>`;
     this.openOverlay('client');
@@ -5713,7 +5757,19 @@ const App = {
     setupOther('cf-race','cf-race-other-wrap','cf-race-other');
     setupOther('cf-primary-language','cf-primary-language-other-wrap','cf-primary-language-other');
     setupOther('cf-exit-type','cf-exit-type-other-wrap','cf-exit-type-other');
-    setupOther('cf-exit-reason','cf-exit-reason-other-wrap','cf-exit-reason-other');
+    // Reason for Exit is a checkbox group now, so it needs its own toggle:
+    // setupOther() reads .value off a single <select>, which no longer exists.
+    const toggleReasonOther=()=>{
+      const boxes=[...document.querySelectorAll('.cf-exit-reason')];
+      const wrap=document.getElementById('cf-exit-reason-other-wrap');
+      const inp=document.getElementById('cf-exit-reason-other');
+      if(!wrap||!inp) return;
+      const show=boxes.some(b=>b.checked && isOtherValue(b.value));
+      wrap.style.display=show?'block':'none';
+      if(!show) inp.value='';
+    };
+    document.querySelectorAll('.cf-exit-reason').forEach(b=>b.addEventListener('change',toggleReasonOther));
+    toggleReasonOther();
     const refresh=()=>{
       const temp={hmis_unique_identifier:document.getElementById('cf-hmis-id').value.trim(), entry_date:document.getElementById('cf-entry-date').value, expected_exit_date:document.getElementById('cf-expected-exit').value, exit_date:document.getElementById('cf-exit-date')?.value, status:document.getElementById('cf-status').value, exit_destination_type:document.getElementById('cf-exit-type')?.value, housing_plan_status:document.getElementById('cf-housing-plan').value};
       const warnings=this.clientQualityWarnings(temp); const q=document.getElementById('cf-quality'); if(q) q.innerHTML=warnings.map(w=>`<div class="dq-warning">⚠ ${this.escape(w)}</div>`).join('');
@@ -5733,6 +5789,8 @@ const App = {
     const status=document.getElementById('cf-status').value;
     const exitType=status==='Exited' ? (document.getElementById('cf-exit-type').value||null) : null;
     const defs=this.deriveExitDefaults(exitType);
+    const isOtherReason=(v)=>String(v||'').toLowerCase().includes('other');
+    const selectedExitReasons=[...document.querySelectorAll('.cf-exit-reason:checked')].map(b=>b.value);
 
     const payload={
       id,
@@ -5765,7 +5823,10 @@ const App = {
       exit_housing_stability:status==='Exited' ? defs.stability : null,
       exit_expected_90_days:status==='Exited' ? defs.days90 : null,
       housing_goal_achieved:status==='Exited' ? defs.goal : null,
-      exit_reason:status==='Exited' ? (document.getElementById('cf-exit-reason').value||null) : null,
+      // exit_reasons is the source of truth; exit_reason keeps the first
+      // selection so the printed report and Excel export keep working.
+      exit_reasons:status==='Exited' ? (selectedExitReasons.length ? selectedExitReasons : null) : null,
+      exit_reason:status==='Exited' ? (selectedExitReasons[0]||null) : null,
       exit_reason_other:status==='Exited' ? (document.getElementById('cf-exit-reason-other')?.value.trim()||null) : null,
       follow_up_planned:status==='Exited' && defs.goal==='Yes' ? 'Yes' : null,
       exit_notes:status==='Exited' ? (document.getElementById('cf-exit-notes').value.trim()||null) : null,
@@ -5782,13 +5843,27 @@ const App = {
     otherCheck('cf-race','cf-race-other','Please specify race/ethnicity.');
     otherCheck('cf-primary-language','cf-primary-language-other','Please specify language.');
     otherCheck('cf-exit-type','cf-exit-type-other','Please describe exit destination.');
-    otherCheck('cf-exit-reason','cf-exit-reason-other','Please specify reason for exit.');
+    if(selectedExitReasons.some(r=>isOtherReason(r)) && !String(document.getElementById('cf-exit-reason-other')?.value||'').trim()){
+      needsOther.push('Please specify reason for exit.');
+    }
     if(needsOther.length){ document.getElementById('client-save-state').textContent=needsOther.join(' '); return; }
     if(blocking.length){ document.getElementById('client-save-state').textContent=blocking.join(' '); return; }
     if(!payload.id || !payload.entry_date){ document.getElementById('client-save-state').textContent='HMIS ID and Entry Date are required.'; return; }
 
-    const {error}=await this.sb.from('holloway_clients').upsert(payload,{onConflict:'id'});
+    // Same degradation strategy as the service form: if exit_reasons has not
+    // been migrated on this deployment, drop it and save the rest rather than
+    // failing the whole record. exit_reason still carries the first selection.
+    let {error}=await this.sb.from('holloway_clients').upsert(payload,{onConflict:'id'});
+    let reasonsDropped=false;
+    if(error && this.isMissingColumnError(error)){
+      const fallback={...payload}; delete fallback.exit_reasons;
+      const retry=await this.sb.from('holloway_clients').upsert(fallback,{onConflict:'id'});
+      error=retry.error; reasonsDropped=!retry.error;
+    }
     if(error){ document.getElementById('client-save-state').textContent='Save failed: '+error.message; return; }
+    if(reasonsDropped && selectedExitReasons.length>1){
+      this.toast('Saved, but only the first exit reason was stored — the exit_reasons migration has not been applied here.',{error:true});
+    }
 
     const clientName=document.getElementById('cf-client-name')?.value.trim()||null;
     if(clientName){
@@ -6180,8 +6255,9 @@ const App = {
       'Exit Stability': c.exit_date ? (this.exitStability(c) || '') : '',
       'Expected Stable 90+ Days': c.exit_expected_90_days || '',
       'Housing Goal Achieved': c.housing_goal_achieved || '',
-      'Reason for Exit': c.exit_reason || '',
+      'Reason for Exit': this.clientExitReasons(c).join('; '),
       'Reason for Exit (Other, specify)': c.exit_reason_other || '',
+      'Reason for Exit (count)': this.clientExitReasons(c).length || '',
       'Follow-up Planned': c.follow_up_planned || '',
       'Updated By': c.updated_by || '',
       'Updated At': c.updated_at ? new Date(c.updated_at) : null
