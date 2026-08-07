@@ -2330,7 +2330,7 @@ const App = {
   // Picks the quarter whose period contains today. Before the contract year
   // starts we sit on Q1; after it ends we stay on Q4, which is the quarter
   // still being written up.
-  resolveCurrentQuarter(today=new Date().toISOString().slice(0,10)) {
+  resolveCurrentQuarter(today=this.localDate()) {
     const order = Object.keys(this.quarters);
     for (const q of order) {
       const { start, end } = this.qRange(q);
@@ -2351,7 +2351,27 @@ const App = {
   // Single source of truth for licensed bed count: the program record wins,
   // CONFIG is the fallback. Read this instead of writing the number inline.
   bedCapacity() { return Number(this.program?.bed_capacity || CONFIG.BED_CAPACITY || 20); },
-  clientStatus(c, onDate=null) { const today = onDate || new Date().toISOString().slice(0,10); if (c.exit_date && this.dateOnly(c.exit_date) <= today) return 'Exited'; if (c.entry_date && this.dateOnly(c.entry_date) <= today) return 'Active'; return 'Pending'; },
+
+  /* Today's date in the LOCAL calendar, as YYYY-MM-DD.
+   *
+   * The app previously derived every "today" from
+   * `new Date().toISOString().slice(0,10)`, which is the date in UTC — not
+   * the date where the staff member is standing. Los Angeles is UTC-7 in
+   * summer and UTC-8 in winter, so from about 4–5pm Pacific onward the UTC
+   * date is already tomorrow. Evening-shift staff were getting tomorrow's
+   * date defaulted into service, case-note and incident forms, and the same
+   * skew fed length-of-stay, follow-up overdue counts, contact gaps and
+   * client Active/Pending status.
+   *
+   * toISOString() is still correct for timestamps sent to Postgres, where an
+   * absolute UTC instant is exactly what a timestamptz column wants. It is
+   * only wrong for calendar dates. Use this for anything date-shaped.
+   */
+  localDate(d = new Date()) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  },
+  clientStatus(c, onDate=null) { const today = onDate || this.localDate(); if (c.exit_date && this.dateOnly(c.exit_date) <= today) return 'Exited'; if (c.entry_date && this.dateOnly(c.entry_date) <= today) return 'Active'; return 'Pending'; },
   clientOverlaps(c,start,end) { const entry=this.dateOnly(c.entry_date); if(!entry) return false; const exit=this.dateOnly(c.exit_date) || end; return entry <= end && exit >= start; },
   clientBedNights(c,start,end) { if(!this.clientOverlaps(c,start,end)) return 0; const s=this.dateMax(this.dateOnly(c.entry_date), start); const e=this.dateMin(this.dateOnly(c.exit_date)||end, end); return this.daysInclusive(s,e); },
   // Explicit destination -> outcome-category map. This is the single
@@ -2699,7 +2719,7 @@ const App = {
     const el = document.getElementById('view-dashboard');
     const q = this.currentQuarter;
     const scope = this.dashboardScope;
-    const todayClamped = this.dateMin(new Date().toISOString().slice(0,10), '2026-09-30');
+    const todayClamped = this.dateMin(this.localDate(), '2026-09-30');
     const periodLabel = scope === 'ytd'
       ? `Year to Date &middot; October 1, 2025 &ndash; ${this.formatDate(todayClamped)}`
       : `${this.escape(q)} &middot; ${this.escape(this.quarters[q].period)} &middot; Due ${this.formatDate(this.quarters[q].due)}`;
@@ -3389,7 +3409,7 @@ const App = {
   // the gating below is convenience, not the security boundary.
   // ══════════════════════════════════════════════════════════════════════
   engagementReviewDefaults() {
-    const iso = d => d.toISOString().slice(0,10);
+    const iso = d => this.localDate(d);
     const to = new Date();
     const from = new Date(to.getTime() - 89*86400000);
     return { from: this._erFrom || iso(from), to: this._erTo || iso(to) };
@@ -5129,8 +5149,8 @@ const App = {
     if (view === 'housing-followups') this.renderHousingFollowUps();
   };
 
-  App.addMonthsDate = function(dateStr, months){ const d=new Date(dateStr+'T12:00:00'); d.setMonth(d.getMonth()+months); return d.toISOString().slice(0,10); };
-  App.today = function(){ return new Date().toISOString().slice(0,10); };
+  App.addMonthsDate = function(dateStr, months){ const d=new Date(dateStr+'T12:00:00'); d.setMonth(d.getMonth()+months); return this.localDate(d); };
+  App.today = function(){ return this.localDate(); };
   App.daysUntil = function(dateStr){ const a=new Date(this.today()+'T00:00:00'), b=new Date(dateStr+'T00:00:00'); return Math.ceil((b-a)/86400000); };
   App.activeClientsNow = function(){ return (this.data.clients||[]).filter(c=>this.clientStatus(c)==='Active'); };
   App.phExitClients = function(){ return (this.data.clients||[]).filter(c=>c.exit_date && this.isPermanentExit(c)); };
@@ -5506,7 +5526,7 @@ const App = {
     return `<div class="field-group"><label class="field-label">${this.escape(label)}</label><div class="segmented-row" data-segment-group="${id}">${vals.map(v=>`<button type="button" class="segment-btn ${value===v?'active':''}" data-value="${this.escape(v)}">${this.escape(v==='Client doesn’t know'?'Unknown':v==='Client prefers not to answer'?'Prefers not':v==='Data not collected'?'Not collected':v)}</button>`).join('')}</div><input type="hidden" id="${id}" value="${this.escape(value||'')}"></div>`;
   };
   App.reportingSummaryHtml = function(c){
-    const today=this.today ? this.today() : new Date().toISOString().slice(0,10);
+    const today=this.today();
     const entry=this.dateOnly(c.entry_date); const exit=this.dateOnly(c.exit_date);
     const los=entry ? this.daysInclusive(entry, exit||today) : 0;
     const status=this.simpleClientStatus(c);
@@ -5917,7 +5937,7 @@ const App = {
         <div class="attendee-toolbar"><button type="button" class="btn btn-ghost btn-sm" id="sf-attend-all">Select all</button><button type="button" class="btn btn-ghost btn-sm" id="sf-attend-none">Clear</button><span class="attendee-count" id="sf-attend-count"></span></div>
         <div class="attendee-list">${attendeeList}</div>
       </div>
-      <div class="field-group"><label class="field-label required" for="sf-date">Service Date</label><input id="sf-date" type="date" class="field-input" value="${this.dateOnly(s.service_date) || new Date().toISOString().slice(0,10)}"></div>
+      <div class="field-group"><label class="field-label required" for="sf-date">Service Date</label><input id="sf-date" type="date" class="field-input" value="${this.dateOnly(s.service_date) || this.localDate()}"></div>
       <div class="field-group"><label class="field-label required" for="sf-type">Service Type</label><select id="sf-type" class="field-select">${typeSelect}</select>
         <div id="sf-type-other-wrap" style="display:none;margin-top:8px;"><label class="field-label required" for="sf-type-other">Name of this service</label><input id="sf-type-other" class="field-input" placeholder="e.g. Sunday Supper Club" value="${this.escape(s.service_type_other||'')}"><div class="field-hint">Staff-defined. Reporting still rolls this up under On-Site Participation.</div></div>
         <div id="sf-group-note" class="group-session-note" style="display:none;">On-site group session</div>
@@ -6168,11 +6188,11 @@ const App = {
   App.openCaseNoteForm = function(noteId=null, clientId=null){
     this.ensureCaseNoteModal();
     this.currentCaseNoteId=noteId;
-    const n=noteId ? (this.data.caseNotes||[]).find(x=>x.id===noteId)||{} : {client_id:clientId||this.currentClientId||'', note_date:this.today ? this.today() : new Date().toISOString().slice(0,10), staff_name:this.user?.email||''};
+    const n=noteId ? (this.data.caseNotes||[]).find(x=>x.id===noteId)||{} : {client_id:clientId||this.currentClientId||'', note_date:this.today(), staff_name:this.user?.email||''};
     document.getElementById('case-note-title').textContent=noteId?'Edit Case Note':'Add Case Note';
     document.getElementById('case-note-body').innerHTML=`<div class="form-section"><div class="form-section-title">Case Note Detail</div><div class="client-form-grid">
       <div class="field-group full"><label class="field-label required">Client</label><select id="cn-client" class="field-select">${this.clientOptionList(n.client_id)}</select></div>
-      <div class="field-group"><label class="field-label required">Note Date</label><input id="cn-date" type="date" class="field-input" value="${this.dateOnly(n.note_date)||new Date().toISOString().slice(0,10)}"></div>
+      <div class="field-group"><label class="field-label required">Note Date</label><input id="cn-date" type="date" class="field-input" value="${this.dateOnly(n.note_date)||this.localDate()}"></div>
       <div class="field-group"><label class="field-label">Staff</label><input id="cn-staff" class="field-input" value="${this.escape(n.staff_name||this.user?.email||'')}"></div>
       <div class="field-group full"><label class="field-label required">Case Note</label><textarea id="cn-note" class="field-textarea" style="min-height:150px;">${this.escape(n.note||'')}</textarea><div class="field-hint">Case notes are saved to the client history only. They are not used in quarterly metrics or printed program-report calculations.</div></div>
     </div></div>`;
@@ -6351,7 +6371,7 @@ const App = {
     addSheet(wb, this.buildDemographicExportRows(), 'Demographics');
 
     const progName = (this.programName ? this.programName() : 'Program').replace(/[^\w\- ]+/g,'').trim() || 'Program';
-    const filename = `${progName} Data Export ${new Date().toISOString().slice(0,10)}.xlsx`;
+    const filename = `${progName} Data Export ${this.localDate()}.xlsx`;
     XLSX.writeFile(wb, filename, { cellDates: true });
     this.toast('Excel export ready — check your downloads.');
   };
@@ -6393,7 +6413,7 @@ const App = {
     const lastContact = dates[dates.length-1];
     const daysSince = -this.daysUntil(lastContact);
     const cutoff = new Date(this.today()+'T00:00:00'); cutoff.setDate(cutoff.getDate()-30);
-    const cutoffStr = cutoff.toISOString().slice(0,10);
+    const cutoffStr = this.localDate(cutoff);
     const contactsLast30 = services.filter(s=>(this.dateOnly(s.service_date)||'') >= cutoffStr).length;
     let out;
     if (daysSince <= 14) out = { label:'Active', cssClass:'badge-green' };
@@ -7078,12 +7098,12 @@ const App = {
     this.ensureIncidentModal();
     this.currentIncidentId=incidentId;
     this.currentIncidentClientId=clientId;
-    const i=incidentId ? (this.data.clientIncidents||[]).find(x=>x.id===incidentId)||{} : {client_id:clientId||this.currentClientId||'', incident_date:this.today ? this.today() : new Date().toISOString().slice(0,10), category:'Behavioral Issue', severity:'Low', status:'Open', staff_name:this.user?.email||''};
+    const i=incidentId ? (this.data.clientIncidents||[]).find(x=>x.id===incidentId)||{} : {client_id:clientId||this.currentClientId||'', incident_date:this.today(), category:'Behavioral Issue', severity:'Low', status:'Open', staff_name:this.user?.email||''};
     document.getElementById('incident-title').textContent=incidentId?'Edit Incident Report':'Log Incident';
     document.getElementById('incident-body').innerHTML=`
       <div class="form-section"><div class="form-section-title">Incident Detail</div><div class="client-form-grid">
         <div class="field-group full"><label class="field-label required">Client</label><select id="in-client" class="field-select">${this.clientOptionList(i.client_id)}</select></div>
-        <div class="field-group"><label class="field-label required">Incident Date</label><input id="in-date" type="date" class="field-input" value="${this.dateOnly(i.incident_date)||new Date().toISOString().slice(0,10)}"></div>
+        <div class="field-group"><label class="field-label required">Incident Date</label><input id="in-date" type="date" class="field-input" value="${this.dateOnly(i.incident_date)||this.localDate()}"></div>
         <div class="field-group"><label class="field-label required">Category</label><select id="in-category" class="field-select">${this.incidentCategoryOptions().map(x=>`<option value="${this.escape(x)}" ${i.category===x?'selected':''}>${this.escape(x)}</option>`).join('')}</select></div>
         <div class="field-group"><label class="field-label required">Severity</label><select id="in-severity" class="field-select">${this.incidentSeverityOptions().map(x=>`<option value="${this.escape(x)}" ${(i.severity||'Low')===x?'selected':''}>${this.escape(x)}</option>`).join('')}</select></div>
         <div class="field-group"><label class="field-label required">Status</label><select id="in-status" class="field-select">${this.incidentStatusOptions().map(x=>`<option value="${this.escape(x)}" ${(i.status||'Open')===x?'selected':''}>${this.escape(x)}</option>`).join('')}</select></div>
