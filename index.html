@@ -1066,6 +1066,68 @@ th.sortable:hover { color:var(--navy); }
 .fy-switcher:hover { background:rgba(255,255,255,.2); }
 .fy-switcher option { color:var(--gray-800); background:var(--white); }
 
+
+
+/* ========================================================================
+   FISCAL REPORTING — FY 2027
+   Monthly actuals, budget monitoring, GL/backup uploads, invoice generation,
+   certification/submission, and City review. Fiscal year is independent from
+   the Oct-Sep program-reporting contract period.
+   ======================================================================== */
+.fiscal-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.fiscal-controls{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.fiscal-control{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:700;color:var(--gray-500);letter-spacing:.025em}
+.fiscal-control select,.fiscal-control input{min-height:38px;border:1px solid var(--border);border-radius:9px;background:#fff;padding:7px 10px;color:var(--gray-800);font-size:12.5px}
+.fiscal-tabs{display:flex;gap:7px;padding:4px;border:1px solid var(--border);border-radius:12px;background:#F4F6F8;width:max-content;max-width:100%;overflow:auto;margin-bottom:18px}
+.fiscal-tab{border:0;background:transparent;color:var(--navy);border-radius:8px;padding:8px 13px;font-size:12px;font-weight:700;white-space:nowrap;cursor:pointer}
+.fiscal-tab.active{background:var(--navy);color:white;box-shadow:0 2px 6px rgba(27,47,91,.16)}
+.fiscal-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.fiscal-kpi{background:#fff;border:1px solid var(--border);border-radius:14px;padding:15px 16px;box-shadow:var(--shadow)}
+.fiscal-kpi .label{font-size:10.5px;font-weight:700;color:var(--gray-500)}
+.fiscal-kpi .value{margin-top:5px;font-size:24px;font-weight:750;color:var(--navy);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.fiscal-kpi .sub{margin-top:3px;font-size:11px;color:var(--gray-500);line-height:1.35}
+.fiscal-budget-wrap{overflow:auto;border:1px solid var(--border);border-radius:14px;background:#fff;box-shadow:var(--shadow)}
+.fiscal-budget-table{width:100%;border-collapse:collapse;font-size:12px;min-width:980px}
+.fiscal-budget-table th{position:sticky;top:0;z-index:2;background:#F4F7FA;color:#4D5A6A;text-transform:uppercase;letter-spacing:.045em;font-size:10px;font-weight:750;padding:10px 11px;border-bottom:1px solid #DCE3EA;text-align:left}
+.fiscal-budget-table td{padding:9px 11px;border-bottom:1px solid #EDF0F3;vertical-align:middle}
+.fiscal-budget-table tbody tr:hover td{background:#F8FAFC}
+.fiscal-budget-table .fiscal-section-row td{background:#EEF3FA!important;color:var(--navy);font-weight:800;border-top:2px solid #D8E0EA}
+.fiscal-budget-table .fiscal-subsection-row td{background:#F8F9FB!important;color:#586575;font-weight:750}
+.fiscal-budget-table .fiscal-total-row td{background:#F1F5FA!important;color:var(--navy);font-weight:800;border-top:1px solid #C9D5E4}
+.fiscal-amount-input{width:118px;min-height:35px;border:1px solid var(--border);border-radius:8px;padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums}
+.fiscal-note-input{width:190px;min-height:35px;border:1px solid var(--border);border-radius:8px;padding:6px 8px}
+.fiscal-over{color:var(--red);font-weight:800}.fiscal-near{color:var(--amber);font-weight:800}
+.fiscal-doc-upload{border:1px dashed #BAC6D3;border-radius:12px;background:#F8FAFC;padding:16px}
+.fiscal-doc-list{display:grid;gap:8px;margin-top:12px}
+.fiscal-doc-row{display:flex;justify-content:space-between;gap:12px;align-items:center;border:1px solid var(--border);border-radius:10px;background:#fff;padding:10px 12px}
+.fiscal-doc-meta{font-size:11px;color:var(--gray-500);margin-top:2px}
+.fiscal-checks{display:grid;gap:8px}.fiscal-check{display:grid;grid-template-columns:24px 1fr auto;gap:9px;align-items:start;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:#fff}
+.fiscal-check.ok{border-left:4px solid var(--green)}.fiscal-check.warning{border-left:4px solid var(--amber)}.fiscal-check.error{border-left:4px solid var(--red)}.fiscal-check.info{border-left:4px solid var(--navy)}
+.fiscal-check .icon{font-weight:900}.fiscal-check .detail{font-size:11.5px;color:var(--gray-600);margin-top:2px}.fiscal-check .fix{font-size:11px;color:var(--gray-500);text-align:right;max-width:250px}
+.fiscal-summary-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;margin-bottom:18px}
+.fiscal-source-note{border:1px solid var(--border);border-radius:12px;background:#FBFCFD;padding:12px 14px;font-size:11.5px;color:var(--gray-600)}
+.fiscal-source-note summary{cursor:pointer;color:var(--navy);font-weight:750}
+.fiscal-invoice{border:1px solid var(--border);border-radius:16px;background:#fff;padding:26px;box-shadow:var(--shadow);max-width:980px}
+.fiscal-invoice-head{display:flex;justify-content:space-between;gap:22px;border-bottom:3px solid var(--gold);padding-bottom:14px;margin-bottom:18px}
+.fiscal-invoice-title{font-size:27px;font-weight:760;color:var(--navy);letter-spacing:-.03em}
+.fiscal-invoice-meta{text-align:right;font-size:11.5px;color:var(--gray-600);line-height:1.65;min-width:260px}
+.fiscal-address-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+.fiscal-address-box{border:1px solid var(--border);border-radius:10px;background:#F8FAFC;padding:12px;font-size:12px;line-height:1.5}
+.fiscal-address-box strong{color:var(--navy)}
+.fiscal-cert{border:1px solid var(--border);border-left:5px solid var(--navy);border-radius:10px;background:#F8FAFC;padding:13px 15px;font-size:11.5px;line-height:1.55;margin-top:18px}
+.fiscal-review-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}
+.fiscal-month-row-active td{background:#F5F8FC!important}
+@media(max-width:1100px){.fiscal-kpis{grid-template-columns:repeat(3,1fr)}.fiscal-summary-grid{grid-template-columns:1fr}}
+@media(max-width:700px){.fiscal-kpis{grid-template-columns:1fr 1fr}.fiscal-address-grid{grid-template-columns:1fr}.fiscal-invoice-head{display:block}.fiscal-invoice-meta{text-align:left;margin-top:12px}.fiscal-doc-row{align-items:flex-start;flex-direction:column}}
+@media(max-width:480px){.fiscal-kpis{grid-template-columns:1fr}}
+@media print{
+  .fiscal-invoice{border:0!important;border-radius:0!important;box-shadow:none!important;padding:0!important;max-width:none!important}
+  .fiscal-invoice .no-print{display:none!important}
+  .fiscal-invoice-head{break-after:avoid;page-break-after:avoid}
+  .fiscal-invoice table{break-inside:avoid;page-break-inside:avoid}
+  .fiscal-print-backup{break-before:page;page-break-before:always;margin-top:0!important}
+}
+
 </style>
 </head>
 
@@ -1164,6 +1226,10 @@ th.sortable:hover { color:var(--navy); }
           <div class="sidebar-label">Program Reports</div>
           <div class="sidebar-item" data-view="quarter"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Program Reports</div>
         </div>
+        <div class="sidebar-section">
+          <div class="sidebar-label">Fiscal</div>
+          <div class="sidebar-item" data-view="fiscal"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h3M14 12h3M7 16h3M14 16h3"/></svg>Fiscal Reporting</div>
+        </div>
       </nav>
     </aside>
 
@@ -1175,6 +1241,7 @@ th.sortable:hover { color:var(--navy); }
       <section id="view-housing-followups" class="view-section"></section>
       <section id="view-incident-log" class="view-section"></section>
       <section id="view-quarter" class="view-section"></section>
+      <section id="view-fiscal" class="view-section"></section>
       <section id="view-admin-review" class="view-section"></section>
       <section id="view-access" class="view-section"></section>
     </main>
@@ -8712,6 +8779,385 @@ const App = {
   });
 })();
 
+
+
+// ---------- Fiscal reporting & invoicing — FY 2027 ----------
+/* ============================================================
+   EXTENSION 20 — Monthly fiscal reporting for Holloway.
+
+   Important calendar rule: fiscal invoicing is JULY-JUNE and is
+   intentionally independent from the Oct-Sep program-reporting contract year.
+   The FY 2027 fallback below reproduces Exhibit F of Amendment No. 1.
+   Database tables (when installed) are the durable source of truth; the
+   fallback lets the screen render before the migration is run.
+   ============================================================ */
+(function(){
+  const FY27 = {
+    fiscalYear: 'FY2026-27',
+    budgetLabel: 'FY 2027',
+    start: '2026-07-01',
+    end: '2027-06-30',
+    officialTotal: 1620284,
+    sourceName: 'Exhibit F: Holloway Interim Housing Program Budget--FY 2027, Amendment No. 1',
+    sourceTotals: {
+      salaries: 646717.72,
+      benefits: 191574,
+      personnel: 838292.09,
+      facility: 432505,
+      program: 324339,
+      administrative: 25149,
+      grand_total: 1620284
+    },
+    lines: [
+      {line_code:'SAL_RA_SUP',category:'Personnel',subcategory:'Salaries',line_name:'RA Supervisor',approved_budget:61306,fte_count:1.00,hourly_wage:31.93,sort_order:10},
+      {line_code:'SAL_DIR_PROG',category:'Personnel',subcategory:'Salaries',line_name:'Director of Programs',approved_budget:9508,fte_count:0.10,hourly_wage:49.52,sort_order:20},
+      {line_code:'SAL_DIR_OPS',category:'Personnel',subcategory:'Salaries',line_name:'Director of Operations',approved_budget:19015,fte_count:0.20,hourly_wage:49.52,sort_order:30},
+      {line_code:'SAL_PM',category:'Personnel',subcategory:'Salaries',line_name:'Program Manager',approved_budget:87842,fte_count:1.00,hourly_wage:45.75,sort_order:40},
+      {line_code:'SAL_RA_01',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 1',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:50},
+      {line_code:'SAL_RA_02',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 2',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:60},
+      {line_code:'SAL_RA_03',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 3',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:70},
+      {line_code:'SAL_RA_04',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 4',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:80},
+      {line_code:'SAL_RA_05',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 5',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:90},
+      {line_code:'SAL_RA_06',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 6',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:100},
+      {line_code:'SAL_RA_07',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 7',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:110},
+      {line_code:'SAL_RA_08',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 8',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:120},
+      {line_code:'SAL_FAC_MGR',category:'Personnel',subcategory:'Salaries',line_name:'Facilities Manager',approved_budget:11470,fte_count:0.20,hourly_wage:29.87,sort_order:130},
+      {line_code:'SAL_GCM',category:'Personnel',subcategory:'Salaries',line_name:'General Case Manager',approved_budget:51418,fte_count:1.00,hourly_wage:26.78,sort_order:140},
+      {line_code:'SAL_HNAV',category:'Personnel',subcategory:'Salaries',line_name:'Housing Navigation Case Manager',approved_budget:58102,fte_count:1.00,hourly_wage:30.26,sort_order:150},
+      {line_code:'BEN_FICA',category:'Personnel',subcategory:'Fringe Benefits',line_name:'FICA',approved_budget:49474,sort_order:210},
+      {line_code:'BEN_SUI',category:'Personnel',subcategory:'Fringe Benefits',line_name:'SUI',approved_budget:719,sort_order:220},
+      {line_code:'BEN_WC',category:'Personnel',subcategory:'Fringe Benefits',line_name:"Worker's Comp",approved_budget:22086,sort_order:230},
+      {line_code:'BEN_MED',category:'Personnel',subcategory:'Fringe Benefits',line_name:'Medical Insurance',approved_budget:86960,sort_order:240},
+      {line_code:'BEN_OTHER',category:'Personnel',subcategory:'Fringe Benefits',line_name:'Other (Detail)',approved_budget:32336,sort_order:250},
+      {line_code:'FAC_EQUIP',category:'Facility',subcategory:'Facility Expenses',line_name:'Equipment (Laptops, software, etc.)',approved_budget:7657,sort_order:310},
+      {line_code:'FAC_IT',category:'Facility',subcategory:'Facility Expenses',line_name:'Computer & IT',approved_budget:9307,sort_order:320},
+      {line_code:'FAC_SECURITY',category:'Facility',subcategory:'Facility Expenses',line_name:'Security',approved_budget:198252,sort_order:330},
+      {line_code:'FAC_UTIL',category:'Facility',subcategory:'Facility Expenses',line_name:'Utilities (Water, Electric, Internet, Sanitation)',approved_budget:78795,sort_order:340},
+      {line_code:'FAC_MR',category:'Facility',subcategory:'Facility Expenses',line_name:'Building M&R',approved_budget:16408,sort_order:350},
+      {line_code:'FAC_JAN',category:'Facility',subcategory:'Facility Expenses',line_name:'Janitorial Services',approved_budget:60255,sort_order:360},
+      {line_code:'FAC_PEST',category:'Facility',subcategory:'Facility Expenses',line_name:'Pest Control Services',approved_budget:6489,sort_order:370},
+      {line_code:'FAC_LAND',category:'Facility',subcategory:'Facility Expenses',line_name:'Landscaping',approved_budget:9734,sort_order:380},
+      {line_code:'FAC_INS',category:'Facility',subcategory:'Facility Expenses',line_name:'Insurance',approved_budget:32630,sort_order:390},
+      {line_code:'FAC_PRINT',category:'Facility',subcategory:'Facility Expenses',line_name:'Printer / Copier',approved_budget:12978,sort_order:400},
+      {line_code:'PROG_EMERG',category:'Program',subcategory:'Program Expenses',line_name:'Emergency Housing Supplies',approved_budget:28811,sort_order:510},
+      {line_code:'PROG_OFFICE',category:'Program',subcategory:'Program Expenses',line_name:'Office Supplies',approved_budget:8158,sort_order:520},
+      {line_code:'PROG_TRANS',category:'Program',subcategory:'Program Expenses',line_name:'Transportation',approved_budget:18540,sort_order:530},
+      {line_code:'PROG_FOOD',category:'Program',subcategory:'Program Expenses',line_name:'Food Costs',approved_budget:139050,sort_order:540},
+      {line_code:'PROG_SUPPORT',category:'Program',subcategory:'Program Expenses',line_name:'Contracted Supportive Services (outside of City provider network)',approved_budget:41715,sort_order:550},
+      {line_code:'PROG_CLINICAL',category:'Program',subcategory:'Program Expenses',line_name:'Clinical Services--contracted',approved_budget:69525,sort_order:560},
+      {line_code:'PROG_HR',category:'Program',subcategory:'Program Expenses',line_name:'Harm-reduction supplies & trainings (NARCAN, sharps containers, overdose ed.)',approved_budget:9270,sort_order:570},
+      {line_code:'PROG_INCENT',category:'Program',subcategory:'Program Expenses',line_name:'Incentives for Participation in Services (for clients)',approved_budget:9270,sort_order:580},
+      {line_code:'ADMIN_INDIRECT',category:'Administrative',subcategory:'Administrative',line_name:'Indirect Costs',approved_budget:25149,sort_order:610}
+    ]
+  };
+  const DOC_TYPES = ['General Ledger','Payroll Register','Check Register','Receipt / Invoice','Allocation Worksheet','Other Backup'];
+  const STORAGE_BUCKET = 'holloway-fiscal-documents';
+  const CERT_TEXT = 'I certify that the amounts reported on this invoice are accurate, eligible under the agreement, incurred during the service period shown, and supported by records maintained by the agency and the documentation submitted with this invoice.';
+
+  App.fiscal = { years:[], budgetLines:[], actuals:[], monthMeta:[], documents:[], submissions:[], statusLog:[], setupReady:false, setupErrors:[] };
+  App.fiscalBudgetYear = FY27.fiscalYear;
+  App.fiscalMonth = null;
+  App.fiscalTab = 'data';
+  App._fiscalDirty = false;
+
+  App.fiscalMoney = function(v){ return Number(v||0).toLocaleString('en-US',{style:'currency',currency:'USD',minimumFractionDigits:0,maximumFractionDigits:2}); };
+  App.fiscalPct = function(v){ return Number.isFinite(v) ? `${Math.round(v*100)}%` : '—'; };
+  App.fiscalYearRecord = function(){ return (this.fiscal.years||[]).find(y=>y.fiscal_year===this.fiscalBudgetYear) || {...FY27, fiscal_year:FY27.fiscalYear, budget_label:FY27.budgetLabel, start_date:FY27.start, end_date:FY27.end, official_total:FY27.officialTotal, source_name:FY27.sourceName, source_totals:FY27.sourceTotals}; };
+  App.fiscalYearStart = function(){ return this.dateOnly(this.fiscalYearRecord().start_date || FY27.start); };
+  App.fiscalYearEnd = function(){ return this.dateOnly(this.fiscalYearRecord().end_date || FY27.end); };
+  App.fiscalYearLabel = function(){ const y=this.fiscalYearRecord(); return y.budget_label || y.budgetLabel || this.fiscalBudgetYear; };
+  App.fiscalSourceTotals = function(){ const y=this.fiscalYearRecord(); return y.source_totals || y.sourceTotals || FY27.sourceTotals; };
+  App.fiscalOfficialTotal = function(){ const y=this.fiscalYearRecord(); return Number(y.official_total ?? y.officialTotal ?? this.fiscalSourceTotals().grand_total ?? 0); };
+
+  App.fiscalMonths = function(){
+    const start = ContractPeriods.parse(this.fiscalYearStart());
+    const end = ContractPeriods.parse(this.fiscalYearEnd());
+    if(!start || !end) return [];
+    const out=[]; let d=new Date(start); let guard=0;
+    while(d<=end && guard++<24){
+      const first=new Date(d.getFullYear(),d.getMonth(),1,12);
+      const last=new Date(d.getFullYear(),d.getMonth()+1,0,12);
+      const clampedStart=first<start?start:first, clampedEnd=last>end?end:last;
+      out.push({key:ContractPeriods.iso(clampedStart).slice(0,7)+'-01', start:ContractPeriods.iso(clampedStart), end:ContractPeriods.iso(clampedEnd), label:first.toLocaleDateString('en-US',{month:'long',year:'numeric'}), short:first.toLocaleDateString('en-US',{month:'short'})});
+      d=new Date(d.getFullYear(),d.getMonth()+1,1,12);
+    }
+    return out;
+  };
+  App.resolveFiscalMonth = function(){
+    const months=this.fiscalMonths(); if(!months.length) return null;
+    if(this.fiscalMonth && months.some(m=>m.key===this.fiscalMonth)) return this.fiscalMonth;
+    const today=this.localDate();
+    const match=months.find(m=>today>=m.start && today<=m.end);
+    this.fiscalMonth=(match||months[0]).key;
+    return this.fiscalMonth;
+  };
+  App.fiscalMonthRecord = function(key=this.resolveFiscalMonth()){ return this.fiscalMonths().find(m=>m.key===key) || this.fiscalMonths()[0]; };
+  App.fiscalMonthIndex = function(key=this.resolveFiscalMonth()){ return Math.max(0,this.fiscalMonths().findIndex(m=>m.key===key)); };
+
+  App.canEditFiscal = function(){ if(this.isAdmin()) return false; if(this.hasRole('agency_reporter','reporter','agency_editor','agency_signer','agency_admin')) return true; const hasNoRole=!this.profile?.access_type&&!this.profile?.role; return hasNoRole && (!!this.profile?.program_id || !!this.profile?.organization); };
+  App.fiscalSubmission = function(month=this.resolveFiscalMonth()){ return (this.fiscal.submissions||[]).find(s=>this.dateOnly(s.invoice_month)===this.dateOnly(month)); };
+  App.fiscalStatus = function(month=this.resolveFiscalMonth()){ return this.fiscalSubmission(month)?.status || 'draft'; };
+  App.fiscalMonthOpen = function(month=this.resolveFiscalMonth()){ return ['draft','revision_requested','returned'].includes(this.fiscalStatus(month)); };
+  App.fiscalCanEditMonth = function(month=this.resolveFiscalMonth()){ return this.canEditFiscal() && this.fiscalMonthOpen(month) && this.fiscal.setupReady; };
+
+  App.loadFiscalData = async function(preferredYear=null){
+    if(!this.program?.id) return;
+    const pid=this.program.id;
+    const priorFiscalYear=this.fiscalBudgetYear;
+    const priorFiscalMonth=this.fiscalMonth;
+    const yearsRes=await this.sb.from('holloway_fiscal_years').select('*').eq('program_id',pid).order('start_date',{ascending:true});
+    const setupErrors=[];
+    let years=[];
+    if(yearsRes.error){ setupErrors.push(yearsRes.error); years=[{fiscal_year:FY27.fiscalYear,budget_label:FY27.budgetLabel,start_date:FY27.start,end_date:FY27.end,official_total:FY27.officialTotal,source_name:FY27.sourceName,source_totals:FY27.sourceTotals,_fallback:true}]; }
+    else years=yearsRes.data?.length?yearsRes.data:[{fiscal_year:FY27.fiscalYear,budget_label:FY27.budgetLabel,start_date:FY27.start,end_date:FY27.end,official_total:FY27.officialTotal,source_name:FY27.sourceName,source_totals:FY27.sourceTotals,_fallback:true}];
+    this.fiscal.years=years;
+    const fy=preferredYear || this.fiscalBudgetYear;
+    const today=this.localDate();
+    const chosen=years.find(y=>y.fiscal_year===fy) || years.find(y=>today>=this.dateOnly(y.start_date)&&today<=this.dateOnly(y.end_date)) || years[years.length-1];
+    this.fiscalBudgetYear=chosen.fiscal_year;
+    this.fiscalMonth=(priorFiscalYear===this.fiscalBudgetYear)?priorFiscalMonth:null;
+    this.resolveFiscalMonth();
+
+    const [budgetRes,actualRes,metaRes,docRes,subRes,logRes]=await Promise.all([
+      this.sb.from('holloway_fiscal_budget_lines').select('*').eq('program_id',pid).eq('fiscal_year',this.fiscalBudgetYear).order('sort_order'),
+      this.sb.from('holloway_fiscal_actuals').select('*').eq('program_id',pid).eq('fiscal_year',this.fiscalBudgetYear).order('invoice_month'),
+      this.sb.from('holloway_fiscal_month_meta').select('*').eq('program_id',pid).eq('fiscal_year',this.fiscalBudgetYear).order('invoice_month'),
+      this.sb.from('holloway_fiscal_documents').select('*').eq('program_id',pid).eq('fiscal_year',this.fiscalBudgetYear).order('uploaded_at',{ascending:false}),
+      this.sb.from('holloway_fiscal_submissions').select('*').eq('program_id',pid).eq('fiscal_year',this.fiscalBudgetYear).order('invoice_month'),
+      this.sb.from('holloway_fiscal_status_log').select('*').eq('program_id',pid).eq('fiscal_year',this.fiscalBudgetYear).order('created_at',{ascending:false})
+    ]);
+    [budgetRes,actualRes,metaRes,docRes,subRes,logRes].forEach(r=>{ if(r.error) setupErrors.push(r.error); });
+    this.fiscal.budgetLines=budgetRes.data?.length ? budgetRes.data : (this.fiscalBudgetYear===FY27.fiscalYear ? FY27.lines.map(x=>({...x, fiscal_year:FY27.fiscalYear, program_id:pid, _fallback:true})) : []);
+    this.fiscal.actuals=actualRes.data||[];
+    this.fiscal.monthMeta=metaRes.data||[];
+    this.fiscal.documents=docRes.data||[];
+    this.fiscal.submissions=subRes.data||[];
+    this.fiscal.statusLog=logRes.data||[];
+    this.fiscal.setupErrors=setupErrors;
+    this.fiscal.setupReady=setupErrors.length===0;
+  };
+
+  App.fiscalActualFor = function(month,lineCode){ return (this.fiscal.actuals||[]).find(a=>this.dateOnly(a.invoice_month)===this.dateOnly(month)&&a.line_code===lineCode); };
+  App.fiscalMetaFor = function(month=this.resolveFiscalMonth()){
+    return (this.fiscal.monthMeta||[]).find(m=>this.dateOnly(m.invoice_month)===this.dateOnly(month)) || {invoice_month:month,invoice_number:'',invoice_date:this.localDate(),po_number:'',vendor_number:'330495',notes:''};
+  };
+  App.fiscalDocsFor = function(month=this.resolveFiscalMonth()){ return (this.fiscal.documents||[]).filter(d=>this.dateOnly(d.invoice_month)===this.dateOnly(month)); };
+  App.fiscalLineYtd = function(lineCode,through=this.resolveFiscalMonth()){
+    const idx=this.fiscalMonthIndex(through); const keys=new Set(this.fiscalMonths().slice(0,idx+1).map(m=>m.key));
+    return (this.fiscal.actuals||[]).filter(a=>a.line_code===lineCode && keys.has(this.dateOnly(a.invoice_month))).reduce((s,a)=>s+Number(a.amount||0),0);
+  };
+  App.fiscalCategoryYtd = function(category,through=this.resolveFiscalMonth()){
+    const codes=new Set((this.fiscal.budgetLines||[]).filter(l=>l.category===category).map(l=>l.line_code));
+    const idx=this.fiscalMonthIndex(through); const keys=new Set(this.fiscalMonths().slice(0,idx+1).map(m=>m.key));
+    return (this.fiscal.actuals||[]).filter(a=>codes.has(a.line_code)&&keys.has(this.dateOnly(a.invoice_month))).reduce((s,a)=>s+Number(a.amount||0),0);
+  };
+  App.fiscalCategoryMonth = function(category,month=this.resolveFiscalMonth()){
+    const codes=new Set((this.fiscal.budgetLines||[]).filter(l=>l.category===category).map(l=>l.line_code));
+    return (this.fiscal.actuals||[]).filter(a=>codes.has(a.line_code)&&this.dateOnly(a.invoice_month)===this.dateOnly(month)).reduce((s,a)=>s+Number(a.amount||0),0);
+  };
+  App.fiscalMonthTotal = function(month=this.resolveFiscalMonth()){ return ['Personnel','Facility','Program','Administrative'].reduce((s,c)=>s+this.fiscalCategoryMonth(c,month),0); };
+  App.fiscalYtdTotal = function(month=this.resolveFiscalMonth()){ return ['Personnel','Facility','Program','Administrative'].reduce((s,c)=>s+this.fiscalCategoryYtd(c,month),0); };
+  App.fiscalCategoryBudget = function(category){ const t=this.fiscalSourceTotals(); return Number(({Personnel:t.personnel,Facility:t.facility,Program:t.program,Administrative:t.administrative})[category]||0); };
+  App.fiscalLineDetailBudget = function(){ return (this.fiscal.budgetLines||[]).reduce((s,l)=>s+Number(l.approved_budget||0),0); };
+  App.fiscalSourceSubtotalSum = function(){ const t=this.fiscalSourceTotals(); return Number(t.personnel||0)+Number(t.facility||0)+Number(t.program||0)+Number(t.administrative||0); };
+
+  App.fiscalStatusBadge = function(status){
+    const map={draft:['gray','Draft'],submitted:['navy','Submitted'],resubmitted:['navy','Resubmitted'],revision_requested:['amber','Revisions Requested'],returned:['amber','Returned'],approved:['green','Approved']};
+    const [cls,label]=map[status]||['gray',String(status||'Draft').replaceAll('_',' ')]; return `<span class="badge badge-${cls}">${this.escape(label)}</span>`;
+  };
+
+  App.fiscalReconciliationChecks = function(month=this.resolveFiscalMonth()){
+    const docs=this.fiscalDocsFor(month); const hasGL=docs.some(d=>String(d.doc_type||'').toLowerCase()==='general ledger');
+    const total=this.fiscalMonthTotal(month); const ytd=this.fiscalYtdTotal(month); const official=this.fiscalOfficialTotal(); const meta=this.fiscalMetaFor(month);
+    const overCats=['Personnel','Facility','Program','Administrative'].filter(c=>this.fiscalCategoryYtd(c,month)>this.fiscalCategoryBudget(c)+0.005);
+    const sourceDiff=this.fiscalSourceSubtotalSum()-official;
+    const checks=[
+      {label:'Fiscal database setup',severity:this.fiscal.setupReady?'ok':'error',detail:this.fiscal.setupReady?'Fiscal tables and document metadata are available.':'The FY27 budget can be previewed, but fiscal database tables are not available yet.',fix:this.fiscal.setupReady?'No action needed.':'Run the supplied Supabase fiscal migration before entering or submitting data.'},
+      {label:'Monthly expense detail',severity:total>0?'ok':'error',detail:`Current invoice total: ${this.fiscalMoney(total)}`,fix:total>0?'No action needed.':'Enter at least one monthly actual before submission.'},
+      {label:'General Ledger backup',severity:hasGL?'ok':'error',detail:hasGL?`${docs.length} supporting file${docs.length===1?'':'s'} uploaded; General Ledger is present.`:`${docs.length} supporting file${docs.length===1?'':'s'} uploaded; no General Ledger found.`,fix:hasGL?'No action needed.':'Upload the monthly General Ledger before submission.'},
+      {label:'Invoice metadata',severity:meta.invoice_date&&meta.po_number?'ok':'error',detail:`Invoice #: ${meta.invoice_number||'not entered'} · Invoice date: ${meta.invoice_date||'not entered'} · PO: ${meta.po_number||'not entered'}`,fix:meta.invoice_date&&meta.po_number?'No action needed.':'Enter the invoice date and current FY27 PO number before submission.'},
+      {label:'Budget monitoring',severity:overCats.length?'warning':'ok',detail:overCats.length?`${overCats.join(', ')} ${overCats.length===1?'is':'are'} over the published annual category budget through this month.`:`YTD actuals ${this.fiscalMoney(ytd)} remain within the published annual total ${this.fiscalMoney(official)}.`,fix:overCats.length?'Review and document any approved budget modification or reallocation.':'No action needed.'},
+      {label:'Source-budget reconciliation',severity:'info',detail:`Published category subtotals sum to ${this.fiscalMoney(this.fiscalSourceSubtotalSum())}; the published grand total is ${this.fiscalMoney(official)} (difference ${this.fiscalMoney(sourceDiff)}). Detailed rounded line items sum to ${this.fiscalMoney(this.fiscalLineDetailBudget())}.`,fix:'The portal preserves the contract figures as published; do not silently adjust them.'}
+    ];
+    return checks;
+  };
+  App.fiscalBlockingIssues = function(month=this.resolveFiscalMonth()){ return this.fiscalReconciliationChecks(month).filter(c=>c.severity==='error'); };
+
+  App.fiscalKpisHtml = function(){
+    const month=this.resolveFiscalMonth(), ytd=this.fiscalYtdTotal(month), official=this.fiscalOfficialTotal(), remaining=official-ytd, monthTotal=this.fiscalMonthTotal(month), pct=official?ytd/official:0, docs=this.fiscalDocsFor(month).length;
+    return `<div class="fiscal-kpis">
+      <div class="fiscal-kpi"><div class="label">FY27 Approved Budget</div><div class="value">${this.fiscalMoney(official)}</div><div class="sub">Published grand total</div></div>
+      <div class="fiscal-kpi"><div class="label">YTD Actuals</div><div class="value">${this.fiscalMoney(ytd)}</div><div class="sub">Through ${this.escape(this.fiscalMonthRecord(month)?.label||'selected month')}</div></div>
+      <div class="fiscal-kpi"><div class="label">Remaining</div><div class="value ${remaining<0?'fiscal-over':''}">${this.fiscalMoney(remaining)}</div><div class="sub">Against published grand total</div></div>
+      <div class="fiscal-kpi"><div class="label">Budget Spent</div><div class="value">${this.fiscalPct(pct)}</div><div class="sub">YTD</div></div>
+      <div class="fiscal-kpi"><div class="label">Current Invoice</div><div class="value">${this.fiscalMoney(monthTotal)}</div><div class="sub">${docs} backup file${docs===1?'':'s'} · ${this.fiscalStatus(month).replaceAll('_',' ')}</div></div>
+    </div>`;
+  };
+
+  App.fiscalBudgetTableHtml = function(month=this.resolveFiscalMonth()){
+    const editable=this.fiscalCanEditMonth(month), lines=(this.fiscal.budgetLines||[]).slice().sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0));
+    if(!lines.length) return `<div class="notice amber"><div>!</div><div>No budget lines are configured for ${this.escape(this.fiscalBudgetYear)}.</div></div>`;
+    let html='', lastCat='', lastSub='';
+    for(const l of lines){
+      if(l.category!==lastCat){ html+=`<tr class="fiscal-section-row"><td colspan="7">${this.escape(l.category)} Expenses</td></tr>`; lastCat=l.category; lastSub=''; }
+      if(l.subcategory && l.subcategory!==lastSub){ html+=`<tr class="fiscal-subsection-row"><td colspan="7">${this.escape(l.subcategory)}</td></tr>`; lastSub=l.subcategory; }
+      const a=this.fiscalActualFor(month,l.line_code)||{}, current=Number(a.amount||0), ytd=this.fiscalLineYtd(l.line_code,month), budget=Number(l.approved_budget||0), remaining=budget-ytd, ratio=budget?ytd/budget:0;
+      const fte=l.fte_count!=null?`${Number(l.fte_count).toFixed(2)} FTE`:''; const wage=l.hourly_wage!=null?`${this.fiscalMoney(l.hourly_wage)}/hr`:''; const detail=[fte,wage].filter(Boolean).join(' · ');
+      const remClass=remaining<0?'fiscal-over':ratio>=.9?'fiscal-near':'';
+      html+=`<tr><td><strong>${this.escape(l.line_name)}</strong>${detail?`<div class="field-hint">${this.escape(detail)}</div>`:''}</td><td style="text-align:right">${this.fiscalMoney(budget)}</td><td style="text-align:right">${editable?`<input class="fiscal-amount-input" type="number" step="0.01" min="0" data-fiscal-amount="${this.escape(l.line_code)}" value="${current||''}" aria-label="${this.escape(l.line_name)} current month actual">`:this.fiscalMoney(current)}</td><td style="text-align:right">${this.fiscalMoney(ytd)}</td><td style="text-align:right" class="${remClass}">${this.fiscalMoney(remaining)}</td><td style="text-align:right" class="${ratio>1?'fiscal-over':ratio>=.9?'fiscal-near':''}">${this.fiscalPct(ratio)}</td><td>${editable?`<input class="fiscal-note-input" data-fiscal-note="${this.escape(l.line_code)}" value="${this.escape(a.notes||'')}" placeholder="Optional note">`:this.escape(a.notes||'—')}</td></tr>`;
+    }
+    const cats=['Personnel','Facility','Program','Administrative'];
+    const totals=cats.map(c=>({c,b:this.fiscalCategoryBudget(c),m:this.fiscalCategoryMonth(c,month),y:this.fiscalCategoryYtd(c,month)}));
+    const totalBudget=this.fiscalOfficialTotal(), totalMonth=this.fiscalMonthTotal(month), totalYtd=this.fiscalYtdTotal(month);
+    html+=`<tr class="fiscal-total-row"><td><strong>Published FY27 Grand Total</strong></td><td style="text-align:right">${this.fiscalMoney(totalBudget)}</td><td style="text-align:right">${this.fiscalMoney(totalMonth)}</td><td style="text-align:right">${this.fiscalMoney(totalYtd)}</td><td style="text-align:right">${this.fiscalMoney(totalBudget-totalYtd)}</td><td style="text-align:right">${this.fiscalPct(totalBudget?totalYtd/totalBudget:0)}</td><td></td></tr>`;
+    return `<div class="fiscal-budget-wrap"><table class="fiscal-budget-table"><thead><tr><th>Budget Line</th><th style="text-align:right">FY27 Budget</th><th style="text-align:right">Current Month</th><th style="text-align:right">YTD</th><th style="text-align:right">Remaining</th><th style="text-align:right">% Spent</th><th>Notes</th></tr></thead><tbody>${html}</tbody></table></div>`;
+  };
+
+  App.fiscalDocumentsHtml = function(month=this.resolveFiscalMonth()){
+    const docs=this.fiscalDocsFor(month), editable=this.fiscalCanEditMonth(month);
+    const list=docs.map(d=>`<div class="fiscal-doc-row"><div><strong>${this.escape(d.doc_type||'Backup')}</strong> · ${this.escape(d.file_name||'file')}<div class="fiscal-doc-meta">${this.escape(this.formatBytes?.(d.file_size) || this.fiscalFormatBytes(d.file_size))} · uploaded by ${this.escape(d.uploaded_by||'—')} · ${this.escape(this.formatDateTime(d.uploaded_at))}</div></div><div class="client-actions"><button class="btn btn-ghost btn-sm" data-fiscal-open-doc="${this.escape(d.id)}">Open</button>${editable?`<button class="btn btn-ghost btn-sm" data-fiscal-delete-doc="${this.escape(d.id)}">Delete</button>`:''}</div></div>`).join('') || `<div class="field-hint">No fiscal backup has been uploaded for this month.</div>`;
+    return `<div class="card" style="margin-top:18px"><div class="card-header"><div><h2 class="card-title">Supporting Documentation</h2><div class="field-hint">The General Ledger is required before monthly submission. Additional payroll, check-register, receipt/invoice, and allocation backup can be attached here.</div></div></div><div class="card-body">${editable?`<div class="fiscal-doc-upload"><div class="form-row"><div class="field-group"><label class="field-label">Document Type</label><select class="field-select" id="fiscal-doc-type">${DOC_TYPES.map(x=>`<option>${this.escape(x)}</option>`).join('')}</select></div><div class="field-group"><label class="field-label">GL / Backup File</label><input class="field-input" id="fiscal-doc-file" type="file" accept=".pdf,.xlsx,.xls,.csv"></div></div><button class="btn btn-ghost btn-sm" id="btn-fiscal-upload">Upload Documentation</button><div class="field-hint" style="margin-top:8px">PDF, XLSX, XLS, or CSV · maximum 20 MB.</div></div>`:''}<div class="fiscal-doc-list">${list}</div></div></div>`;
+  };
+  App.fiscalFormatBytes = function(n){ n=Number(n)||0; if(n<1024)return n+' B'; if(n<1048576)return (n/1024).toFixed(1)+' KB'; return (n/1048576).toFixed(1)+' MB'; };
+
+  App.fiscalMetaHtml = function(month=this.resolveFiscalMonth()){
+    const meta=this.fiscalMetaFor(month), editable=this.fiscalCanEditMonth(month);
+    const field=(id,label,value,type='text',placeholder='')=>`<div class="field-group"><label class="field-label">${label}</label>${editable?`<input class="field-input" id="${id}" type="${type}" value="${this.escape(value||'')}" placeholder="${this.escape(placeholder)}">`:`<div class="locked-field">${this.escape(value||'—')}</div>`}</div>`;
+    return `<div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Invoice Information</h2><div class="field-hint">PO and vendor information is kept with the monthly fiscal record so it can change by fiscal year without changing application code.</div></div>${this.fiscalStatusBadge(this.fiscalStatus(month))}</div><div class="card-body"><div class="form-row">${field('fiscal-invoice-number','Invoice #',meta.invoice_number,'text','Agency invoice number')}${field('fiscal-invoice-date','Invoice Date',meta.invoice_date||this.localDate(),'date')}</div><div class="form-row">${field('fiscal-po-number','P.O. #',meta.po_number,'text','Enter FY27 PO number')}${field('fiscal-vendor-number','Vendor No.',meta.vendor_number,'text','Agency vendor number')}</div>${editable?`<div class="field-group"><label class="field-label">Fiscal Note (optional)</label><textarea class="field-textarea" id="fiscal-month-notes" style="min-height:70px">${this.escape(meta.notes||'')}</textarea></div>`:`<div class="field-group"><label class="field-label">Fiscal Note</label><div class="locked-field">${this.escape(meta.notes||'—')}</div></div>`}</div></div>`;
+  };
+
+  App.fiscalChecksHtml = function(month=this.resolveFiscalMonth()){
+    const checks=this.fiscalReconciliationChecks(month);
+    const glyph={ok:'✓',warning:'!',error:'×',info:'i'};
+    return `<div class="fiscal-checks">${checks.map(c=>`<div class="fiscal-check ${c.severity}"><div class="icon" aria-hidden="true">${glyph[c.severity]||'i'}</div><div><strong>${this.escape(c.label)}</strong><div class="detail">${this.escape(c.detail)}</div></div><div class="fix">${this.escape(c.fix)}</div></div>`).join('')}</div>`;
+  };
+
+  App.fiscalBudgetSummaryHtml = function(month=this.resolveFiscalMonth()){
+    const rows=['Personnel','Facility','Program','Administrative'].map(c=>{ const b=this.fiscalCategoryBudget(c), y=this.fiscalCategoryYtd(c,month), rem=b-y, ratio=b?y/b:0; return `<tr><td>${this.escape(c)}</td><td style="text-align:right">${this.fiscalMoney(b)}</td><td style="text-align:right">${this.fiscalMoney(y)}</td><td style="text-align:right" class="${rem<0?'fiscal-over':''}">${this.fiscalMoney(rem)}</td><td style="text-align:right" class="${ratio>1?'fiscal-over':ratio>=.9?'fiscal-near':''}">${this.fiscalPct(ratio)}</td></tr>`; }).join('');
+    return `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Category</th><th style="text-align:right">Contract Budget</th><th style="text-align:right">YTD Actuals</th><th style="text-align:right">Remaining</th><th style="text-align:right">% Spent</th></tr></thead><tbody>${rows}<tr><td><strong>Published Grand Total</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(this.fiscalOfficialTotal())}</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(this.fiscalYtdTotal(month))}</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(this.fiscalOfficialTotal()-this.fiscalYtdTotal(month))}</strong></td><td style="text-align:right"><strong>${this.fiscalPct(this.fiscalOfficialTotal()?this.fiscalYtdTotal(month)/this.fiscalOfficialTotal():0)}</strong></td></tr></tbody></table></div>`;
+  };
+
+  App.fiscalMonthlyReviewHtml = function(){
+    const months=this.fiscalMonths();
+    const rows=months.map(m=>{ const total=this.fiscalMonthTotal(m.key), docs=this.fiscalDocsFor(m.key), gl=docs.some(d=>String(d.doc_type||'').toLowerCase()==='general ledger'), st=this.fiscalStatus(m.key), active=m.key===this.resolveFiscalMonth(); return `<tr class="${active?'fiscal-month-row-active':''}"><td><button class="btn btn-ghost btn-sm" data-fiscal-month-link="${m.key}">${this.escape(m.label)}</button></td><td style="text-align:right">${this.fiscalMoney(total)}</td><td>${gl?'<span class="badge badge-green">GL uploaded</span>':'<span class="badge badge-amber">GL missing</span>'}</td><td>${docs.length}</td><td>${this.fiscalStatusBadge(st)}</td></tr>`; }).join('');
+    return `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Month</th><th style="text-align:right">Invoice</th><th>General Ledger</th><th>Backup Files</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  };
+
+  App.fiscalSubmissionPanelHtml = function(month=this.resolveFiscalMonth()){
+    const sub=this.fiscalSubmission(month), status=this.fiscalStatus(month), editable=this.fiscalCanEditMonth(month), blocking=this.fiscalBlockingIssues(month), canSubmit=editable && !blocking.length;
+    if(this.isAdmin()){
+      const reviewable=['submitted','resubmitted'].includes(status);
+      return `<div class="card"><div class="card-header"><div><h2 class="card-title">City Fiscal Review</h2><div class="field-hint">Agency submission is locked while under City review.</div></div>${this.fiscalStatusBadge(status)}</div><div class="card-body">${sub?`<div class="field-hint">Submitted by ${this.escape(sub.submitted_by||'—')} · ${this.escape(this.formatDateTime(sub.submitted_at))}</div>`:'<div class="field-hint">No invoice has been submitted for this month.</div>'}${sub?.review_note?`<div class="notice amber" style="margin-top:12px"><div>!</div><div><strong>Most recent City note</strong><br>${this.escape(sub.review_note)}</div></div>`:''}${reviewable?`<div class="field-group" style="margin-top:14px"><label class="field-label">Review Comment</label><textarea class="field-textarea" id="fiscal-review-note" placeholder="Required when requesting revisions"></textarea></div><div class="fiscal-review-actions"><button class="btn btn-primary" id="btn-fiscal-approve">Approve Invoice</button><button class="btn btn-ghost" id="btn-fiscal-revisions">Request Revisions</button></div>`:''}</div></div>`;
+    }
+    if(['submitted','resubmitted','approved'].includes(status)) return `<div class="card"><div class="card-header"><div><h2 class="card-title">Submission</h2><div class="field-hint">This month's fiscal record is locked.</div></div>${this.fiscalStatusBadge(status)}</div><div class="card-body"><div class="notice ${status==='approved'?'green':'navy'}"><div>${status==='approved'?'✓':'i'}</div><div>${status==='approved'?'The City approved this monthly invoice.':'The invoice has been submitted to the City and cannot be edited unless revisions are requested.'}</div></div>${sub?.review_note?`<div class="field-hint">City note: ${this.escape(sub.review_note)}</div>`:''}</div></div>`;
+    return `<div class="card"><div class="card-header"><div><h2 class="card-title">Certification & Submission</h2><div class="field-hint">Resolve blocking checks and upload the General Ledger before submitting.</div></div>${this.fiscalStatusBadge(status)}</div><div class="card-body">${sub?.review_note?`<div class="notice amber"><div>!</div><div><strong>City requested revisions:</strong><br>${this.escape(sub.review_note)}</div></div>`:''}<label class="checkbox-label" style="align-items:flex-start"><input type="checkbox" id="fiscal-cert-check" style="margin-top:3px"> <span>${this.escape(CERT_TEXT)}</span></label><div style="margin-top:12px"><button class="btn btn-gold" id="btn-fiscal-submit" disabled>${status==='revision_requested'?'Resubmit Monthly Invoice':'Submit Monthly Invoice'}</button>${blocking.length?`<span class="field-hint" style="margin-left:10px">${blocking.length} blocking item${blocking.length===1?'':'s'} remain.</span>`:''}</div></div></div>`;
+  };
+
+  App.fiscalInvoiceHtml = function(month=this.resolveFiscalMonth(),forPrint=false){
+    const m=this.fiscalMonthRecord(month), meta=this.fiscalMetaFor(month), sub=this.fiscalSubmission(month), total=this.fiscalMonthTotal(month), cats=['Personnel','Facility','Program','Administrative'];
+    const catLabels={Personnel:'Personnel Expenses',Facility:'Facility Expenses',Program:'Program Expenses',Administrative:'Administrative / Indirect Costs'};
+    const rows=cats.map(c=>`<tr><td>${this.escape(catLabels[c])}</td><td style="text-align:right">${this.fiscalMoney(this.fiscalCategoryMonth(c,month))}</td></tr>`).join('');
+    const docs=this.fiscalDocsFor(month);
+    const backupRows=docs.map(d=>`<tr><td>${this.escape(d.doc_type||'Backup')}</td><td>${this.escape(d.file_name||'file')}</td><td>${this.escape(this.fiscalFormatBytes(d.file_size))}</td><td>${this.escape(d.uploaded_by||'—')}</td></tr>`).join('')||'<tr><td colspan="4">No backup documentation uploaded.</td></tr>';
+    return `<div class="fiscal-invoice" id="fiscal-invoice">
+      <div class="fiscal-invoice-head"><div><img class="print-logo" src="${WEHO_LOGO_URL}" alt="City of West Hollywood logo"><div class="fiscal-invoice-title">INVOICE</div><div class="field-hint">${this.escape(this.programName())} · ${this.escape(this.fiscalYearLabel())}</div></div><div class="fiscal-invoice-meta"><strong>Invoice #:</strong> ${this.escape(meta.invoice_number||'—')}<br><strong>Invoice Date:</strong> ${this.escape(meta.invoice_date?this.formatDate(meta.invoice_date):'—')}<br><strong>P.O. #:</strong> ${this.escape(meta.po_number||'—')}<br><strong>Vendor No.:</strong> ${this.escape(meta.vendor_number||'—')}<br><strong>Status:</strong> ${this.escape(statusLabel(sub?.status||'draft'))}</div></div>
+      <div class="fiscal-address-grid"><div class="fiscal-address-box"><strong>Customer</strong><br>City of West Hollywood<br>Human Services Division<br>8300 Santa Monica Blvd.<br>West Hollywood, CA 90069</div><div class="fiscal-address-box"><strong>Service Location</strong><br>The Holloway<br>8464 Holloway Dr.<br>West Hollywood, CA 90069<br><br><strong>Agency / Remit To</strong><br>${this.escape(this.agencyName())}<br>1851 Tyburn St.<br>Glendale, CA 91204</div></div>
+      <div class="notice navy"><div>i</div><div>${this.escape(m?.label||'Monthly')} billing for management and operation of the Holloway Interim Housing Program.<br><strong>Service period:</strong> ${this.escape(m?`${this.formatDate(m.start)} – ${this.formatDate(m.end)}`:'—')}</div></div>
+      <table class="print-table invoice-summary-table"><thead><tr><th>Description</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rows}<tr class="print-total-row"><td><strong>Total Amount Due</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(total)}</strong></td></tr></tbody></table>
+      <div class="fiscal-cert"><strong>Certification</strong><br>${this.escape(CERT_TEXT)}${sub?`<div style="margin-top:8px"><strong>Certified/submitted by:</strong> ${this.escape(sub.certified_by||sub.submitted_by||'—')} · ${this.escape(this.formatDateTime(sub.certified_at||sub.submitted_at))}</div>`:'<div style="margin-top:8px">Draft — not yet certified or submitted.</div>'}</div>
+      ${meta.notes?`<div style="margin-top:14px;font-size:11.5px"><strong>Fiscal note:</strong> ${this.escape(meta.notes)}</div>`:''}
+      <div class="fiscal-print-backup" style="margin-top:28px"><h2 style="color:var(--navy);font-size:17px;border-bottom:2px solid var(--gold);padding-bottom:7px">Supporting Documentation Index</h2><p class="field-hint" style="margin:7px 0 10px">Supporting files are retained in the secure fiscal document repository; this page lists the records associated with the invoice.</p><table class="print-table"><thead><tr><th>Type</th><th>File</th><th>Size</th><th>Uploaded By</th></tr></thead><tbody>${backupRows}</tbody></table></div>
+    </div>`;
+
+    function statusLabel(st){ return ({draft:'Draft',submitted:'Submitted',resubmitted:'Resubmitted',revision_requested:'Revisions Requested',approved:'Approved',returned:'Returned'})[st]||String(st||'Draft').replaceAll('_',' '); }
+  };
+
+  App.renderFiscal = async function(){
+    const el=document.getElementById('view-fiscal'); if(!el) return;
+    if(!this.fiscal.years.length){ el.innerHTML='<div class="notice navy"><div>i</div><div>Loading fiscal workspace…</div></div>'; await this.loadFiscalData(); }
+    const month=this.resolveFiscalMonth(), m=this.fiscalMonthRecord(month), status=this.fiscalStatus(month), editable=this.fiscalCanEditMonth(month);
+    const years=(this.fiscal.years||[]).map(y=>`<option value="${this.escape(y.fiscal_year)}" ${y.fiscal_year===this.fiscalBudgetYear?'selected':''}>${this.escape(y.budget_label||y.fiscal_year)}</option>`).join('');
+    const months=this.fiscalMonths().map(x=>`<option value="${x.key}" ${x.key===month?'selected':''}>${this.escape(x.label)}</option>`).join('');
+    const setupNotice=this.fiscal.setupReady?'':`<div class="notice amber"><div>!</div><div><strong>Fiscal database setup is not installed yet.</strong> The FY27 contract budget is shown from the built-in source fallback, but saving actuals, uploading backup, and submitting invoices are disabled until the supplied Supabase migration is run.</div></div>`;
+    const source=this.fiscalYearRecord().source_name||this.fiscalYearRecord().sourceName||FY27.sourceName;
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Fiscal Reporting</h1><div class="page-subtitle">Monthly actuals, supporting documentation, budget monitoring, invoice generation, and City fiscal review.</div></div>${this.fiscalStatusBadge(status)}</div>
+      ${setupNotice}
+      <div class="fiscal-toolbar"><div class="fiscal-controls"><label class="fiscal-control">Fiscal Year<select id="fiscal-year-select">${years}</select></label><label class="fiscal-control">Invoice Month<select id="fiscal-month-select">${months}</select></label></div><div class="client-actions">${editable?'<button class="btn btn-primary" id="btn-fiscal-save">Save Fiscal Draft</button>':''}<button class="btn btn-ghost" id="btn-fiscal-print">Print / Save Invoice PDF</button></div></div>
+      <div class="report-summary-strip"><strong>Fiscal calendar:</strong> ${this.escape(this.formatDate(this.fiscalYearStart()))} – ${this.escape(this.formatDate(this.fiscalYearEnd()))} · <strong>Budget source:</strong> ${this.escape(source)} · Fiscal reporting is independent from the program-reporting contract year.</div>
+      ${this.fiscalKpisHtml()}
+      <div class="fiscal-tabs"><button class="fiscal-tab ${this.fiscalTab==='data'?'active':''}" data-fiscal-tab="data">1 · Monthly Actuals & Uploads</button><button class="fiscal-tab ${this.fiscalTab==='review'?'active':''}" data-fiscal-tab="review">2 · Budget & Reconciliation</button><button class="fiscal-tab ${this.fiscalTab==='invoice'?'active':''}" data-fiscal-tab="invoice">3 · Invoice Preview</button></div>
+      <div style="display:${this.fiscalTab==='data'?'block':'none'}">${this.fiscalMetaHtml(month)}<div class="section-label">FY27 Budget Lines · ${this.escape(m?.label||'Selected Month')}</div>${this.fiscalBudgetTableHtml(month)}${this.fiscalDocumentsHtml(month)}</div>
+      <div style="display:${this.fiscalTab==='review'?'block':'none'}"><div class="fiscal-summary-grid"><div class="card"><div class="card-header"><div><h2 class="card-title">Reconciliation & Readiness</h2><div class="field-hint">Errors block submission; warnings require review but do not automatically block.</div></div></div><div class="card-body">${this.fiscalChecksHtml(month)}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Budget vs. Actuals</h2><div class="field-hint">YTD through ${this.escape(m?.label||'selected month')}.</div></div></div><div class="card-body">${this.fiscalBudgetSummaryHtml(month)}<details class="fiscal-source-note" style="margin-top:12px"><summary>Source budget reconciliation note</summary><div style="margin-top:8px">The FY27 contract page contains small rounding/subtotal differences. Published category subtotals sum to <strong>${this.fiscalMoney(this.fiscalSourceSubtotalSum())}</strong>, while the published grand total is <strong>${this.fiscalMoney(this.fiscalOfficialTotal())}</strong>. Rounded detail lines sum to <strong>${this.fiscalMoney(this.fiscalLineDetailBudget())}</strong>. The portal preserves the published figures rather than silently changing the contract source.</div></details></div></div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Monthly Fiscal Review</h2><div class="field-hint">Select a month to review invoice amount, GL status, and submission status.</div></div></div><div class="card-body">${this.fiscalMonthlyReviewHtml()}</div></div>${this.fiscalSubmissionPanelHtml(month)}</div>
+      <div style="display:${this.fiscalTab==='invoice'?'block':'none'}">${this.fiscalInvoiceHtml(month)}</div>`;
+    this.bindFiscalEvents();
+  };
+
+  App.bindFiscalEvents = function(){
+    const el=document.getElementById('view-fiscal'); if(!el) return;
+    el.querySelector('#fiscal-year-select')?.addEventListener('change',async e=>{ if(this._fiscalDirty&&!window.confirm('Discard unsaved fiscal changes and switch fiscal years?')){e.target.value=this.fiscalBudgetYear;return;} this._fiscalDirty=false; await this.loadFiscalData(e.target.value); this.renderFiscal(); });
+    el.querySelector('#fiscal-month-select')?.addEventListener('change',e=>{ if(this._fiscalDirty&&!window.confirm('Discard unsaved fiscal changes and switch months?')){e.target.value=this.fiscalMonth;return;} this._fiscalDirty=false; this.fiscalMonth=e.target.value; this.renderFiscal(); });
+    el.querySelectorAll('[data-fiscal-tab]').forEach(b=>b.addEventListener('click',()=>{ if(this._fiscalDirty&&!window.confirm('You have unsaved fiscal changes. Discard them and switch sections?'))return; this._fiscalDirty=false; this.fiscalTab=b.dataset.fiscalTab;this.renderFiscal();}));
+    el.querySelectorAll('[data-fiscal-amount],[data-fiscal-note],#fiscal-invoice-number,#fiscal-invoice-date,#fiscal-po-number,#fiscal-vendor-number,#fiscal-month-notes').forEach(x=>x.addEventListener('input',()=>{this._fiscalDirty=true;}));
+    el.querySelector('#btn-fiscal-save')?.addEventListener('click',()=>this.saveFiscalDraft());
+    el.querySelector('#btn-fiscal-upload')?.addEventListener('click',()=>this.uploadFiscalDocument());
+    el.querySelectorAll('[data-fiscal-open-doc]').forEach(b=>b.addEventListener('click',()=>this.openFiscalDocument(b.dataset.fiscalOpenDoc)));
+    el.querySelectorAll('[data-fiscal-delete-doc]').forEach(b=>b.addEventListener('click',()=>this.deleteFiscalDocument(b.dataset.fiscalDeleteDoc)));
+    el.querySelectorAll('[data-fiscal-month-link]').forEach(b=>b.addEventListener('click',()=>{ if(this._fiscalDirty&&!window.confirm('Discard unsaved fiscal changes and switch months?'))return; this._fiscalDirty=false; this.fiscalMonth=b.dataset.fiscalMonthLink; this.renderFiscal(); }));
+    el.querySelector('#fiscal-cert-check')?.addEventListener('change',e=>{ const btn=el.querySelector('#btn-fiscal-submit'); if(btn) btn.disabled=!e.target.checked||this.fiscalBlockingIssues().length>0; });
+    el.querySelector('#btn-fiscal-submit')?.addEventListener('click',()=>this.submitFiscalInvoice());
+    el.querySelector('#btn-fiscal-approve')?.addEventListener('click',()=>this.reviewFiscalInvoice('approved'));
+    el.querySelector('#btn-fiscal-revisions')?.addEventListener('click',()=>this.reviewFiscalInvoice('revision_requested'));
+    el.querySelector('#btn-fiscal-print')?.addEventListener('click',()=>this.printFiscalInvoice());
+  };
+
+  App.collectFiscalMeta = function(){
+    const old=this.fiscalMetaFor(); return {program_id:this.program.id,fiscal_year:this.fiscalBudgetYear,invoice_month:this.resolveFiscalMonth(),invoice_number:document.getElementById('fiscal-invoice-number')?.value?.trim()||old.invoice_number||'',invoice_date:document.getElementById('fiscal-invoice-date')?.value||old.invoice_date||this.localDate(),po_number:document.getElementById('fiscal-po-number')?.value?.trim()||old.po_number||'',vendor_number:document.getElementById('fiscal-vendor-number')?.value?.trim()||old.vendor_number||'',notes:document.getElementById('fiscal-month-notes')?.value?.trim()||old.notes||'',updated_by:this.user?.email||'',updated_at:new Date().toISOString()};
+  };
+
+  App.saveFiscalDraft = async function(silent=false){
+    if(!this.fiscal.setupReady){ this.toast('Run the fiscal Supabase migration before saving fiscal data.',{error:true}); return false; }
+    if(!this.fiscalCanEditMonth()){ this.toast('This fiscal month is locked for editing.',{error:true}); return false; }
+    const month=this.resolveFiscalMonth(); const rows=(this.fiscal.budgetLines||[]).map(l=>({program_id:this.program.id,fiscal_year:this.fiscalBudgetYear,invoice_month:month,line_code:l.line_code,amount:Number(document.querySelector(`[data-fiscal-amount="${CSS.escape(l.line_code)}"]`)?.value||0),notes:document.querySelector(`[data-fiscal-note="${CSS.escape(l.line_code)}"]`)?.value?.trim()||'',updated_by:this.user?.email||'',updated_at:new Date().toISOString()}));
+    const meta=this.collectFiscalMeta();
+    const [a,m]=await Promise.all([this.sb.from('holloway_fiscal_actuals').upsert(rows,{onConflict:'program_id,fiscal_year,invoice_month,line_code'}),this.sb.from('holloway_fiscal_month_meta').upsert(meta,{onConflict:'program_id,fiscal_year,invoice_month'})]);
+    if(a.error||m.error){ this.toast('Fiscal draft save failed: '+(a.error?.message||m.error?.message||'Unknown error'),{error:true}); return false; }
+    this._fiscalDirty=false; await this.loadFiscalData(this.fiscalBudgetYear); if(!silent){this.toast('Fiscal draft saved.');this.renderFiscal();} return true;
+  };
+
+  App.uploadFiscalDocument = async function(){
+    if(!this.fiscalCanEditMonth()){ this.toast('This fiscal month is not editable.',{error:true}); return; }
+    const input=document.getElementById('fiscal-doc-file'), type=document.getElementById('fiscal-doc-type')?.value||'Other Backup', file=input?.files?.[0]; if(!file){this.toast('Choose a file to upload.',{error:true});return;}
+    const allowed=['application/pdf','text/csv','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel']; if(!(allowed.includes(file.type)||/\.(pdf|csv|xlsx|xls)$/i.test(file.name))){this.toast('Only PDF, XLSX, XLS, and CSV files are allowed.',{error:true});return;} if(file.size>20*1024*1024){this.toast('File is too large. Keep uploads under 20 MB.',{error:true});return;}
+    const safe=file.name.replace(/[^a-zA-Z0-9._-]+/g,'_'), month=this.resolveFiscalMonth(), path=`${this.program.id}/${this.fiscalBudgetYear}/${month}/${Date.now()}_${safe}`;
+    const up=await this.sb.storage.from(STORAGE_BUCKET).upload(path,file,{upsert:false,contentType:file.type||undefined}); if(up.error){this.toast('Upload failed: '+up.error.message,{error:true});return;}
+    const row={program_id:this.program.id,fiscal_year:this.fiscalBudgetYear,invoice_month:month,doc_type:type,file_name:file.name,file_size:file.size,mime_type:file.type||'',storage_path:path,uploaded_by:this.user?.email||'',uploaded_at:new Date().toISOString()};
+    const {error}=await this.sb.from('holloway_fiscal_documents').insert(row); if(error){await this.sb.storage.from(STORAGE_BUCKET).remove([path]);this.toast('File upload metadata failed: '+error.message,{error:true});return;}
+    await this.loadFiscalData(this.fiscalBudgetYear); this.toast('Fiscal documentation uploaded.'); this.renderFiscal();
+  };
+  App.openFiscalDocument = async function(id){ const doc=(this.fiscal.documents||[]).find(d=>String(d.id)===String(id)); if(!doc)return; const {data,error}=await this.sb.storage.from(STORAGE_BUCKET).createSignedUrl(doc.storage_path,3600); if(error){this.toast('Could not open file: '+error.message,{error:true});return;} window.open(data.signedUrl,'_blank'); };
+  App.deleteFiscalDocument = function(id){ const doc=(this.fiscal.documents||[]).find(d=>String(d.id)===String(id)); if(!doc)return; this.confirm(`Delete ${doc.file_name}? This cannot be undone.`,async()=>{ const st=await this.sb.storage.from(STORAGE_BUCKET).remove([doc.storage_path]); if(st.error){this.toast('File delete failed: '+st.error.message,{error:true});return;} const {error}=await this.sb.from('holloway_fiscal_documents').delete().eq('id',doc.id); if(error){this.toast('Document metadata delete failed: '+error.message,{error:true});return;} await this.loadFiscalData(this.fiscalBudgetYear);this.toast('Fiscal document deleted.');this.renderFiscal(); }); };
+
+  App.submitFiscalInvoice = async function(){
+    if(!document.getElementById('fiscal-cert-check')?.checked){this.toast('Check the certification box before submitting.',{error:true});return;}
+    const issues=this.fiscalBlockingIssues(); if(issues.length){this.toast('Resolve the blocking fiscal checks before submitting.',{error:true});return;}
+    const saved=await this.saveFiscalDraft(true); if(!saved)return;
+    const {data,error}=await this.sb.rpc('submit_holloway_fiscal_invoice',{p_program_id:this.program.id,p_fiscal_year:this.fiscalBudgetYear,p_invoice_month:this.resolveFiscalMonth()});
+    if(error){this.toast(/function .* does not exist|Could not find the function/i.test(error.message||'')?'Submission function is not installed. Run the supplied Supabase fiscal migration.':'Fiscal submission failed: '+error.message,{error:true});return;}
+    await this.loadFiscalData(this.fiscalBudgetYear); this.toast('Monthly fiscal invoice submitted.'); this.fiscalTab='review'; this.renderFiscal();
+  };
+  App.reviewFiscalInvoice = async function(action){
+    if(!this.isAdmin())return; const note=document.getElementById('fiscal-review-note')?.value?.trim()||''; if(action==='revision_requested'&&!note){this.toast('Enter a review comment before requesting revisions.',{error:true});return;}
+    const {error}=await this.sb.rpc('review_holloway_fiscal_invoice',{p_program_id:this.program.id,p_fiscal_year:this.fiscalBudgetYear,p_invoice_month:this.resolveFiscalMonth(),p_action:action,p_note:note});
+    if(error){this.toast('Fiscal review failed: '+error.message,{error:true});return;} await this.loadFiscalData(this.fiscalBudgetYear);this.toast(action==='approved'?'Fiscal invoice approved.':'Revisions requested.');this.renderFiscal();
+  };
+
+  App.printFiscalInvoice = function(){ if(this._fiscalDirty){this.toast('Save the fiscal draft before printing the invoice.',{error:true});return;} const target=document.getElementById('print-report'); if(!target)return; target.innerHTML=`<div class="print-page-header"><strong>${this.escape(this.programName())}</strong> · ${this.escape(this.fiscalYearLabel())} Fiscal Invoice · Generated ${new Date().toLocaleDateString()}</div>${this.fiscalInvoiceHtml(this.resolveFiscalMonth(),true)}<div class="print-footer"><img class="print-footer-logo" src="${WEHO_LOGO_URL}" alt="City of West Hollywood logo">Prepared through the ${this.escape(this.programName())} Reporting Portal · City of West Hollywood Human Services Division</div>`; window.print(); };
+
+  const fiscalBaseShowView=App.showView;
+  App.showView=function(view){ fiscalBaseShowView.call(this,view); if(view==='fiscal'){ const el=document.getElementById('view-fiscal'); if(el)el.innerHTML='<div class="notice navy"><div>i</div><div>Loading fiscal workspace…</div></div>'; this.loadFiscalData(this.fiscalBudgetYear).then(()=>this.renderFiscal()).catch(e=>{console.error(e);if(el)el.innerHTML=`<div class="notice red"><div>!</div><div>Fiscal workspace could not load: ${this.escape(e?.message||String(e))}</div></div>`;}); } };
+
+  window.addEventListener('beforeunload',e=>{ if(App._fiscalDirty){e.preventDefault();e.returnValue='';return '';} });
+})();
 
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
