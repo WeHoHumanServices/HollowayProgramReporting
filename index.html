@@ -840,6 +840,30 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .perf-strip-link:hover .strip-go { opacity:1; transform:translateX(2px); }
 .strip-go { font-size:13px; margin-left:6px; color:var(--gray-400); opacity:0; transition:all .15s ease; display:inline-block; }
 
+/* ── EARLY WARNING INDICATORS ────────────────────────────────────────────
+   Tone here comes only from a contract benchmark. Where the contract is
+   silent the card stays neutral and carries a regional reference instead,
+   so an LA City comparison never reads as a West Hollywood pass/fail.    */
+.risk-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.risk-card { margin:0; border-left:3px solid var(--gray-200); }
+.risk-card.tone-good { border-left-color:var(--green); }
+.risk-card.tone-warn { border-left-color:var(--amber); }
+.risk-card.tone-bad  { border-left-color:var(--red); }
+.risk-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.risk-value { font-size:29px; font-weight:800; letter-spacing:-.02em; line-height:1.1; margin:5px 0 3px; color:var(--navy); }
+.risk-value.tone-good { color:var(--green); }
+.risk-value.tone-warn { color:var(--amber); }
+.risk-value.tone-bad  { color:var(--red); }
+.risk-value .tile-of { font-size:14px; font-weight:600; color:var(--gray-500); margin-left:7px; letter-spacing:0; }
+.risk-detail { font-size:12px; color:var(--gray-600); margin-top:9px; padding-top:9px; border-top:1px solid var(--gray-100); }
+.risk-why { font-size:11px; color:var(--gray-500); margin-top:6px; line-height:1.5; }
+.regional-ref { display:inline-block; font-size:10px; font-weight:700; letter-spacing:.02em; color:var(--gray-500); background:var(--gray-100); border-radius:999px; padding:2px 8px; margin-left:8px; white-space:nowrap; }
+@media (max-width:800px) { .risk-grid { grid-template-columns:1fr; } }
+
+.quick-group-label { font-size:10.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--gray-500); margin-bottom:8px; }
+.quick-group-note { text-transform:none; letter-spacing:0; font-weight:600; color:var(--gray-400); margin-left:6px; }
+.quick-chip-named { border-style:dashed; }
+
 /* ── GROUP SESSIONS / ON-SITE PARTICIPATION ──────────────────────────── */
 .attendee-toolbar { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
 .attendee-count { font-size:11.5px; color:var(--gray-500); margin-left:auto; }
@@ -1380,6 +1404,69 @@ const CONFIG = {
   // headline metric so the number can be read as pass/fail rather than as a
   // bare percentage. Source: ANNUAL_GOALS phExitsAnnual description.
   PH_RATE_TARGET: 30,
+
+  /* BENCHMARKS — what "good" means for each headline metric.
+   *
+   *   contract   the figure the City actually holds this agency to. This and
+   *              only this drives the pass/fail colour. Null where the
+   *              agreement is silent.
+   *   reference  a sector comparison point, shown as a grey chip. Never
+   *              colours anything — the agency is not held to it.
+   *     .value   the number
+   *     .label   short text for the chip
+   *     .source  full provenance, shown on hover. Keep this filled in: the
+   *              whole point is that a reader can tell where a number came
+   *              from and decide whether it applies to them.
+   *   direction  'above' = higher is better; 'below' = a ceiling.
+   *
+   * These are sector reference points, not West Hollywood policy. Every value
+   * below traces to a published figure — see .source. Replace them if the City
+   * adopts its own standards.
+   */
+  BENCHMARKS: {
+    phRate: {
+      contract: 30, direction:'above',
+      reference: {
+        value: 32, label:'National avg 32%',
+        source:'HUD System Performance Measure 7b1 — national rate of exits from emergency shelter and transitional housing to permanent housing, 2023 (40.9% in 2019, declining each year since). A national actual, not a target.'
+      }
+    },
+    occupancy: {
+      contract: null, direction:'above',
+      reference: {
+        value: 95, label:'Sector benchmark 95%',
+        source:'Common utilization standard in funder program requirements; contracts in this sector typically set 95–100% occupancy for interim and shelter beds.'
+      }
+    },
+    retention: {
+      contract: null, direction:'above',
+      reference: {
+        value: 90, label:'Sector standard ≥90%',
+        source:'Derived from the common funder standard that fewer than 10% of those housed return to homelessness within 180 days of exit. Compare against the 6-month follow-up cohort. For context, the HUD national return-to-homelessness rate at 24 months was 18.7% in 2023.'
+      }
+    },
+    unknownExit: {
+      contract: null, direction:'below',
+      reference: {
+        value: 30, label:'Sector reference ≤30%',
+        source:'Ceiling used in regional interim housing reporting for exits to homelessness or an unknown destination. Note this band mixes a real outcome (returned to homelessness) with a data gap (destination unknown); HMIS data-quality plans commonly cap missing exit destination at 10–15% for this project type, so a high figure here may indicate a recording problem rather than a housing one.'
+      }
+    },
+    // No number. Early exits are widely treated as a warning sign for interim
+    // housing, but no published national or funder target was found, and
+    // inventing one would put a fabricated standard on a City dashboard.
+    // Shown for monitoring and trend only.
+    earlyExit: { contract: null, direction:'below', reference: null },
+    // Deliberately unbenchmarked. Published length-of-stay norms (national
+    // median 27 nights, funder caps of 20–75 days) are emergency shelter
+    // figures. Interim housing of this kind runs materially longer by design,
+    // so scoring it against shelter numbers would misrepresent the program.
+    avgLos: { contract: null, direction:'below', reference: null }
+  },
+
+  // An exit is "early" below this many days in program. 90 days is the window
+  // used in interim housing reporting on early departures.
+  EARLY_EXIT_DAYS: 90,
 
   // Below this many counted exits a percentage is too volatile to headline —
   // one placement out of three is not "33%" in any useful sense — so the raw
@@ -2592,12 +2679,13 @@ const App = {
         <span class="dash-period-label">${periodLabel}</span>
         ${this.renderAttentionChip(q)}
       </div>
-      <h2 class="section-label">Program Performance${scope==='ytd' ? ' — Year to Date' : ''}</h2>
+      <h2 class="section-label">Contract Performance${scope==='ytd' ? ' — Year to Date' : ''}</h2>
       ${this.renderProgramPerformance(q, scope)}
-      ${this.renderOutcomeSummary(q)}
-      <h2 class="section-label" style="margin-top:18px;">Participant Demographics — Year to Date</h2>
-      ${this.renderParticipantDemographics(q)}
-      ${this.renderProgramOperationsDrawer(q)}`;
+      <h2 class="section-label" style="margin-top:20px;">Early Warning Indicators</h2>
+      ${this.renderRiskIndicators(q, scope)}
+      <h2 class="section-label" style="margin-top:20px;">Daily Work</h2>
+      ${this.renderTodayPanel(q)}
+      ${this.renderProgramDetailDrawer(q)}`;
     this.bindDashboardScopeSelector(el);
     this.bindSubmitBundleButton(el);
     el.querySelectorAll('[data-open]').forEach(btn => btn.addEventListener('click', () => this.openForm(btn.dataset.open)));
@@ -2615,6 +2703,79 @@ const App = {
      Quarters after the current one are omitted rather than plotted as zero:
      a quarter that has not happened is missing data, and drawing it as 0
      would read as a collapse in performance.                              */
+  /* ── Interim-housing risk indicators ────────────────────────────────────
+     Two measures the contract does not name but that the field treats as
+     leading indicators of whether an interim housing program is working.
+
+     earlyExitSummary — share of exits happening inside 90 days, and where
+     those people went. A program can post a respectable permanent-housing
+     rate while quietly losing most residents in the first three months; the
+     PH rate alone cannot distinguish the two.
+
+     unknownExitSummary — share of exits to homelessness, unknown, or a place
+     not meant for habitation. Read against a ceiling rather than a target.  */
+
+  earlyExitSummary(scope='ytd', q=this.currentQuarter) {
+    const days = CONFIG.EARLY_EXIT_DAYS;
+    const exits = this.outcomeSummary(q, scope).exits;
+    if (!exits.length) return { total:0, early:0, rate:null, earlyToUnknown:0, days };
+    const lengthOf = c => this.daysInclusive(this.dateOnly(c.entry_date), this.dateOnly(c.exit_date));
+    const early = exits.filter(c => { const l = lengthOf(c); return l > 0 && l < days; });
+    const earlyToUnknown = early.filter(c => this.exitOutcomeBand(c) === 'Unstable / Unknown').length;
+    return {
+      total: exits.length,
+      early: early.length,
+      rate: Math.round((early.length / exits.length) * 100),
+      earlyToUnknown,
+      days
+    };
+  },
+
+  unknownExitSummary(scope='ytd', q=this.currentQuarter) {
+    const o = this.outcomeSummary(q, scope);
+    // Denominator excludes deceased exits, matching the PH-rate methodology
+    // already used elsewhere so the two percentages are comparable.
+    const denom = o.countedExits;
+    const n = o.byBand?.['Unstable / Unknown'] || 0;
+    return { n, denom, rate: denom ? Math.round((n / denom) * 100) : null };
+  },
+
+  // Scores a value against its benchmark. Only the contract figure sets tone;
+  // regional numbers are context and never colour a metric the agency is not
+  // formally held to.
+  benchmarkTone(key, value) {
+    const b = CONFIG.BENCHMARKS[key];
+    if (!b || value == null || b.contract == null) return 'neutral';
+    if (b.direction === 'below') {
+      if (value > b.contract) return 'bad';
+      return value > b.contract * 0.75 ? 'warn' : 'good';
+    }
+    if (value >= b.contract) return 'good';
+    return value >= b.contract * 0.7 ? 'warn' : 'bad';
+  },
+
+  // The grey comparison chip. Carries its own provenance in the title so a
+  // reader can hover and see exactly where the number came from rather than
+  // taking an unattributed benchmark on faith.
+  referenceChip(key) {
+    const ref = CONFIG.BENCHMARKS[key]?.reference;
+    if (!ref) return '';
+    return `<span class="regional-ref" title="${this.escape(ref.source)}">${this.escape(ref.label)}</span>`;
+  },
+
+  benchmarkNote(key, value) {
+    const b = CONFIG.BENCHMARKS[key];
+    if (!b) return '';
+    const parts = [];
+    if (b.contract != null) {
+      if (value == null) parts.push(`Contract ${b.direction === 'below' ? 'ceiling' : 'target'} ${b.contract}%`);
+      else if (b.direction === 'below') parts.push(value > b.contract ? `${value - b.contract} pts over the ${b.contract}% contract ceiling` : `within the ${b.contract}% contract ceiling`);
+      else if (value === b.contract) parts.push(`meets the ${b.contract}% contract target`);
+      else parts.push(value > b.contract ? `${value - b.contract} pts above the ${b.contract}% target` : `${b.contract - value} pts below the ${b.contract}% target`);
+    }
+    return parts.join('');
+  },
+
   quarterTrends() {
     const cacheKey = `${(this.data.clients||[]).length}:${(this.data.clientServices||[]).length}:${this.currentQuarter}`;
     if (this._trendCache && this._trendCache.key === cacheKey) return this._trendCache.value;
@@ -2683,6 +2844,79 @@ const App = {
     const arrow = diff > 0 ? '▲' : '▼';
     const unit = opts.unit || '';
     return `<span class="delta ${good ? 'delta-good' : 'delta-bad'}"><span aria-hidden="true">${arrow}</span> ${Math.abs(diff)}${unit} vs ${this.escape(priorQ)}</span>`;
+  },
+
+  /* Early warning indicators. Neither is in the contract, so neither is
+     scored pass/fail — tone comes from the benchmark table, which leaves
+     these neutral unless a contract number is set. Sector reference points
+     carry their provenance in a hover title so nobody mistakes a published
+     comparison for a West Hollywood requirement. */
+  renderRiskIndicators(q=this.currentQuarter, scope='quarter') {
+    const sc = scope === 'ytd' ? 'ytd' : 'quarter';
+    const early = this.earlyExitSummary(sc, q);
+    const unknown = this.unknownExitSummary(sc, q);
+    const minN = CONFIG.MIN_EXITS_FOR_RATE;
+
+    const thinEarly = early.total > 0 && early.total < minN;
+    const thinUnknown = unknown.denom > 0 && unknown.denom < minN;
+
+    const cards = [
+      {
+        label: `Exits within ${early.days} days`,
+        value: early.total === 0 ? '—' : thinEarly ? `${early.early}<span class="tile-of">of ${early.total}</span>` : `${early.rate}%`,
+        tone: this.benchmarkTone('earlyExit', thinEarly ? null : early.rate),
+        note: early.total === 0 ? 'No exits in this period'
+             : thinEarly ? `${early.early} of ${early.total} exits — too few to rate`
+             : `${early.early} of ${early.total} exits left inside ${early.days} days`,
+        refKey: 'earlyExit',
+        detail: early.earlyToUnknown
+          ? `${early.earlyToUnknown} of those went to an unknown or unsheltered destination`
+          : 'None of those went to an unknown or unsheltered destination',
+        why: 'A strong permanent-housing rate can hide residents leaving in the first three months. Tracked separately so the two are not confused.'
+      },
+      {
+        label: 'Exits to unknown or unsheltered',
+        value: unknown.denom === 0 ? '—' : thinUnknown ? `${unknown.n}<span class="tile-of">of ${unknown.denom}</span>` : `${unknown.rate}%`,
+        tone: this.benchmarkTone('unknownExit', thinUnknown ? null : unknown.rate),
+        note: unknown.denom === 0 ? 'No exits in this period'
+             : thinUnknown ? `${unknown.n} of ${unknown.denom} exits — too few to rate`
+             : `${unknown.n} of ${unknown.denom} counted exits`,
+        refKey: 'unknownExit',
+        detail: 'Returned to homelessness, left for an unknown destination, or lost contact.',
+        why: 'Read as a ceiling, not a target. Deceased exits are excluded so this is comparable with the PH rate.'
+      }
+    ];
+
+    return `<div class="risk-grid">${cards.map(c => `
+      <div class="card risk-card tone-${c.tone}"><div class="card-body">
+        <div class="risk-head">
+          <div class="kpi-label">${this.escape(c.label)}</div>
+          ${this.referenceChip(c.refKey)}
+        </div>
+        <div class="risk-value tone-${c.tone}">${c.value}</div>
+        <div class="kpi-sub">${this.escape(c.note)}</div>
+        <div class="risk-detail">${this.escape(c.detail)}</div>
+        <div class="risk-why">${this.escape(c.why)}</div>
+      </div></div>`).join('')}</div>`;
+  },
+
+  /* Everything that is reference rather than action, in one collapsed place.
+     Previously the daily work queue was buried in here while year-to-date
+     demographics held a third of the visible page — this inverts that. */
+  renderProgramDetailDrawer(q=this.currentQuarter) {
+    return `<details class="ops-drawer" style="margin-top:22px;">
+      <summary class="ops-drawer-summary">Program detail — outcomes, demographics, goals &amp; audit</summary>
+      <div class="ops-drawer-body">
+        ${this.renderOutcomeSummary(q)}
+        <h2 class="section-label" style="margin-top:18px;">Participant Demographics — Year to Date</h2>
+        ${this.renderParticipantDemographics(q)}
+        <h2 class="section-label" style="margin-top:18px;">Submission &amp; Data Quality</h2>
+        <div class="content-grid">
+          <div>${this.renderReadinessPanel(q)}</div>
+          <div>${this.renderDataCheckPanel(q)}${this.renderGoalProgress(q)}${this.renderActivityLog(q)}</div>
+        </div>
+      </div>
+    </details>`;
   },
 
   renderProgramPerformance(q=this.currentQuarter, scope='quarter') {
@@ -2755,7 +2989,7 @@ const App = {
         <div class="perf-hero">
           <div class="kpi-label">PH exit rate${scope==='ytd' ? ' (YTD)' : ''}</div>
           <div class="perf-hero-value tone-${tone}">${heroValue}</div>
-          <div class="hero-target hero-target-${tone}">${this.escape(targetNote)}</div>
+          <div class="hero-target hero-target-${tone}">${this.escape(targetNote)}${this.referenceChip('phRate')}</div>
           <div class="hero-meter" role="img" aria-label="${heroPrimary==null?'No rate yet':heroPrimary+' percent against a '+target+' percent target'}">
             <div class="hero-meter-fill tone-${tone}" style="width:${meterPct}%;"></div>
             <div class="hero-meter-target" style="left:${targetPct}%;"></div>
@@ -2764,20 +2998,20 @@ const App = {
           <div class="kpi-sub">${heroSub}</div>
         </div>
         <div class="perf-sub">
-          <div class="kpi-label">Confirmed retention</div>
+          <div class="kpi-label">Confirmed retention ${this.referenceChip('retention')}</div>
           <div class="perf-sub-value">${retention.total ? retention.rate+'%' : '—'}</div>
-          <div class="kpi-sub">6- and 12-month combined${retention.total ? ` · ${retention.stable} of ${retention.total} check-ins` : ''}</div>
+          <div class="kpi-sub">${retention.total ? `${retention.stable} of ${retention.total} completed check-ins${retention.total < CONFIG.MIN_EXITS_FOR_RATE ? ' — too few to rate' : ''}` : '6- and 12-month combined · no check-ins yet'}</div>
         </div>
         <div class="perf-sub">
           <div class="kpi-label">Avg length of stay</div>
           <div class="perf-sub-value">${losNow}</div>
           ${spark('avgLos', v => v==null ? 'no data' : v+' days') ? `<div class="trend-row">${spark('avgLos', v => v==null?'no data':v+' days')}${this.deltaChip(cur?.avgLos, prev?.avgLos, { priorLabel: prev?.q, unit:' d', goodDirection:'down' })}</div>` : ''}
-          <div class="kpi-sub">days, served clients</div>
+          <div class="kpi-sub" title="Published length-of-stay norms are emergency shelter figures; interim housing runs materially longer by design, so no sector comparison is shown here.">days, served clients · no sector comparison</div>
         </div>
       </div>
       <div class="perf-strip-row">
         <div><div class="kpi-label">Persons served YTD</div><div class="perf-strip-value">${ytdPersons ?? '—'}</div>${spark('served', v=>v==null?'—':v+' served') ? `<div class="trend-row">${spark('served', v=>v==null?'—':v+' served')}${this.deltaChip(cur?.served, prev?.served, { priorLabel: prev?.q })}</div>` : ''}</div>
-        <div><div class="kpi-label">Occupancy</div><div class="perf-strip-value">${this.percent(s.bedNightsOcc, s.bedNightsAvail)}</div>${spark('occupancy', v=>v==null?'—':v+'%') ? `<div class="trend-row">${spark('occupancy', v=>v==null?'—':v+'%')}${this.deltaChip(cur?.occupancy, prev?.occupancy, { priorLabel: prev?.q, unit:' pts' })}</div>` : ''}</div>
+        <div><div class="kpi-label">Occupancy ${this.referenceChip('occupancy')}</div><div class="perf-strip-value">${this.percent(s.bedNightsOcc, s.bedNightsAvail)}</div>${spark('occupancy', v=>v==null?'—':v+'%') ? `<div class="trend-row">${spark('occupancy', v=>v==null?'—':v+'%')}${this.deltaChip(cur?.occupancy, prev?.occupancy, { priorLabel: prev?.q, unit:' pts' })}</div>` : ''}</div>
         <button type="button" class="perf-strip-link" data-view-shortcut="clients"><div class="kpi-label">Current census</div><div class="perf-strip-value">${active.length}/${capacity}<span class="strip-go" aria-hidden="true">→</span></div><div class="kpi-sub">${Math.max(0,capacity-active.length)} open · view caseload</div></button>
         <div><div class="kpi-label">Income increased</div><div class="perf-strip-value">${incomePct!=null ? incomePct+'%' : '—'}</div><div class="kpi-sub">of residents served this quarter</div></div>
       </div>
@@ -4916,7 +5150,12 @@ const App = {
       ['Narrative completed', narrative.split(/\s+/).filter(Boolean).length>=100]
     ];
     const passed=checks.filter(x=>x[1]).length;
-    return `<div style="margin-top:10px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><strong>Quarter-End Readiness</strong><span class="badge badge-${passed===checks.length?'green':'amber'}">${passed} of ${checks.length} checks</span></div>${checks.map(([label,ok])=>`<div class="readiness-check"><span>${ok?'✓':'⚠'}</span><span>${this.escape(label)}</span></div>`).join('')}</div>`;
+    // Named "data entered" rather than "readiness": the drawer already has a
+    // Submission Readiness panel about whether documents have been submitted,
+    // and two panels both called readiness meant staff had to open both to
+    // work out which was which. This one is about whether the underlying
+    // records exist yet.
+    return `<div style="margin-top:10px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><strong>Data entered this quarter</strong><span class="badge badge-${passed===checks.length?'green':'amber'}">${passed} of ${checks.length} complete</span></div>${checks.map(([label,ok])=>`<div class="readiness-check"><span aria-hidden="true">${ok?'✓':'⚠'}</span><span class="sr-only">${ok?'Complete: ':'Needs attention: '}</span><span>${this.escape(label)}</span></div>`).join('')}</div>`;
   };
 
   App.attentionItems = function(q=this.currentQuarter){
@@ -4944,17 +5183,11 @@ const App = {
     </details>`;
   };
 
-  App.renderProgramOperationsDrawer = function(q=this.currentQuarter){
-    return `<details class="ops-drawer">
-      <summary class="ops-drawer-summary">Program Operations</summary>
-      <div class="ops-drawer-body">
-        <div class="content-grid">
-          <div>${this.renderReadinessPanel(q)}${this.renderTodayPanel(q)}</div>
-          <div>${this.renderDataCheckPanel(q)}${this.renderGoalProgress(q)}${this.renderActivityLog(q)}</div>
-        </div>
-      </div>
-    </details>`;
-  };
+  // renderProgramOperationsDrawer was removed with the dashboard rebuild. It
+  // collapsed the daily work queue out of sight behind a disclosure while
+  // year-to-date demographics held a third of the visible page; the Today
+  // panel is now rendered directly and the reference material moved to
+  // renderProgramDetailDrawer.
 
     
   
@@ -5577,10 +5810,13 @@ const App = {
   // always passed it as a third argument, but this function only declared two
   // parameters, so the preset was silently dropped and every chip opened a
   // blank form defaulting to the first service type in the list.
-  App.openServiceForm = function(id=null,clientId=null,presetType=null) {
+  App.openServiceForm = function(id=null,clientId=null,presetType=null,presetName=null) {
     this.currentServiceId=id;
     const s=id ? (this.data.clientServices||[]).find(x=>x.id===id)||{} : {client_id:clientId||''};
     if (presetType && !id) s.service_type = presetType;
+    // presetName pre-fills the staff-defined name when a previously-used
+    // on-site session is picked from the quick bar.
+    if (presetName && !id) s.service_type_other = presetName;
     const editing = !!id;
 
     const typeSelect = this.serviceTypeGroups().map(([group, types]) =>
@@ -6396,9 +6632,30 @@ const App = {
     this.wireSortableHeaders(el, this._servicesSort, ()=>this.renderServices());
     el.querySelector('#btn-new-service').addEventListener('click',()=>this.openServiceForm());
     const header=el.querySelector('.page-header');
-    const quick=`<div class="card" style="margin-bottom:16px;"><div class="card-header"><div><h2 class="card-title">One-Click Service Entry</h2><div class="field-hint">Choose a service type, then select the client. Today's date and 30 minutes are filled automatically.</div></div></div><div class="card-body"><div class="quick-service-bar">${['Case Management','Housing Navigation','Benefits Assistance','Document Readiness','Landlord Coordination','Mental Health Referral','Trauma Therapy','Occupational Therapy','Mindful Floral Wellness Workshop','Sunday Night Knitting Class'].map(t=>`<button class="quick-chip${this.isGroupSessionType(t)?' quick-chip-onsite':''}" data-quick-service="${this.escape(t)}">+ ${this.escape(t)}</button>`).join('')}</div></div></div>`;
+    // Names staff have already used for On-Site Service — Other become chips of
+    // their own, so a recurring offering is one click and is spelled the same
+    // way every time instead of being retyped (and drifting) each session.
+    const priorNames = [...new Set((this.data.clientServices||[])
+      .filter(s => this.typeNeedsSpecify(s.service_type) && (s.service_type_other||'').trim())
+      .map(s => s.service_type_other.trim()))]
+      .sort((a,b) => a.localeCompare(b))
+      .slice(0, 6);
+
+    const caseChips = ['Case Management','Housing Navigation','Benefits Assistance','Document Readiness','Landlord Coordination','Mental Health Referral'];
+    const onsiteChips = CONFIG.SERVICE_TYPES.filter(t => t.session).map(t => t.label);
+
+    const chipRow = (types) => types.map(t =>
+      `<button class="quick-chip${this.isGroupSessionType(t)?' quick-chip-onsite':''}" data-quick-service="${this.escape(t)}">+ ${this.escape(t)}</button>`).join('');
+
+    const quick=`<div class="card" style="margin-bottom:16px;"><div class="card-header"><div><h2 class="card-title">One-Click Service Entry</h2><div class="field-hint">Pick a service to open a pre-filled entry. Today's date and 30 minutes are set automatically; on-site sessions open with the attendee list ready.</div></div></div><div class="card-body">
+      <div class="quick-group-label">Case management &amp; housing</div>
+      <div class="quick-service-bar">${chipRow(caseChips)}</div>
+      <div class="quick-group-label" style="margin-top:14px;">On-site participation <span class="quick-group-note">group sessions — log once for everyone who attended</span></div>
+      <div class="quick-service-bar">${chipRow(onsiteChips)}</div>
+      ${priorNames.length ? `<div class="quick-group-label" style="margin-top:14px;">Previously logged on-site sessions</div><div class="quick-service-bar">${priorNames.map(n=>`<button class="quick-chip quick-chip-onsite quick-chip-named" data-quick-service="On-Site Service — Other" data-quick-name="${this.escape(n)}">+ ${this.escape(n)}</button>`).join('')}</div>` : ''}
+    </div></div>`;
     if(header) header.insertAdjacentHTML('afterend',quick);
-    el.querySelectorAll('[data-quick-service]').forEach(b=>b.addEventListener('click',()=>this.openServiceForm(null,null,b.dataset.quickService)));
+    el.querySelectorAll('[data-quick-service]').forEach(b=>b.addEventListener('click',()=>this.openServiceForm(null,null,b.dataset.quickService,b.dataset.quickName||null)));
   };
 
   // ---- Housing Follow-Ups: sorting (6-month and 12-month independently) --
