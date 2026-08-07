@@ -788,6 +788,103 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .demo-bar-pct { font-size:10.5px; color:var(--gray-500); width:64px; flex:0 0 64px; text-align:right; white-space:nowrap; }
 @media (max-width:800px) { .demo-summary-grid { grid-template-columns:1fr; gap:18px; } }
 
+/* ── HERO METRIC: TARGET COMPARISON ──────────────────────────────────────
+   The headline PH rate used to render unconditionally green, so a failing
+   number looked exactly like a passing one. Tone is now driven by
+   performance against CONFIG.PH_RATE_TARGET, and a meter puts the target
+   on screen as a physical mark rather than leaving it implied.          */
+.perf-hero-value.tone-good    { color:var(--green); }
+.perf-hero-value.tone-warn    { color:var(--amber); }
+.perf-hero-value.tone-bad     { color:var(--red); }
+.perf-hero-value.tone-neutral { color:var(--navy); }
+.perf-hero-value .hero-of { font-size:15px; font-weight:600; color:var(--gray-500); margin-left:7px; letter-spacing:0; }
+.hero-target { font-size:11.5px; font-weight:700; margin-top:2px; }
+.hero-target-good    { color:var(--green); }
+.hero-target-warn    { color:var(--amber); }
+.hero-target-bad     { color:var(--red); }
+.hero-target-neutral { color:var(--gray-500); }
+/* margin-bottom clears the "target" caption rendered under the tick mark. */
+.hero-meter { position:relative; height:6px; background:var(--gray-100); border-radius:99px; margin:10px 0 20px; overflow:visible; }
+.hero-meter-fill { height:6px; border-radius:99px; transition:width .25s ease; }
+.hero-meter-fill.tone-good    { background:var(--green); }
+.hero-meter-fill.tone-warn    { background:var(--amber); }
+.hero-meter-fill.tone-bad     { background:var(--red); }
+.hero-meter-fill.tone-neutral { background:var(--gray-400); }
+.hero-meter-target { position:absolute; top:-3px; width:2px; height:12px; background:var(--navy); border-radius:1px; }
+.hero-meter-target::after { content:'target'; position:absolute; top:13px; left:50%; transform:translateX(-50%); font-size:9px; font-weight:700; letter-spacing:.04em; color:var(--gray-500); }
+
+.perf-strip-link { display:block; width:100%; text-align:left; background:none; border:none; padding:0; cursor:pointer; border-radius:6px; }
+.perf-strip-link:hover .perf-strip-value { color:var(--navy-light); }
+.perf-strip-link:hover .strip-go { opacity:1; transform:translateX(2px); }
+.strip-go { font-size:13px; margin-left:6px; color:var(--gray-400); opacity:0; transition:all .15s ease; display:inline-block; }
+
+/* ── LIVE CENSUS (Active Caseload) ───────────────────────────────────── */
+.census-card { margin-bottom:16px; }
+.census-head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; }
+.census-title { font-size:13px; font-weight:800; letter-spacing:.03em; color:var(--navy); margin:0; }
+.census-asof { font-size:11px; color:var(--gray-400); }
+.census-tile-row { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; }
+.census-tile { padding:2px 0; }
+.census-tile-label { font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--gray-400); }
+.census-tile-value { font-size:26px; font-weight:800; color:var(--navy); letter-spacing:-.02em; line-height:1.1; margin-top:4px; }
+.census-tile-value .census-of { font-size:15px; font-weight:600; color:var(--gray-400); }
+.census-tile-sub { font-size:11px; color:var(--gray-500); margin-top:3px; }
+.census-tile.tile-open .census-tile-value { color:var(--green); }
+.census-tile.tile-open.full .census-tile-value { color:var(--amber); }
+.census-tile.tile-open.low .census-tile-value { color:var(--navy); }
+.bed-strip { display:flex; flex-wrap:wrap; gap:5px; margin:16px 0 4px; }
+.bed-pip { width:100%; max-width:26px; flex:1 1 18px; height:9px; border-radius:3px; }
+.bed-pip.filled { background:var(--navy); }
+.bed-pip.open { background:var(--gray-200); box-shadow:inset 0 0 0 1px var(--border); }
+.census-flags { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; padding-top:13px; border-top:1px solid var(--gray-100); }
+.census-flag { background:var(--amber-light); border:1px solid #F0DFB8; color:var(--gray-800); border-radius:999px; padding:5px 13px; font-size:11.5px; cursor:pointer; font-family:inherit; transition:all .15s ease; }
+.census-flag:hover { border-color:var(--amber); background:#FDF0D8; }
+.census-flag strong { color:var(--amber); font-weight:800; }
+.census-flag-clear { background:var(--green-light); color:var(--green); border-radius:999px; padding:5px 13px; font-size:11.5px; font-weight:700; }
+@media (max-width:980px) { .census-tile-row { grid-template-columns:repeat(3,1fr); row-gap:18px; } }
+@media (max-width:620px) { .census-tile-row { grid-template-columns:repeat(2,1fr); } }
+
+/* ── EXITS SCREEN ────────────────────────────────────────────────────── */
+.exit-tile-row { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:18px; }
+.exit-tile { background:var(--white); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; border-top:3px solid var(--gray-200); }
+.exit-tile-label { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--gray-400); line-height:1.3; }
+.exit-tile-value { font-size:25px; font-weight:800; color:var(--navy); letter-spacing:-.02em; line-height:1.1; margin-top:5px; }
+.exit-tile-sub { font-size:10.5px; color:var(--gray-500); margin-top:3px; line-height:1.35; }
+.exit-tile.tile-permanent { border-top-color:var(--green); }
+.exit-tile.tile-permanent .exit-tile-value { color:var(--green); }
+.exit-tile.tile-positive  { border-top-color:#5B8DB8; }
+.exit-tile.tile-temporary { border-top-color:var(--amber); }
+.exit-tile.tile-unstable  { border-top-color:var(--red); }
+.exit-tile.tile-unstable .exit-tile-value { color:var(--red); }
+.exit-tile.tile-needs { border-top-color:var(--amber); background:var(--amber-light); }
+.exit-tile.tile-needs .exit-tile-value { color:var(--amber); }
+@media (max-width:1080px) { .exit-tile-row { grid-template-columns:repeat(3,1fr); } }
+@media (max-width:620px)  { .exit-tile-row { grid-template-columns:repeat(2,1fr); } }
+
+/* .field-input/.field-select are width:100% for form layouts; inside a filter
+   row they need to size to content instead of each claiming a full row. */
+.table-filter-row .field-select { width:auto; min-width:170px; flex:0 0 auto; }
+.table-filter-row .field-input  { width:auto; flex:1 1 240px; min-width:200px; max-width:360px; }
+.exit-filter-row .field-select { min-width:190px; }
+.chip-toggle { background:var(--white); border:1.5px solid var(--border); color:var(--navy); border-radius:999px; padding:6px 14px; font-size:11.5px; font-weight:700; cursor:pointer; font-family:inherit; transition:all .15s ease; }
+.chip-toggle:hover { border-color:var(--amber); background:var(--amber-light); }
+.chip-toggle.active { background:var(--navy); border-color:var(--navy); color:var(--white); }
+.filter-count { font-size:11.5px; color:var(--gray-400); margin-left:auto; white-space:nowrap; }
+
+tr.exit-group-row td { background:var(--gray-50); font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--gray-600); padding:9px 12px; border-top:1px solid var(--border); }
+.exit-group-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:8px; vertical-align:middle; background:var(--gray-400); }
+.exit-group-row.band-permanent .exit-group-dot { background:var(--green); }
+.exit-group-row.band-positive  .exit-group-dot { background:#5B8DB8; }
+.exit-group-row.band-temporary .exit-group-dot { background:var(--amber); }
+.exit-group-row.band-unstable  .exit-group-dot { background:var(--red); }
+.exit-group-row.band-deceased  .exit-group-dot { background:var(--gray-600); }
+.exit-group-row.band-needs td { background:var(--amber-light); color:var(--amber); }
+.exit-group-row.band-needs .exit-group-dot { background:var(--amber); }
+.exit-group-count { display:inline-block; background:var(--white); border:1px solid var(--border); border-radius:999px; padding:0 8px; margin-left:8px; font-size:10.5px; color:var(--gray-600); }
+.exit-group-note { float:right; text-transform:none; letter-spacing:0; font-weight:600; font-size:10.5px; color:var(--amber); }
+.btn-fix { border-color:var(--amber) !important; color:var(--amber) !important; font-weight:700; }
+.btn-fix:hover { background:var(--amber-light) !important; }
+
 .attention-chip-clear { background:var(--green-light); color:var(--green); border-radius:999px; padding:6px 13px; font-size:11.5px; font-weight:700; }
 .attention-chip { position:relative; }
 .attention-chip summary { list-style:none; cursor:pointer; display:inline-flex; align-items:center; gap:6px; background:var(--red-light); border:1px solid #EABCB6; color:var(--red); border-radius:999px; padding:6px 13px; font-size:11.5px; font-weight:700; }
@@ -1013,7 +1110,7 @@ th.sortable:hover { color:var(--navy); }
   <div class="form-modal wide">
     <div class="form-modal-header">
       <div>
-        <div class="form-modal-title" id="qr-title">Quarterly Narrative & Certification</div>
+        <h2 class="form-modal-title" id="qr-title">Quarterly Narrative & Certification</h2>
         <div class="form-modal-meta" id="qr-meta"></div>
       </div>
       <button class="form-close-btn" data-close="quarterly">✕</button>
@@ -1045,7 +1142,7 @@ th.sortable:hover { color:var(--navy); }
   <div class="form-modal">
     <div class="form-modal-header">
       <div>
-        <div class="form-modal-title" id="roster-title">HMIS Roster Backup Documentation</div>
+        <h2 class="form-modal-title" id="roster-title">HMIS Roster Backup Documentation</h2>
         <div class="form-modal-meta" id="roster-meta"></div>
       </div>
       <button class="form-close-btn" data-close="roster">✕</button>
@@ -1067,7 +1164,7 @@ th.sortable:hover { color:var(--navy); }
   <div class="form-modal wide">
     <div class="form-modal-header">
       <div>
-        <div class="form-modal-title" id="exits-title">Non-Permanent Exit Detail</div>
+        <h2 class="form-modal-title" id="exits-title">Non-Permanent Exit Detail</h2>
         <div class="form-modal-meta" id="exits-meta"></div>
       </div>
       <button class="form-close-btn" data-close="exits">✕</button>
@@ -1091,7 +1188,7 @@ th.sortable:hover { color:var(--navy); }
   <div class="form-modal wide">
     <div class="form-modal-header">
       <div>
-        <div class="form-modal-title" id="client-title">Client Record</div>
+        <h2 class="form-modal-title" id="client-title">Client Record</h2>
         <div class="form-modal-meta">Client-based reporting source record</div>
       </div>
       <button class="form-close-btn" data-close="client">✕</button>
@@ -1113,7 +1210,7 @@ th.sortable:hover { color:var(--navy); }
   <div class="form-modal">
     <div class="form-modal-header">
       <div>
-        <div class="form-modal-title" id="service-title">Service Entry</div>
+        <h2 class="form-modal-title" id="service-title">Service Entry</h2>
         <div class="form-modal-meta">Individual service/contact record</div>
       </div>
       <button class="form-close-btn" data-close="service">✕</button>
@@ -1135,7 +1232,7 @@ th.sortable:hover { color:var(--navy); }
 <div id="modal-followup" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="followup-title">
   <div class="form-modal">
     <div class="form-modal-header">
-      <div><div class="form-modal-title" id="followup-title">Housing Follow-Up</div><div class="form-modal-meta">6-month / 12-month permanent housing follow-up</div></div>
+      <div><h2 class="form-modal-title" id="followup-title">Housing Follow-Up</h2><div class="form-modal-meta">6-month / 12-month permanent housing follow-up</div></div>
       <button class="form-close-btn" data-close="followup">✕</button>
     </div>
     <div class="form-gold-bar"></div>
@@ -1151,7 +1248,7 @@ th.sortable:hover { color:var(--navy); }
 <div id="modal-clientupdate" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="clientupdate-title">
   <div class="form-modal">
     <div class="form-modal-header">
-      <div><div class="form-modal-title" id="clientupdate-title">Client Update</div><div class="form-modal-meta">Quarterly income / benefits status check</div></div>
+      <div><h2 class="form-modal-title" id="clientupdate-title">Client Update</h2><div class="form-modal-meta">Quarterly income / benefits status check</div></div>
       <button class="form-close-btn" data-close="clientupdate">✕</button>
     </div>
     <div class="form-gold-bar"></div>
@@ -1167,7 +1264,7 @@ th.sortable:hover { color:var(--navy); }
 <div id="modal-account" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="account-title">
   <div class="form-modal" style="max-width:520px;">
     <div class="form-modal-header">
-      <div><div class="form-modal-title" id="account-title">Account Settings</div><div class="form-modal-meta" id="account-meta"></div></div>
+      <div><h2 class="form-modal-title" id="account-title">Account Settings</h2><div class="form-modal-meta" id="account-meta"></div></div>
       <button class="form-close-btn" data-close="account">✕</button>
     </div>
     <div class="form-gold-bar"></div>
@@ -1194,7 +1291,7 @@ th.sortable:hover { color:var(--navy); }
 <div id="confirm-modal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
   <div class="confirm-card">
     <div class="card-header">
-      <div class="card-title" id="confirm-title">Confirm Action</div>
+      <h2 class="card-title" id="confirm-title">Confirm Action</h2>
     </div>
     <div class="card-body">
       <p id="confirm-message" style="font-size:13px;color:var(--gray-600);margin-bottom:18px;"></p>
@@ -1237,6 +1334,23 @@ const CONFIG = {
   PROGRAM_NAME: 'Holloway Interim Housing Program',
   PROGRAM_ID: null,
   FISCAL_YEAR_LABEL: 'FY 2025-26',
+
+  // Licensed bed count. A program record with its own bed_capacity overrides
+  // this at runtime (see App.bedCapacity). Previously the number 20 was
+  // written literally in four different places, so the dashboard and the
+  // quarterly detail page could disagree if it ever changed.
+  BED_CAPACITY: 20,
+
+  // Contract benchmark for the permanent-housing exit rate, shown next to the
+  // headline metric so the number can be read as pass/fail rather than as a
+  // bare percentage. Source: ANNUAL_GOALS phExitsAnnual description.
+  PH_RATE_TARGET: 30,
+
+  // Below this many counted exits a percentage is too volatile to headline —
+  // one placement out of three is not "33%" in any useful sense — so the raw
+  // fraction is shown instead. Mirrors the suppression already used in the
+  // equity breakdown.
+  MIN_EXITS_FOR_RATE: 5,
 
   QUARTERS: {
     Q1: { period:'October 1 – December 31, 2025', due:'2026-01-15', label:'Q1' },
@@ -1330,7 +1444,10 @@ const App = {
   profile: null,
   program: null,
   fiscalYear: 'FY2025-26',
-  currentQuarter: 'Q3',
+  // Set from today's date at startup by resolveCurrentQuarter(). The literal
+  // below is only a pre-boot placeholder; it used to be the permanent value,
+  // which meant everyone landed on Q3 no matter what month it was.
+  currentQuarter: 'Q1',
   dashboardScope: 'quarter',
   view: 'dashboard',
   data: {
@@ -1510,6 +1627,7 @@ const App = {
     document.getElementById('loading-screen').style.display = 'none';
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
+    this.currentQuarter = this.resolveCurrentQuarter();
     // Replace any static program-name text with values from the loaded program record.
     const brand = document.getElementById('brand-program');
     if (brand) brand.textContent = `${this.programName()} Reporting Portal`;
@@ -2034,6 +2152,18 @@ const App = {
 
 
   // ---------- Client-based reporting model ----------
+  // Picks the quarter whose period contains today. Before the contract year
+  // starts we sit on Q1; after it ends we stay on Q4, which is the quarter
+  // still being written up.
+  resolveCurrentQuarter(today=new Date().toISOString().slice(0,10)) {
+    const order = Object.keys(this.quarters);
+    for (const q of order) {
+      const { start, end } = this.qRange(q);
+      if (today >= start && today <= end) return q;
+    }
+    return today < this.qRange(order[0]).start ? order[0] : order[order.length-1];
+  },
+
   qRange(q=this.currentQuarter) {
     const map = { Q1:['2025-10-01','2025-12-31'], Q2:['2026-01-01','2026-03-31'], Q3:['2026-04-01','2026-06-30'], Q4:['2026-07-01','2026-09-30'] };
     return { start: map[q]?.[0] || '2025-10-01', end: map[q]?.[1] || '2026-09-30', label: this.quarters[q]?.period || '' };
@@ -2043,6 +2173,9 @@ const App = {
   dateMin(a,b){ return a < b ? a : b; },
   daysInclusive(start,end){ if(!start||!end) return 0; const a=new Date(start+'T00:00:00'), b=new Date(end+'T00:00:00'); return Math.max(0, Math.floor((b-a)/86400000)+1); },
   clientName(c) { return this.isAdmin() ? 'Agency-visible only' : (c.client_name || '—'); },
+  // Single source of truth for licensed bed count: the program record wins,
+  // CONFIG is the fallback. Read this instead of writing the number inline.
+  bedCapacity() { return Number(this.program?.bed_capacity || CONFIG.BED_CAPACITY || 20); },
   clientStatus(c, onDate=null) { const today = onDate || new Date().toISOString().slice(0,10); if (c.exit_date && this.dateOnly(c.exit_date) <= today) return 'Exited'; if (c.entry_date && this.dateOnly(c.entry_date) <= today) return 'Active'; return 'Pending'; },
   clientOverlaps(c,start,end) { const entry=this.dateOnly(c.entry_date); if(!entry) return false; const exit=this.dateOnly(c.exit_date) || end; return entry <= end && exit >= start; },
   clientBedNights(c,start,end) { if(!this.clientOverlaps(c,start,end)) return 0; const s=this.dateMax(this.dateOnly(c.entry_date), start); const e=this.dateMin(this.dateOnly(c.exit_date)||end, end); return this.daysInclusive(s,e); },
@@ -2142,7 +2275,7 @@ const App = {
     if (cat === 'deceased') return 'Deceased';
     return c.exit_date ? 'Other Non-Permanent' : '';
   },
-  clientMetrics(q=this.currentQuarter) { const {start,end}=this.qRange(q); const clients=this.data.clients||[]; const served=clients.filter(c=>this.clientOverlaps(c,start,end)); const activeAtEnd=clients.filter(c=>this.clientStatus(c,end)==='Active'); const intakes=clients.filter(c=>this.dateOnly(c.entry_date)>=start && this.dateOnly(c.entry_date)<=end); const exits=clients.filter(c=>this.dateOnly(c.exit_date)>=start && this.dateOnly(c.exit_date)<=end); const phExits=exits.filter(c=>this.isPermanentExit(c)); const positiveNonPermanent=exits.filter(c=>this.isPositiveNonPermanentExit(c)); const occupied=clients.reduce((sum,c)=>sum+this.clientBedNights(c,start,end),0); const available=20*this.daysInclusive(start,end); const losVals=served.map(c=>this.clientBedNights(c, this.dateOnly(c.entry_date), this.dateOnly(c.exit_date)||end)).filter(v=>v>0); const avgLos=losVals.length ? Math.round(losVals.reduce((a,b)=>a+b,0)/losVals.length) : 0; const services=(this.data.clientServices||[]).filter(s=>this.dateOnly(s.service_date)>=start && this.dateOnly(s.service_date)<=end); return {served, activeAtEnd, intakes, exits, phExits, positiveNonPermanent, occupied, available, avgLos, services}; },
+  clientMetrics(q=this.currentQuarter) { const {start,end}=this.qRange(q); const clients=this.data.clients||[]; const served=clients.filter(c=>this.clientOverlaps(c,start,end)); const activeAtEnd=clients.filter(c=>this.clientStatus(c,end)==='Active'); const intakes=clients.filter(c=>this.dateOnly(c.entry_date)>=start && this.dateOnly(c.entry_date)<=end); const exits=clients.filter(c=>this.dateOnly(c.exit_date)>=start && this.dateOnly(c.exit_date)<=end); const phExits=exits.filter(c=>this.isPermanentExit(c)); const positiveNonPermanent=exits.filter(c=>this.isPositiveNonPermanentExit(c)); const occupied=clients.reduce((sum,c)=>sum+this.clientBedNights(c,start,end),0); const available=this.bedCapacity()*this.daysInclusive(start,end); const losVals=served.map(c=>this.clientBedNights(c, this.dateOnly(c.entry_date), this.dateOnly(c.exit_date)||end)).filter(v=>v>0); const avgLos=losVals.length ? Math.round(losVals.reduce((a,b)=>a+b,0)/losVals.length) : 0; const services=(this.data.clientServices||[]).filter(s=>this.dateOnly(s.service_date)>=start && this.dateOnly(s.service_date)<=end); return {served, activeAtEnd, intakes, exits, phExits, positiveNonPermanent, occupied, available, avgLos, services}; },
   // Income Increased / Income Maintained are agency-reported aggregate
   // counts, not calculated from client records — even in client-generated
   // reporting mode. Staff type the quarter's total directly on the Program
@@ -2232,17 +2365,18 @@ const App = {
     const exits = scope === 'ytd'
       ? (this.data.clients||[]).filter(c => c.exit_date && this.dateOnly(c.exit_date) >= '2025-10-01' && this.dateOnly(c.exit_date) <= end)
       : this.clientMetrics(q).exits;
+    // byStability was dropped here along with the table that displayed it —
+    // it was a projection re-derived from the same destination that produces
+    // the outcome band. exitStability() itself is retained for the Excel
+    // export and the client record.
     const labels=['Permanent Housing','Positive Non-Permanent','Temporary / Institutional','Unstable / Unknown','Deceased','Other Non-Permanent'];
-    const stability=['Stable','Potentially Stable','Temporary','Unstable','Deceased','Unspecified'];
     const byBand=Object.fromEntries(labels.map(x=>[x,0]));
-    const byStability=Object.fromEntries(stability.map(x=>[x,0]));
     exits.forEach(c=>{
       const b=this.exitOutcomeBand(c)||'Other Non-Permanent'; byBand[b]=(byBand[b]||0)+1;
-      const st=this.exitStability(c)||'Unspecified'; byStability[st]=(byStability[st]||0)+1;
     });
     const countedExits = exits.filter(c => !this.isDeceasedExit(c));
     const phRate = countedExits.length ? Math.round((countedExits.filter(c=>this.isPermanentExit(c)).length / countedExits.length) * 100) : null;
-    return {exits, byBand, byStability, phRate, totalExits: exits.length, countedExits: countedExits.length};
+    return {exits, byBand, phRate, totalExits: exits.length, countedExits: countedExits.length};
   },
   // Confirmed (measured) retention, from actual 6/12-month follow-up
   // check-ins — distinct from the "expected stability" estimate made at
@@ -2257,14 +2391,17 @@ const App = {
     const rate = total ? Math.round((stable/total)*100) : null;
     return { total, stable, returned, unableToContact, rate };
   },
+  // Outcome bands only. The old "Expected Stability" companion table was a
+  // projection derived from the very same exit destination as the band, so it
+  // restated the left-hand column in different words. Measured retention from
+  // completed 6/12-month follow-ups is the stability signal we show instead.
   renderOutcomeBandTable(o, label) {
-    const bands = Object.entries(o.byBand).map(([k,v])=>`<tr><td>${this.escape(k)}</td><td style="text-align:right;font-weight:800;">${v}</td></tr>`).join('');
-    const st = Object.entries(o.byStability).map(([k,v])=>`<tr><td>${this.escape(k)}</td><td style="text-align:right;font-weight:800;">${v}</td></tr>`).join('');
+    const shown = Object.entries(o.byBand).filter(([,v]) => v > 0);
+    const bands = shown.length
+      ? shown.map(([k,v])=>`<tr><td>${this.escape(k)}</td><td style="text-align:right;font-weight:800;">${v}</td><td style="text-align:right;" class="field-hint">${o.totalExits ? Math.round((v/o.totalExits)*100) : 0}%</td></tr>`).join('')
+      : '<tr><td colspan="3" class="field-hint">No exits in this period.</td></tr>';
     return `<div><div class="field-hint" style="margin-bottom:6px;font-weight:700;">${this.escape(label)} ${o.phRate!=null ? `· PH rate ${o.phRate}% (of ${o.countedExits}${o.countedExits!==o.totalExits?', deceased excluded':''})` : ''}</div>
-      <div class="content-grid" style="grid-template-columns:1fr 1fr;">
-        <table class="svc-table"><thead><tr><th>Outcome Band</th><th>Count</th></tr></thead><tbody>${bands}</tbody></table>
-        <table class="svc-table"><thead><tr><th>Expected Stability</th><th>Count</th></tr></thead><tbody>${st}</tbody></table>
-      </div></div>`;
+      <table class="svc-table"><thead><tr><th>Outcome Band</th><th style="text-align:right;">Count</th><th style="text-align:right;">Share</th></tr></thead><tbody>${bands}</tbody></table></div>`;
   },
   // Groups YTD exits by a demographic dimension and computes each group's
   // permanent-housing rate. Any group with fewer than SUPPRESS_BELOW people
@@ -2307,7 +2444,7 @@ const App = {
       </div>
       <div class="field-hint" style="margin-top:8px;">Groups with fewer than 5 exits are suppressed to protect client privacy.</div>
     </details>`;
-    return `<div class="card" style="margin-top:16px;"><div class="card-header"><div class="card-title">Housing Outcomes</div></div><div class="card-body">
+    return `<div class="card" style="margin-top:16px;"><div class="card-header"><h2 class="card-title">Housing Outcomes</h2></div><div class="card-body">
       <p class="field-hint" style="margin-bottom:12px;">Permanent housing remains the official contract outcome. Positive non-permanent exits, such as moving in with family or a partner without a lease, are tracked separately. Deceased exits are shown separately and excluded from the permanent-housing rate.</p>
       <div class="content-grid" style="grid-template-columns:1fr 1fr;gap:20px;">
         ${this.renderOutcomeBandTable(qtr, `${q} (this quarter)`)}
@@ -2333,7 +2470,7 @@ const App = {
       : `${this.escape(q)} &middot; ${this.escape(this.quarters[q].period)} &middot; Due ${this.formatDate(this.quarters[q].due)}`;
     el.innerHTML = `
       <div class="page-header">
-        <div><div class="page-title">${this.isAdmin() ? 'City Admin Dashboard' : 'Agency Reporting Workspace'}</div>
+        <div><h1 class="page-title">${this.isAdmin() ? 'City Admin Dashboard' : 'Agency Reporting Workspace'}</h1>
         <div class="page-subtitle">${this.escape(this.programName())} · Contract Year: October 1, 2025 – September 30, 2026</div></div>
         <div style="display:flex;gap:10px;">
           <button class="btn btn-ghost btn-sm" id="btn-print-current">Print / Save PDF</button>
@@ -2345,10 +2482,10 @@ const App = {
         <span class="dash-period-label">${periodLabel}</span>
         ${this.renderAttentionChip(q)}
       </div>
-      <div class="section-label">Program Performance${scope==='ytd' ? ' — Year to Date' : ''}</div>
+      <h2 class="section-label">Program Performance${scope==='ytd' ? ' — Year to Date' : ''}</h2>
       ${this.renderProgramPerformance(q, scope)}
       ${this.renderOutcomeSummary(q)}
-      <div class="section-label" style="margin-top:18px;">Participant Demographics — Year to Date</div>
+      <h2 class="section-label" style="margin-top:18px;">Participant Demographics — Year to Date</h2>
       ${this.renderParticipantDemographics(q)}
       ${this.renderProgramOperationsDrawer(q)}`;
     this.bindDashboardScopeSelector(el);
@@ -2366,18 +2503,52 @@ const App = {
     const s = (this.data.clients||[]).length ? this.generatedScopeFromClients(q) : this.reportScope(q);
     const ytdPersons = (this.data.clients||[]).length ? s.unduplicatedYTD : (this.data.reports[q]?.persons_ytd ?? this.calcPersonsYtd(q));
     const active = (this.data.clients||[]).filter(c=>this.clientStatus(c)==='Active');
-    const capacity = 20;
+    const capacity = this.bedCapacity();
     const servedBase = Number(s.residentsServed || s.activeResidents || 0);
     const incomePct = servedBase ? Math.round((Number(s.incomeIncrease||0) / servedBase) * 100) : null;
-    const heroPrimary = scope === 'ytd' ? ytd.phRate : qtr.phRate;
+    const src = scope === 'ytd' ? ytd : qtr;
+    const other = scope === 'ytd' ? qtr : ytd;
+    const heroPrimary = src.phRate;
+    const target = CONFIG.PH_RATE_TARGET;
+    const minN = CONFIG.MIN_EXITS_FOR_RATE;
+
+    // Below the small-n threshold a percentage overstates what the data can
+    // support — one placement out of three is not a 33% rate — so show the
+    // fraction instead and say plainly that it is too early to rate.
+    const thin = src.countedExits > 0 && src.countedExits < minN;
+    const heroValue = heroPrimary == null
+      ? '—'
+      : thin
+        ? `${src.byBand?.['Permanent Housing']||0}<span class="hero-of">of ${src.countedExits}</span>`
+        : `${heroPrimary}%`;
+    const tone = heroPrimary == null || thin ? 'neutral'
+      : heroPrimary >= target ? 'good'
+      : heroPrimary >= target * 0.7 ? 'warn'
+      : 'bad';
+    const targetNote = heroPrimary == null
+      ? `Target ${target}%`
+      : thin
+        ? `Too few exits to rate · target ${target}%`
+        : heroPrimary === target
+          ? `Meets the ${target}% target`
+          : heroPrimary > target
+            ? `${heroPrimary - target} pts above the ${target}% target`
+            : `${target - heroPrimary} pts below the ${target}% target`;
     const heroSub = scope === 'ytd'
       ? `${qtr.phRate!=null ? qtr.phRate+'% this quarter' : 'No exits this quarter'} &middot; ${ytd.byBand?.['Permanent Housing']||0} of ${ytd.countedExits||0} exits YTD`
-      : `${ytd.phRate!=null ? ytd.phRate+'% YTD' : 'No YTD exits yet'} &middot; ${qtr.byBand?.['Permanent Housing']||0} of ${qtr.countedExits||0} exits this quarter`;
+      : `${other.phRate!=null ? other.phRate+'% YTD' : 'No YTD exits yet'} &middot; ${qtr.byBand?.['Permanent Housing']||0} of ${qtr.countedExits||0} exits this quarter`;
+    const meterPct = heroPrimary == null ? 0 : Math.min(100, heroPrimary);
+    const targetPct = Math.min(100, target);
     return `<div class="card perf-card"><div class="card-body">
       <div class="perf-hero-row">
         <div class="perf-hero">
           <div class="kpi-label">PH exit rate${scope==='ytd' ? ' (YTD)' : ''}</div>
-          <div class="perf-hero-value">${heroPrimary ?? '—'}${heroPrimary!=null?'%':''}</div>
+          <div class="perf-hero-value tone-${tone}">${heroValue}</div>
+          <div class="hero-target hero-target-${tone}">${this.escape(targetNote)}</div>
+          <div class="hero-meter" role="img" aria-label="${heroPrimary==null?'No rate yet':heroPrimary+' percent against a '+target+' percent target'}">
+            <div class="hero-meter-fill tone-${tone}" style="width:${meterPct}%;"></div>
+            <div class="hero-meter-target" style="left:${targetPct}%;"></div>
+          </div>
           <div class="kpi-sub">${heroSub}</div>
         </div>
         <div class="perf-sub">
@@ -2394,8 +2565,8 @@ const App = {
       <div class="perf-strip-row">
         <div><div class="kpi-label">Persons served YTD</div><div class="perf-strip-value">${ytdPersons ?? '—'}</div></div>
         <div><div class="kpi-label">Occupancy</div><div class="perf-strip-value">${this.percent(s.bedNightsOcc, s.bedNightsAvail)}</div></div>
-        <div><div class="kpi-label">Current census</div><div class="perf-strip-value">${active.length}/${capacity}</div></div>
-        <div><div class="kpi-label">Income increased</div><div class="perf-strip-value">${incomePct!=null ? incomePct+'%' : '—'}</div></div>
+        <button type="button" class="perf-strip-link" data-view-shortcut="clients"><div class="kpi-label">Current census</div><div class="perf-strip-value">${active.length}/${capacity}<span class="strip-go" aria-hidden="true">→</span></div><div class="kpi-sub">${Math.max(0,capacity-active.length)} open · view caseload</div></button>
+        <div><div class="kpi-label">Income increased</div><div class="perf-strip-value">${incomePct!=null ? incomePct+'%' : '—'}</div><div class="kpi-sub">of residents served this quarter</div></div>
       </div>
     </div></div>`;
   },
@@ -2464,7 +2635,7 @@ const App = {
   renderReadinessPanel(q) {
     const readiness = this.readiness(q);
     const allGreen = readiness.every(x => x.submitReady ?? x.ok);
-    return `<div class="section-label">Submission Readiness — ${q}</div>
+    return `<h2 class="section-label">Submission Readiness — ${q}</h2>
       <div class="card"><div class="card-body">
         ${readiness.map(item => `<div class="readiness-row">
           <div class="readiness-left"><span class="status-icon" aria-hidden="true">${(item.visualOk ?? item.ok)?'✅':item.started?'⚠':'⚪'}</span><div><strong>${item.label}</strong><br><span style="font-size:12px;color:var(--gray-400);">${item.detail}</span></div></div>
@@ -2586,14 +2757,14 @@ const App = {
   renderDataCheckPanel(q) {
     const checks = this.dataChecks(q);
     return `<div class="card" style="margin-bottom:16px;">
-      <div class="card-header"><div class="card-title">Data Check</div><span class="badge ${checks.every(c=>c.ok) ? 'badge-green' : 'badge-amber'}">${checks.every(c=>c.ok) ? 'Clear' : 'Review Needed'}</span></div>
+      <div class="card-header"><h2 class="card-title">Data Check</h2><span class="badge ${checks.every(c=>c.ok) ? 'badge-green' : 'badge-amber'}">${checks.every(c=>c.ok) ? 'Clear' : 'Review Needed'}</span></div>
       <div class="card-body"><div class="check-list">${checks.map(c => `<div class="check-row"><span aria-hidden="true">${c.ok ? '✅' : '⚠️'}</span><div><strong>${this.escape(c.label)}</strong><br><span class="field-hint">${this.escape(c.detail)}</span></div></div>`).join('')}</div></div>
     </div>`;
   },
 
   renderActivityLog(q) {
     const rows = (this.data.activity || []).filter(a => a.quarter === q).slice(0,5);
-    return `<div class="card"><div class="card-header"><div class="card-title">Activity Log</div></div><div class="card-body">
+    return `<div class="card"><div class="card-header"><h2 class="card-title">Activity Log</h2></div><div class="card-body">
       ${rows.length ? rows.map(r => `<div style="border-left:3px solid var(--gold);padding-left:10px;margin-bottom:10px;font-size:12.5px;">
         <strong>${this.escape((r.status || '').replaceAll('_',' '))}</strong><br>${this.formatDateTime(r.created_at)} ${r.note ? '· ' + this.escape(r.note) : ''}
       </div>`).join('') : '<p class="field-hint">No activity has been recorded for this quarter yet.</p>'}
@@ -2606,7 +2777,7 @@ const App = {
     this.reportsTab = this.reportsTab === 'narrative' ? 'narrative' : 'overview';
     el.innerHTML = `
       <div class="page-header">
-        <div><div class="page-title">Program Reports</div><div class="page-subtitle">Review readiness, submit the quarter, and manage the quarterly narrative — all in one place.</div></div>
+        <div><h1 class="page-title">Program Reports</h1><div class="page-subtitle">Review readiness, submit the quarter, and manage the quarterly narrative — all in one place.</div></div>
         <button class="btn btn-ghost btn-sm" id="btn-print-quarter">Print / Save PDF</button>
       </div>
       ${this.renderQuarterButtons()}
@@ -2673,8 +2844,8 @@ const App = {
     const arrow = (field) => sort.field === field ? `<span class="sort-arrow" aria-hidden="true">${sort.dir==='asc'?'▲':'▼'}</span>` : '<span class="sort-arrow" aria-hidden="true">↕</span>';
     const opts = (selected, vals) => vals.map(([v,l]) => `<option value="${v}" ${v===selected?'selected':''}>${l}</option>`).join('');
 
-    el.innerHTML = `<div class="page-header"><div><div class="page-title">City Admin Review Queue</div><div class="page-subtitle">Review ${this.escape(this.programName())} submissions, request revisions, accept, or void a bundle.</div></div></div>
-      <div class="card"><div class="card-header"><div class="card-title">Quarterly Bundles</div><button class="btn btn-ghost btn-sm" id="btn-refresh-admin">Refresh</button></div>
+    el.innerHTML = `<div class="page-header"><div><h1 class="page-title">City Admin Review Queue</h1><div class="page-subtitle">Review ${this.escape(this.programName())} submissions, request revisions, accept, or void a bundle.</div></div></div>
+      <div class="card"><div class="card-header"><h2 class="card-title">Quarterly Bundles</h2><button class="btn btn-ghost btn-sm" id="btn-refresh-admin">Refresh</button></div>
       <div class="card-body" style="overflow-x:auto;">
         <div class="review-filters">
           <div><label class="field-label" for="rf-quarter">Quarter</label><select id="rf-quarter" class="field-select">${opts(f.quarter, [['all','All'],['Q1','Q1'],['Q2','Q2'],['Q3','Q3'],['Q4','Q4']])}</select></div>
@@ -2745,7 +2916,7 @@ const App = {
     const src = this._erSources || { caseNotes:true, services:true, incidents:true, exits:true, followups:true };
     const cb = (k,label) => `<label class="checkbox-label"><input type="checkbox" data-er-source="${k}" ${src[k]?'checked':''}> ${label}</label>`;
     return `<div class="card" id="engagement-review-card">
-      <div class="card-header"><div class="card-title">Engagement Review<span class="er-badge">AI-assisted</span></div></div>
+      <div class="card-header"><h2 class="card-title">Engagement Review<span class="er-badge">AI-assisted</span></h2></div>
       <div class="card-body">
         <div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div>
           <div><strong>City Admin only — not visible to agency users.</strong><br>Residents are identified by HMIS ID and staff by name, so a finding can be followed up. Client names are stripped before review, along with emails and phone numbers — no client name leaves your database. Treat the output as a drafting aid and verify anything you rely on against the underlying records.</div></div>
@@ -2873,7 +3044,7 @@ const App = {
     ];
     return `<div class="card" id="notes-chat-card">
       <div class="card-header">
-        <div class="card-title">Ask about these notes<span class="er-badge">AI-assisted</span></div>
+        <h2 class="card-title">Ask about these notes<span class="er-badge">AI-assisted</span></h2>
         <div style="display:flex;gap:8px;flex-shrink:0;">
           <button class="btn btn-ghost btn-sm" id="btn-chat-export" type="button">Export to Word</button>
           <button class="btn btn-ghost btn-sm" id="btn-chat-clear" type="button">Clear</button>
@@ -3120,7 +3291,7 @@ const App = {
   renderAdminActionCard(q) {
     const b = this.data.bundles[q] || {};
     return `<div class="card" style="margin-top:18px;">
-      <div class="card-header"><div class="card-title">City Review & Acceptance</div>${this.statusBadge(this.bundleStatus(q))}</div>
+      <div class="card-header"><h2 class="card-title">City Review & Acceptance</h2>${this.statusBadge(this.bundleStatus(q))}</div>
       <div class="card-body">
         <div class="field-group" style="margin-bottom:14px;"><label class="field-label" for="admin-review-notes">City Review Notes</label>
           <textarea class="field-textarea" id="admin-review-notes" placeholder="Add review notes or revision request details.">${this.escape(b.city_review_notes || '')}</textarea></div>
@@ -4152,7 +4323,7 @@ const App = {
     const newIntakes = Number(movement.intakes || s.newIntakes || 0);
     const exitsQuarter = Number(movement.exits || 0);
     const activeEnd = Number(movement.end || s.activeResidents || 0);
-    const capacity = Number(this.program?.bed_capacity || 20);
+    const capacity = this.bedCapacity();
 
     const bedNightOcc = Number(s.bedNightsOcc || 0);
     const bedNightAvail = Number(s.bedNightsAvail || 0);
@@ -4512,7 +4683,7 @@ const App = {
       ['Housing Plans Needed', stalePlans.length, 'Missing or not-started housing plans'],
       ['No Service This Week', noRecent.length, 'Active clients with no service in last 7 days']
     ];
-    return `<div class="card" style="margin-bottom:18px;"><div class="card-header"><div><div class="card-title">Today</div><div class="field-hint">Daily work queue for program staff. These items also improve quarter-end reporting readiness.</div></div><button class="btn btn-ghost btn-sm" data-view-shortcut="housing-followups">View Follow-Ups</button></div><div class="card-body"><div class="today-grid">${cards.map(c=>`<div class="today-card"><div class="label">${this.escape(c[0])}</div><div class="value">${c[1]}</div><div class="sub">${this.escape(c[2])}</div></div>`).join('')}</div>${this.renderQuarterReadinessChecklist(q)}</div></div>`;
+    return `<div class="card" style="margin-bottom:18px;"><div class="card-header"><div><h2 class="card-title">Today</h2><div class="field-hint">Daily work queue for program staff. These items also improve quarter-end reporting readiness.</div></div><button class="btn btn-ghost btn-sm" data-view-shortcut="housing-followups">View Follow-Ups</button></div><div class="card-body"><div class="today-grid">${cards.map(c=>`<div class="today-card"><div class="label">${this.escape(c[0])}</div><div class="value">${c[1]}</div><div class="sub">${this.escape(c[2])}</div></div>`).join('')}</div>${this.renderQuarterReadinessChecklist(q)}</div></div>`;
   };
 
   App.renderQuarterReadinessChecklist = function(q=this.currentQuarter){
@@ -4525,7 +4696,10 @@ const App = {
       ['Admissions entered', clients.some(c=>this.dateOnly(c.entry_date)>=start&&this.dateOnly(c.entry_date)<=end)],
       ['Active residents have housing plan status', active.every(c=>!!c.housing_plan_status)],
       ['Services recorded this quarter', svcs.length>0],
-      ['Exits include destination and stability', exits.every(c=>!!c.exit_destination_type && !!this.exitStability(c))],
+      // exitStability() falls back to a derived value for every exited client,
+      // so testing it here was always true and told us nothing. Destination is
+      // the field staff actually have to fill in.
+      ['Exits include a destination', exits.every(c=>!!c.exit_destination_type)],
       ['Narrative completed', narrative.split(/\s+/).filter(Boolean).length>=100]
     ];
     const passed=checks.filter(x=>x[1]).length;
@@ -4698,7 +4872,7 @@ const App = {
     pane.innerHTML = `
       <div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div><div><strong>Narrative guidance</strong><br>Use the calculated quarter summary below to explain context behind the numbers. Please include a success story from the quarter. Client names should not be included in City-facing narratives unless expressly authorized and appropriate.</div></div>
       <div class="generated-metric-grid" style="grid-template-columns:repeat(3,1fr);">${metrics.map(m=>`<div class="generated-metric"><div class="label">${this.escape(m[0])}</div><div class="value">${this.escape(m[1])}</div></div>`).join('')}</div>
-      <div class="card"><div class="card-header"><div><div class="card-title">Narrative Sections</div><div class="field-hint">These sections will be combined into the quarterly report narrative. Boxes grow as you type.</div></div><button class="btn btn-gold btn-sm" id="btn-narrative-save">Save Narrative</button></div><div class="card-body">
+      <div class="card"><div class="card-header"><div><h2 class="card-title">Narrative Sections</h2><div class="field-hint">These sections will be combined into the quarterly report narrative. Boxes grow as you type.</div></div><button class="btn btn-gold btn-sm" id="btn-narrative-save">Save Narrative</button></div><div class="card-body">
         ${this.narrativeSectionHtml(1,'program_summary','narr-program-summary','Program Summary', sections.program_summary, { placeholder:'Summarize overall program operations during this reporting period.' })}
         ${this.narrativeSectionHtml(2,'program_successes','narr-program-successes','Program Successes', sections.program_successes, { placeholder:'Describe significant accomplishments, partnerships, or notable progress.' })}
         ${this.narrativeSectionHtml(3,'program_challenges','narr-program-challenges','Challenges', sections.program_challenges, { placeholder:'Describe barriers such as housing availability, documentation, staffing, engagement, or other challenges.' })}
@@ -4859,7 +5033,7 @@ const App = {
       `Length of stay: ${los||'—'} day${los===1?'':'s'}`,
       `Housing progress: ${c.housing_plan_status||'Not set'}`
     ];
-    return `<div class="card report-summary-card"><div class="card-header"><div><div class="card-title">Reporting Summary</div><div class="field-hint">Generated automatically from this record.</div></div></div><div class="card-body">${checks.map(x=>`<div class="report-check"><span>✓</span><span>${this.escape(x)}</span></div>`).join('')}</div></div>`;
+    return `<div class="card report-summary-card"><div class="card-header"><div><h2 class="card-title">Reporting Summary</h2><div class="field-hint">Generated automatically from this record.</div></div></div><div class="card-body">${checks.map(x=>`<div class="report-check"><span>✓</span><span>${this.escape(x)}</span></div>`).join('')}</div></div>`;
   };
   App.clientQualityWarnings = function(c){
     const warnings=[]; const entry=this.dateOnly(c.entry_date); const exit=this.dateOnly(c.exit_date);
@@ -4919,9 +5093,74 @@ const App = {
   };
 
   
+  /* ---- Exits screen -----------------------------------------------------
+     Reorganized around the question the screen actually has to answer:
+     "where did people go, and what still needs finishing before this
+     quarter can be reported?" Outcome tiles carry the summary, filters
+     narrow the list, and rows group under the outcome band so the table
+     reads as a set of outcomes rather than an undifferentiated log.
+     Records missing an exit destination are hoisted into their own group
+     at the top, because those are the ones blocking submission.       */
+
+  App.EXIT_BAND_ORDER = ['Needs Destination','Permanent Housing','Positive Non-Permanent','Temporary / Institutional','Unstable / Unknown','Other Non-Permanent','Deceased'];
+
+  App.exitBandFor = function(c){
+    if (!c.exit_destination_type) return 'Needs Destination';
+    return this.exitOutcomeBand(c) || 'Other Non-Permanent';
+  };
+
+  App.exitBandClass = function(band){
+    return ({
+      'Needs Destination':'band-needs',
+      'Permanent Housing':'band-permanent',
+      'Positive Non-Permanent':'band-positive',
+      'Temporary / Institutional':'band-temporary',
+      'Unstable / Unknown':'band-unstable',
+      'Deceased':'band-deceased'
+    })[band] || 'band-other';
+  };
+
+  App.exitsInScope = function(scope){
+    const all = (this.data.clients||[]).filter(c=>c.exit_date);
+    if (scope === 'ytd' || !scope) return all;
+    const {start,end} = this.qRange(scope);
+    return all.filter(c => this.dateOnly(c.exit_date) >= start && this.dateOnly(c.exit_date) <= end);
+  };
+
+  App.renderExitTiles = function(list){
+    const counted = list.filter(c=>!this.isDeceasedExit(c));
+    const perm = list.filter(c=>this.isPermanentExit(c)).length;
+    const phRate = counted.length ? Math.round((counted.filter(c=>this.isPermanentExit(c)).length / counted.length) * 100) : null;
+    const needs = list.filter(c=>!c.exit_destination_type).length;
+    const tiles = [
+      { label:'Total exits', value:list.length, sub:'in the selected period', cls:'' },
+      { label:'Permanent housing', value:perm, sub: phRate!=null ? `${phRate}% of exits counted` : 'no counted exits', cls:'tile-permanent' },
+      { label:'Positive non-permanent', value:list.filter(c=>this.isPositiveNonPermanentExit(c)).length, sub:'family / partner, no lease', cls:'tile-positive' },
+      { label:'Temporary / institutional', value:list.filter(c=>this.exitOutcomeBand(c)==='Temporary / Institutional').length, sub:'shelter, hotel, institution', cls:'tile-temporary' },
+      { label:'Unstable / unknown', value:list.filter(c=>this.exitOutcomeBand(c)==='Unstable / Unknown').length, sub:'returned to homelessness, lost contact', cls:'tile-unstable' },
+      { label:'Needs destination', value:needs, sub: needs ? 'blocking accurate reporting' : 'all exits classified', cls: needs ? 'tile-needs' : '' }
+    ];
+    return `<div class="exit-tile-row">${tiles.map(t=>`<div class="exit-tile ${t.cls}"><div class="exit-tile-label">${this.escape(t.label)}</div><div class="exit-tile-value">${t.value}</div><div class="exit-tile-sub">${this.escape(t.sub)}</div></div>`).join('')}</div>`;
+  };
+
   App.renderClientExits = function(){
-    const el=document.getElementById('view-client-exits'); const exitsRaw=(this.data.clients||[]).filter(c=>c.exit_date);
-    this._exitsSort = this._exitsSort || {key:null, dir:'asc'};
+    const el=document.getElementById('view-client-exits');
+    this._exitsSort = this._exitsSort || {key:'exit', dir:'desc'};
+    this._exitsFilter = this._exitsFilter || { scope:'ytd', band:'all', q:'', needsOnly:false };
+    const f = this._exitsFilter;
+
+    const scoped = this.exitsInScope(f.scope);
+    const term = (f.q||'').trim().toLowerCase();
+    let list = scoped.filter(c=>{
+      if (f.needsOnly && c.exit_destination_type) return false;
+      if (f.band !== 'all' && this.exitBandFor(c) !== f.band) return false;
+      if (term) {
+        const hay = `${this.clientDisplayId(c)} ${this.clientName(c)||''} ${c.exit_destination_type||''} ${c.room_assignment||''}`.toLowerCase();
+        if (!hay.includes(term)) return false;
+      }
+      return true;
+    });
+
     const accessors = {
       hmis: c=>this.clientDisplayId(c),
       name: c=>this.clientName(c)||'',
@@ -4929,21 +5168,77 @@ const App = {
       exit: c=>this.dateOnly(c.exit_date)||'',
       los: c=>this.daysInclusive(this.dateOnly(c.entry_date), this.dateOnly(c.exit_date)),
       destination: c=>c.exit_destination_type||'',
-      outcome: c=>this.exitOutcomeBand(c)||'',
-      stability: c=>this.exitStability(c)||'',
       goal: c=>c.housing_goal_achieved||''
     };
-    const exits = this.applySort(exitsRaw, this._exitsSort, accessors);
-    const missingDestCount = exitsRaw.filter(c=>!c.exit_destination_type).length;
-    const missingDestBanner = missingDestCount>0 ? `<div class="notice amber" style="margin-top:16px;"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.1 14c.9-1 1.9-2.1 1.9-4a5 5 0 0 0-10 0c0 1.9 1 3 1.9 4 .7.8 1.1 1.2 1.1 2h4c0-.8.4-1.2 1.1-2Z"/></svg></div><div><strong>${missingDestCount} of ${exitsRaw.length} exited client${exitsRaw.length===1?'':'s'}</strong> ${missingDestCount===1?'is':'are'} missing an exit destination. Open each record to complete it so quarterly reporting reflects accurate outcomes.</div></div>` : '';
-    const rows=exits.map(c=>{
+    list = this.applySort(list, this._exitsSort, accessors);
+
+    // Group into bands, preserving the sort order inside each group.
+    const groups = new Map();
+    list.forEach(c=>{
+      const band = this.exitBandFor(c);
+      if (!groups.has(band)) groups.set(band, []);
+      groups.get(band).push(c);
+    });
+    const orderedBands = this.EXIT_BAND_ORDER.filter(b=>groups.has(b))
+      .concat([...groups.keys()].filter(b=>!this.EXIT_BAND_ORDER.includes(b)));
+
+    const COLS = 8;
+    const rowFor = (c) => {
       const destDetail=[c.exit_destination, c.exit_notes].filter(Boolean).join(' — ');
-      const destCell = destDetail
-        ? `<td class="exit-dest-cell" title="${this.escape(destDetail)}">${this.escape(c.exit_destination_type||'—')} <span aria-hidden="true">ⓘ</span></td>`
-        : `<td>${this.escape(c.exit_destination_type||'—')}</td>`;
-      return `<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.formatDate(c.exit_date)}</td><td>${this.daysInclusive(this.dateOnly(c.entry_date), this.dateOnly(c.exit_date)).toLocaleString()}</td>${destCell}<td>${this.escape(this.exitOutcomeBand(c)||'—')}</td><td>${this.escape(this.exitStability(c)||'—')}</td><td>${this.escape(c.housing_goal_achieved||'—')}</td><td><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button></td></tr>`;
-    }).join('') || '<tr><td colspan="10" class="field-hint" style="text-align:center;padding:24px;">No client exits recorded yet.</td></tr>';
-    el.innerHTML=`<div class="page-header"><div><div class="page-title">Exits</div><div class="page-subtitle">Exit detail appears only when a client is marked exited.</div></div></div>${this.renderOutcomeSummary(this.currentQuarter)}${missingDestBanner}<div class="client-table-wrap" style="margin-top:16px;"><table class="client-table"><thead><tr>${this.sortableHeader(this._exitsSort,'hmis','HMIS ID')}${this.sortableHeader(this._exitsSort,'name','Name')}${this.sortableHeader(this._exitsSort,'entry','Entry')}${this.sortableHeader(this._exitsSort,'exit','Exit')}${this.sortableHeader(this._exitsSort,'los','LOS')}${this.sortableHeader(this._exitsSort,'destination','Destination')}${this.sortableHeader(this._exitsSort,'outcome','Outcome Band')}${this.sortableHeader(this._exitsSort,'stability','Stability')}${this.sortableHeader(this._exitsSort,'goal','Goal')}<th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+      const destCell = !c.exit_destination_type
+        ? `<td><button class="btn btn-ghost btn-sm btn-fix" data-edit-client="${c.id}">Add destination</button></td>`
+        : destDetail
+          ? `<td class="exit-dest-cell" title="${this.escape(destDetail)}">${this.escape(c.exit_destination_type)} <span aria-hidden="true">ⓘ</span></td>`
+          : `<td>${this.escape(c.exit_destination_type)}</td>`;
+      const los = this.daysInclusive(this.dateOnly(c.entry_date), this.dateOnly(c.exit_date));
+      return `<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.formatDate(c.exit_date)}</td><td>${los.toLocaleString()}</td>${destCell}<td>${this.escape(c.housing_goal_achieved||'—')}</td><td><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button></td></tr>`;
+    };
+
+    const body = orderedBands.length
+      ? orderedBands.map(band=>{
+          const items = groups.get(band);
+          const head = `<tr class="exit-group-row ${this.exitBandClass(band)}"><td colspan="${COLS}"><span class="exit-group-dot" aria-hidden="true"></span>${this.escape(band)} <span class="exit-group-count">${items.length}</span>${band==='Needs Destination' ? '<span class="exit-group-note">Complete these before submitting the quarter</span>' : ''}</td></tr>`;
+          return head + items.map(rowFor).join('');
+        }).join('')
+      : `<tr><td colspan="${COLS}" class="field-hint" style="text-align:center;padding:24px;">${scoped.length ? 'No exits match the current filters.' : 'No client exits recorded yet.'}</td></tr>`;
+
+    const scopeOpts = [['ytd','Year to date']].concat(Object.keys(this.quarters).map(q=>[q, `${q} · ${this.quarters[q].period}`]));
+    const bandOpts = [['all','All outcomes']].concat(this.EXIT_BAND_ORDER.map(b=>[b,b]));
+    const needsCount = scoped.filter(c=>!c.exit_destination_type).length;
+
+    el.innerHTML=`
+      <div class="page-header">
+        <div><h1 class="page-title">Exits</h1>
+        <div class="page-subtitle">${scoped.length} exit${scoped.length===1?'':'s'} ${f.scope==='ytd'?'year to date':'in '+this.escape(f.scope)} · a client appears here once an exit date is recorded</div></div>
+      </div>
+      ${this.renderExitTiles(scoped)}
+      <div class="table-filter-row exit-filter-row">
+        <label class="sr-only" for="exit-scope">Period</label>
+        <select id="exit-scope" class="field-select">${scopeOpts.map(([v,l])=>`<option value="${this.escape(v)}" ${f.scope===v?'selected':''}>${this.escape(l)}</option>`).join('')}</select>
+        <label class="sr-only" for="exit-band">Outcome</label>
+        <select id="exit-band" class="field-select">${bandOpts.map(([v,l])=>`<option value="${this.escape(v)}" ${f.band===v?'selected':''}>${this.escape(l)}</option>`).join('')}</select>
+        <label class="sr-only" for="exit-search">Search exits</label>
+        <input id="exit-search" class="field-input" type="search" placeholder="Search ID, name, or destination" value="${this.escape(f.q||'')}">
+        ${needsCount ? `<button type="button" class="chip-toggle ${f.needsOnly?'active':''}" id="exit-needs-toggle" aria-pressed="${f.needsOnly}">Needs destination · ${needsCount}</button>` : ''}
+        ${(f.band!=='all'||f.q||f.needsOnly) ? '<button type="button" class="btn btn-ghost btn-sm" id="exit-clear">Clear filters</button>' : ''}
+        <span class="filter-count">${list.length} shown</span>
+      </div>
+      <div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._exitsSort,'hmis','HMIS ID')}${this.sortableHeader(this._exitsSort,'name','Name')}${this.sortableHeader(this._exitsSort,'entry','Entry')}${this.sortableHeader(this._exitsSort,'exit','Exit')}${this.sortableHeader(this._exitsSort,'los','LOS')}${this.sortableHeader(this._exitsSort,'destination','Destination')}${this.sortableHeader(this._exitsSort,'goal','Goal')}<th>Actions</th></tr></thead><tbody>${body}</tbody></table></div>
+      <details class="ops-drawer" style="margin-top:18px;"><summary class="ops-drawer-summary">Outcome breakdown &amp; equity detail</summary><div class="ops-drawer-body">${this.renderOutcomeSummary(this.currentQuarter)}</div></details>`;
+
+    const rerender = () => this.renderClientExits();
+    el.querySelector('#exit-scope')?.addEventListener('change', e => { f.scope = e.target.value; rerender(); });
+    el.querySelector('#exit-band')?.addEventListener('change', e => { f.band = e.target.value; rerender(); });
+    el.querySelector('#exit-needs-toggle')?.addEventListener('click', () => { f.needsOnly = !f.needsOnly; rerender(); });
+    el.querySelector('#exit-clear')?.addEventListener('click', () => { f.band='all'; f.q=''; f.needsOnly=false; rerender(); });
+    const search = el.querySelector('#exit-search');
+    if (search) {
+      let t; search.addEventListener('input', e => {
+        clearTimeout(t);
+        const v = e.target.value;
+        t = setTimeout(() => { f.q = v; rerender(); const s = document.getElementById('exit-search'); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }, 220);
+      });
+    }
     el.querySelectorAll('[data-edit-client]').forEach(b=>b.addEventListener('click',()=>this.openClientForm(b.dataset.editClient)));
     this.wireSortableHeaders(el, this._exitsSort, ()=>this.renderClientExits());
   };
@@ -5143,7 +5438,7 @@ const App = {
     modal.setAttribute('aria-modal','true');
     modal.setAttribute('aria-labelledby','case-note-title');
     modal.innerHTML=`<div class="form-modal">
-      <div class="form-modal-header"><div><div class="form-modal-title" id="case-note-title">Case Note</div><div class="form-modal-meta">Operational case management note — not used for program report calculations</div></div><button class="form-close-btn" data-close-case-note="1">✕</button></div>
+      <div class="form-modal-header"><div><h2 class="form-modal-title" id="case-note-title">Case Note</h2><div class="form-modal-meta">Operational case management note — not used for program report calculations</div></div><button class="form-close-btn" data-close-case-note="1">✕</button></div>
       <div class="form-gold-bar"></div>
       <div class="form-body" id="case-note-body"></div>
       <div class="form-footer"><div class="save-state" id="case-note-save-state">Not saved this session</div><div style="display:flex;gap:10px;"><button class="btn btn-ghost" data-close-case-note="1">Close</button><button class="btn btn-gold" id="btn-save-case-note">Save Case Note</button></div></div>
@@ -5496,7 +5791,64 @@ const App = {
   
   
   
-  // ---- Active Caseload: add Participation column --------------------------
+  /* ---- Live census -------------------------------------------------------
+     The dashboard used to carry the whole census as a single "4/20" figure
+     buried in a strip of four numbers, which answered how many beds are
+     full but nothing a house manager actually needs at the start of a
+     shift. This panel sits above the resident list, where the people it
+     describes already are.                                              */
+
+  App.censusSnapshot = function(){
+    const today = this.today();
+    const clients = this.data.clients||[];
+    const capacity = this.bedCapacity();
+    const active = clients.filter(c=>this.clientStatus(c)==='Active');
+    const pending = clients.filter(c=>this.clientStatus(c)==='Pending');
+    const within = (dateStr, days) => { const d=this.dateOnly(dateStr); return d && -this.daysUntil(d) <= days && -this.daysUntil(d) >= 0; };
+    const movedIn30 = clients.filter(c=>within(c.entry_date,30));
+    const movedOut30 = clients.filter(c=>c.exit_date && within(c.exit_date,30));
+    const losVals = active.map(c=>this.clientBedNights(c, this.dateOnly(c.entry_date), today)).filter(v=>v>0);
+    const avgLos = losVals.length ? Math.round(losVals.reduce((a,b)=>a+b,0)/losVals.length) : 0;
+    const longStay = active.filter(c=>this.clientBedNights(c, this.dateOnly(c.entry_date), today) >= 180);
+    const noPlan = active.filter(c=>!c.housing_plan_status || String(c.housing_plan_status).toLowerCase().includes('not'));
+    const quiet = active.filter(c=>{
+      const p = this.clientParticipation(c);
+      return p.daysSince !== undefined && p.daysSince > 14;
+    });
+    const plannedExits = active.filter(c=>c.expected_exit_date && this.dateOnly(c.expected_exit_date) <= this.addMonthsDate(today,1));
+    return { capacity, active, pending, open: Math.max(0, capacity-active.length), movedIn30, movedOut30, avgLos, longStay, noPlan, quiet, plannedExits };
+  };
+
+  App.renderCensusPanel = function(){
+    const s = this.censusSnapshot();
+    const pct = s.capacity ? Math.round((s.active.length/s.capacity)*100) : 0;
+    const openTone = s.open === 0 ? 'full' : s.open > s.capacity*0.25 ? 'low' : '';
+    const beds = Array.from({length:s.capacity}, (_,i) => i < s.active.length ? 'filled' : 'open')
+      .map(state=>`<span class="bed-pip ${state}"></span>`).join('');
+    const tiles = [
+      { label:'Beds occupied', value:`${s.active.length}<span class="census-of">/${s.capacity}</span>`, sub:`${pct}% of licensed capacity`, cls:'' },
+      { label:'Open beds', value:s.open, sub: s.open===0 ? 'at capacity' : s.open===1 ? '1 bed available now' : `${s.open} beds available now`, cls:`tile-open ${openTone}` },
+      { label:'Average stay', value:s.avgLos, sub:`days, current residents${s.longStay.length?` · ${s.longStay.length} over 180d`:''}`, cls:'' },
+      { label:'Moved in', value:s.movedIn30.length, sub:'last 30 days', cls:'' },
+      { label:'Moved out', value:s.movedOut30.length, sub:`last 30 days${s.plannedExits.length?` · ${s.plannedExits.length} planned`:''}`, cls:'' }
+    ];
+    const flags = [
+      s.noPlan.length ? { n:s.noPlan.length, label:`housing plan${s.noPlan.length===1?'':'s'} not started`, filter:'noplan' } : null,
+      s.quiet.length ? { n:s.quiet.length, label:`no contact in 14+ days`, filter:'quiet' } : null,
+      s.pending.length ? { n:s.pending.length, label:`scheduled intake${s.pending.length===1?'':'s'} not yet arrived`, filter:'pending' } : null
+    ].filter(Boolean);
+    return `<div class="card census-card"><div class="card-body">
+      <div class="census-head">
+        <h2 class="census-title">Live census</h2>
+        <span class="census-asof">as of ${this.formatDate(this.today())}</span>
+      </div>
+      <div class="census-tile-row">${tiles.map(t=>`<div class="census-tile ${t.cls}"><div class="census-tile-label">${this.escape(t.label)}</div><div class="census-tile-value">${t.value}</div><div class="census-tile-sub">${this.escape(t.sub)}</div></div>`).join('')}</div>
+      <div class="bed-strip" role="img" aria-label="${s.active.length} of ${s.capacity} beds occupied">${beds}</div>
+      ${flags.length ? `<div class="census-flags">${flags.map(fl=>`<button type="button" class="census-flag" data-census-filter="${fl.filter}"><strong>${fl.n}</strong> ${this.escape(fl.label)}</button>`).join('')}</div>` : '<div class="census-flags"><span class="census-flag-clear">No housing plans or contact gaps outstanding</span></div>'}
+    </div></div>`;
+  };
+
+  // ---- Active Caseload: census panel, filters, participation column -------
   App.renderClients = function(){
     const el=document.getElementById('view-clients');
     this._caseloadSort = this._caseloadSort || {key:null, dir:'asc'};
@@ -5511,7 +5863,22 @@ const App = {
       room: c=>c.room_assignment||'',
       participation: c=>this.clientParticipation(c).label
     };
-    const active = this.applySort(activeRaw, this._caseloadSort, accessors);
+    // Census flag chips write into this filter, so clicking "3 housing plans
+    // not started" narrows the list below instead of just reporting a number.
+    this._caseloadFilter = this._caseloadFilter || { flag:'all', q:'' };
+    const cf = this._caseloadFilter;
+    const term = (cf.q||'').trim().toLowerCase();
+    const filtered = activeRaw.filter(c=>{
+      if (cf.flag === 'noplan' && c.housing_plan_status && !String(c.housing_plan_status).toLowerCase().includes('not')) return false;
+      if (cf.flag === 'quiet') { const p=this.clientParticipation(c); if (!(p.daysSince !== undefined && p.daysSince > 14)) return false; }
+      if (cf.flag === 'pending' && this.clientStatus(c) !== 'Pending') return false;
+      if (term) {
+        const hay = `${this.clientDisplayId(c)} ${this.clientName(c)||''} ${c.room_assignment||''} ${c.housing_plan_status||''}`.toLowerCase();
+        if (!hay.includes(term)) return false;
+      }
+      return true;
+    });
+    const active = this.applySort(filtered, this._caseloadSort, accessors);
     const duplicates = this.duplicateRoomAssignments(activeRaw);
     const duplicateNotice = duplicates.length ? `<div class="notice amber"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div><div><strong>Duplicate room/bed assignments:</strong> ${duplicates.map(([k,v])=>`${this.escape(k)} (${v})`).join(', ')}. Please verify active resident assignments.</div></div>` : '';
     const rows=active.map(c=>{
@@ -5519,8 +5886,29 @@ const App = {
       const isDuplicate = assignment && duplicates.some(([k])=>k===assignment);
       const part=this.clientParticipation(c);
       return `<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.statusBadge(this.simpleClientStatus(c).toLowerCase().replace(' ','-'))}</td><td>${this.escape(c.housing_plan_status||'—')}</td><td>${this.clientBedNights(c,this.dateOnly(c.entry_date),this.today()).toLocaleString()}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.escape(c.room_assignment||'—')}${isDuplicate?' <span class="badge badge-amber">Duplicate</span>':''}</td><td><span class="badge ${part.cssClass}" title="${this.escape(part.hint||'')}">${this.escape(part.label)}</span></td><td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button><button class="btn btn-ghost btn-sm" data-add-service="${c.id}">Add Service</button><button class="btn btn-ghost btn-sm" data-add-update="${c.id}">Add Update</button></div></td></tr>`;
-    }).join('') || '<tr><td colspan="9" class="empty-table-state">No active client records entered yet.</td></tr>';
-    el.innerHTML=`<div class="page-header"><div><div class="page-title">Active Caseload</div><div class="page-subtitle">Daily client workspace. Quarterly reporting is generated from these source records.</div></div><button class="btn btn-gold" id="btn-new-client">+ Add Client</button></div>${duplicateNotice}<div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._caseloadSort,'hmis','HMIS ID')}${this.sortableHeader(this._caseloadSort,'name','Name')}${this.sortableHeader(this._caseloadSort,'status','Status')}${this.sortableHeader(this._caseloadSort,'housing','Housing Progress')}${this.sortableHeader(this._caseloadSort,'los','LOS')}${this.sortableHeader(this._caseloadSort,'entry','Entry')}${this.sortableHeader(this._caseloadSort,'room','Room / Bed')}${this.sortableHeader(this._caseloadSort,'participation','Participation')}<th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    }).join('') || `<tr><td colspan="9" class="empty-table-state">${activeRaw.length ? 'No residents match the current filter.' : 'No active client records entered yet.'}</td></tr>`;
+    const flagLabels = { all:'All residents', noplan:'Housing plan not started', quiet:'No contact in 14+ days', pending:'Scheduled intakes' };
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Active Caseload</h1><div class="page-subtitle">Daily client workspace. Quarterly reporting is generated from these source records.</div></div><button class="btn btn-gold" id="btn-new-client">+ Add Client</button></div>
+      ${this.renderCensusPanel()}
+      ${duplicateNotice}
+      <div class="table-filter-row">
+        <label class="sr-only" for="caseload-search">Search residents</label>
+        <input id="caseload-search" class="field-input" type="search" placeholder="Search ID, name, room, or plan status" value="${this.escape(cf.q||'')}">
+        ${cf.flag!=='all' ? `<span class="chip-toggle active">${this.escape(flagLabels[cf.flag]||cf.flag)}</span>` : ''}
+        ${(cf.flag!=='all'||cf.q) ? '<button type="button" class="btn btn-ghost btn-sm" id="caseload-clear">Clear filters</button>' : ''}
+        <span class="filter-count">${active.length} of ${activeRaw.length} shown</span>
+      </div>
+      <div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._caseloadSort,'hmis','HMIS ID')}${this.sortableHeader(this._caseloadSort,'name','Name')}${this.sortableHeader(this._caseloadSort,'status','Status')}${this.sortableHeader(this._caseloadSort,'housing','Housing Progress')}${this.sortableHeader(this._caseloadSort,'los','LOS')}${this.sortableHeader(this._caseloadSort,'entry','Entry')}${this.sortableHeader(this._caseloadSort,'room','Room / Bed')}${this.sortableHeader(this._caseloadSort,'participation','Participation')}<th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    el.querySelectorAll('[data-census-filter]').forEach(b=>b.addEventListener('click',()=>{ cf.flag = b.dataset.censusFilter; this.renderClients(); }));
+    el.querySelector('#caseload-clear')?.addEventListener('click',()=>{ cf.flag='all'; cf.q=''; this.renderClients(); });
+    const csearch = el.querySelector('#caseload-search');
+    if (csearch) {
+      let ct; csearch.addEventListener('input', e => {
+        clearTimeout(ct);
+        const v = e.target.value;
+        ct = setTimeout(()=>{ cf.q = v; this.renderClients(); const s=document.getElementById('caseload-search'); if(s){ s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }, 220);
+      });
+    }
     el.querySelector('#btn-new-client').addEventListener('click',()=>this.openClientForm());
     el.querySelectorAll('[data-edit-client]').forEach(b=>b.addEventListener('click',()=>this.openClientForm(b.dataset.editClient)));
     el.querySelectorAll('[data-add-service]').forEach(b=>b.addEventListener('click',()=>this.openServiceForm(null,b.dataset.addService)));
@@ -5615,12 +6003,12 @@ const App = {
       return `<tr><td>${this.formatDate(s.service_date)}</td><td>${this.escape(c.id||'—')}</td><td>${this.escape(this.isAdmin()?'Agency-visible only':(c.client_name||'—'))}</td><td>${this.escape(s.service_type||'—')}</td><td>${s.duration_minutes||0}</td><td>${this.escape(s.staff_name||'—')}</td><td>${this.escape(s.notes||'')}</td></tr>`;
     }).join('') || '<tr><td colspan="7" class="empty-table-state">No services entered for this quarter.</td></tr>';
     const byType={}; services.forEach(s=>{byType[s.service_type||'Other']=(byType[s.service_type||'Other']||0)+1});
-    el.innerHTML=`<div class="page-header"><div><div class="page-title">Services</div><div class="page-subtitle">Individual service contacts generate service tallies automatically.</div></div><button class="btn btn-gold" id="btn-new-service">+ Add Service</button></div>${this.renderQuarterButtons()}<div class="generated-metric-grid"><div class="generated-metric"><div class="label">Service Contacts</div><div class="value">${services.length}</div></div><div class="generated-metric"><div class="label">Clients Engaged</div><div class="value">${new Set(services.map(s=>s.client_id)).size}</div></div><div class="generated-metric"><div class="label">Minutes</div><div class="value">${services.reduce((a,b)=>a+Number(b.duration_minutes||0),0)}</div></div><div class="generated-metric"><div class="label">Service Types</div><div class="value">${Object.keys(byType).length}</div></div></div><div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._servicesSort,'date','Date')}${this.sortableHeader(this._servicesSort,'clientId','Client ID')}${this.sortableHeader(this._servicesSort,'name','Name')}${this.sortableHeader(this._servicesSort,'type','Service Type')}${this.sortableHeader(this._servicesSort,'minutes','Minutes')}${this.sortableHeader(this._servicesSort,'staff','Staff')}<th>Notes</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Services</h1><div class="page-subtitle">Individual service contacts generate service tallies automatically.</div></div><button class="btn btn-gold" id="btn-new-service">+ Add Service</button></div>${this.renderQuarterButtons()}<div class="generated-metric-grid"><div class="generated-metric"><div class="label">Service Contacts</div><div class="value">${services.length}</div></div><div class="generated-metric"><div class="label">Clients Engaged</div><div class="value">${new Set(services.map(s=>s.client_id)).size}</div></div><div class="generated-metric"><div class="label">Minutes</div><div class="value">${services.reduce((a,b)=>a+Number(b.duration_minutes||0),0)}</div></div><div class="generated-metric"><div class="label">Service Types</div><div class="value">${Object.keys(byType).length}</div></div></div><div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._servicesSort,'date','Date')}${this.sortableHeader(this._servicesSort,'clientId','Client ID')}${this.sortableHeader(this._servicesSort,'name','Name')}${this.sortableHeader(this._servicesSort,'type','Service Type')}${this.sortableHeader(this._servicesSort,'minutes','Minutes')}${this.sortableHeader(this._servicesSort,'staff','Staff')}<th>Notes</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     this.bindQuarterButtons(el);
     this.wireSortableHeaders(el, this._servicesSort, ()=>this.renderServices());
     el.querySelector('#btn-new-service').addEventListener('click',()=>this.openServiceForm());
     const header=el.querySelector('.page-header');
-    const quick=`<div class="card" style="margin-bottom:16px;"><div class="card-header"><div><div class="card-title">One-Click Service Entry</div><div class="field-hint">Choose a service type, then select the client. Today's date and 30 minutes are filled automatically.</div></div></div><div class="card-body"><div class="quick-service-bar">${['Case Management','Housing Navigation','Benefits Assistance','Document Readiness','Landlord Coordination','Mental Health Referral'].map(t=>`<button class="quick-chip" data-quick-service="${this.escape(t)}">+ ${this.escape(t)}</button>`).join('')}</div></div></div>`;
+    const quick=`<div class="card" style="margin-bottom:16px;"><div class="card-header"><div><h2 class="card-title">One-Click Service Entry</h2><div class="field-hint">Choose a service type, then select the client. Today's date and 30 minutes are filled automatically.</div></div></div><div class="card-body"><div class="quick-service-bar">${['Case Management','Housing Navigation','Benefits Assistance','Document Readiness','Landlord Coordination','Mental Health Referral'].map(t=>`<button class="quick-chip" data-quick-service="${this.escape(t)}">+ ${this.escape(t)}</button>`).join('')}</div></div></div>`;
     if(header) header.insertAdjacentHTML('afterend',quick);
     el.querySelectorAll('[data-quick-service]').forEach(b=>b.addEventListener('click',()=>this.openServiceForm(null,null,b.dataset.quickService)));
   };
@@ -5642,7 +6030,7 @@ const App = {
     const typeRows = this.applySort(typeRowsAll, sortState, accessors);
     const html = typeRows.map(f=>{const c=f.client||{}; const st=this.followUpStatus(f); return `<tr><td><strong>${this.escape(c.id||'—')}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.formatDate(f.due_date)}</td><td><span class="followup-status ${st}">${this.escape(this.followUpLabel(f))}</span></td><td>${this.escape(f.housing_status||'—')}</td><td>${this.formatDate(f.completed_date)}</td><td><button class="btn btn-ghost btn-sm" data-followup-client="${c.id}" data-followup-type="${this.escape(f.followup_type)}">${st==='complete'?'Edit':'Complete'}</button></td></tr>`}).join('') || `<tr><td colspan="7" style="text-align:center;padding:24px;" class="field-hint">No ${this.escape(label.toLowerCase())} are currently expected.</td></tr>`;
     return `<div class="card" style="margin-bottom:16px;">
-      <div class="card-header"><div class="card-title">${this.escape(label)}</div><span class="badge badge-gray">${typeDue.length} open · ${typeComplete.length} completed${typeOverdue.length?` · ${typeOverdue.length} overdue`:''}</span></div>
+      <div class="card-header"><h2 class="card-title">${this.escape(label)}</h2><span class="badge badge-gray">${typeDue.length} open · ${typeComplete.length} completed${typeOverdue.length?` · ${typeOverdue.length} overdue`:''}</span></div>
       <div class="card-body" style="padding:0;">
         <div class="client-table-wrap"><table class="client-table" data-followup-table="${this.escape(type)}"><thead><tr>${this.sortableHeader(sortState,'hmis','Client ID')}${this.sortableHeader(sortState,'name','Name')}${this.sortableHeader(sortState,'due','Due Date')}${this.sortableHeader(sortState,'status','Status')}${this.sortableHeader(sortState,'housing','Housing Status')}${this.sortableHeader(sortState,'completed','Completed')}<th></th></tr></thead><tbody>${html}</tbody></table></div>
       </div>
@@ -5657,7 +6045,7 @@ const App = {
     const overdue=rows.filter(f=>this.followUpStatus(f)==='overdue');
     this._followup6Sort = this._followup6Sort || {key:null, dir:'asc'};
     this._followup12Sort = this._followup12Sort || {key:null, dir:'asc'};
-    el.innerHTML=`<div class="page-header"><div><div class="page-title">Housing Follow-Ups</div><div class="page-subtitle">Track 6-month and 12-month housing status checks for clients placed in permanent housing.</div></div></div><div class="generated-metric-grid"><div class="generated-metric"><div class="label">Open Follow-Ups</div><div class="value">${due.length}</div></div><div class="generated-metric"><div class="label">Completed</div><div class="value">${complete.length}</div></div><div class="generated-metric"><div class="label">Overdue</div><div class="value">${overdue.length}</div></div><div class="generated-metric"><div class="label">PH Clients</div><div class="value">${this.phExitClients().length}</div></div></div><div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg></div><div><strong>Purpose:</strong> after a client exits to documented permanent housing, staff should confirm housing status at 6 months and 12 months. This helps the City understand whether placements remain stable beyond the point of exit.</div></div>${this.renderFollowUpSection(rows,'6-month','6-Month Follow-Ups',this._followup6Sort)}${this.renderFollowUpSection(rows,'12-month','12-Month Follow-Ups',this._followup12Sort)}`;
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Housing Follow-Ups</h1><div class="page-subtitle">Track 6-month and 12-month housing status checks for clients placed in permanent housing.</div></div></div><div class="generated-metric-grid"><div class="generated-metric"><div class="label">Open Follow-Ups</div><div class="value">${due.length}</div></div><div class="generated-metric"><div class="label">Completed</div><div class="value">${complete.length}</div></div><div class="generated-metric"><div class="label">Overdue</div><div class="value">${overdue.length}</div></div><div class="generated-metric"><div class="label">PH Clients</div><div class="value">${this.phExitClients().length}</div></div></div><div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg></div><div><strong>Purpose:</strong> after a client exits to documented permanent housing, staff should confirm housing status at 6 months and 12 months. This helps the City understand whether placements remain stable beyond the point of exit.</div></div>${this.renderFollowUpSection(rows,'6-month','6-Month Follow-Ups',this._followup6Sort)}${this.renderFollowUpSection(rows,'12-month','12-Month Follow-Ups',this._followup12Sort)}`;
     el.querySelectorAll('[data-followup-client]').forEach(b=>b.addEventListener('click',()=>this.openFollowUpForm(b.dataset.followupClient,b.dataset.followupType)));
     this.wireSortableHeaders(el.querySelector('[data-followup-table="6-month"]'), this._followup6Sort, ()=>this.renderHousingFollowUps());
     this.wireSortableHeaders(el.querySelector('[data-followup-table="12-month"]'), this._followup12Sort, ()=>this.renderHousingFollowUps());
@@ -5676,15 +6064,15 @@ const App = {
       status: u=>u.active ? 'Active' : 'Inactive'
     };
     const users = this.applySort(this.data.approvedUsers||[], this._accessSort, accessors);
-    el.innerHTML = `<div class="page-header"><div><div class="page-title">Access Management</div><div class="page-subtitle">Manage approved ${this.escape(this.programName())} portal users.</div></div></div>
-      <div class="card" style="margin-bottom:18px;"><div class="card-header"><div class="card-title">Add or Update User</div></div><div class="card-body">
+    el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Access Management</h1><div class="page-subtitle">Manage approved ${this.escape(this.programName())} portal users.</div></div></div>
+      <div class="card" style="margin-bottom:18px;"><div class="card-header"><h2 class="card-title">Add or Update User</h2></div><div class="card-body">
         <div class="form-row"><div class="field-group"><label class="field-label required">Email</label><input class="field-input" id="au-email" type="email"></div><div class="field-group"><label class="field-label required">Full Name</label><input class="field-input" id="au-name"></div></div>
         <div class="form-row three"><div class="field-group"><label class="field-label">Organization</label><input class="field-input" id="au-org" value="${this.escape(this.agencyName())}"></div>
         <div class="field-group"><label class="field-label">Access Type</label><select class="field-select" id="au-access"><option value="agency_reporter">Agency Reporter</option><option value="agency_editor">Agency Editor</option><option value="agency_signer">Agency Signer</option><option value="viewer">Viewer</option><option value="city_admin">City Admin</option></select></div>
         <div class="field-group"><label class="field-label">Status</label><select class="field-select" id="au-active"><option value="true">Active</option><option value="false">Inactive</option></select></div></div>
         <button class="btn btn-gold" id="btn-save-user">Save User</button><span id="au-msg" style="font-size:12px;margin-left:10px;color:var(--gray-600);"></span>
       </div></div>
-      <div class="card"><div class="card-header"><div class="card-title">Approved Users</div><button class="btn btn-ghost btn-sm" id="btn-refresh-users">Refresh</button></div><div class="card-body" style="overflow-x:auto;">
+      <div class="card"><div class="card-header"><h2 class="card-title">Approved Users</h2><button class="btn btn-ghost btn-sm" id="btn-refresh-users">Refresh</button></div><div class="card-body" style="overflow-x:auto;">
       <table class="svc-table"><thead><tr>${this.sortableHeader(this._accessSort,'email','Email')}${this.sortableHeader(this._accessSort,'name','Name')}${this.sortableHeader(this._accessSort,'org','Organization')}${this.sortableHeader(this._accessSort,'access','Access')}${this.sortableHeader(this._accessSort,'status','Status')}<th>Action</th></tr></thead><tbody>
         ${users.map(u => `<tr><td>${this.escape(u.email)}</td><td>${this.escape(u.full_name)}</td><td>${this.escape(u.organization)}</td><td>${this.escape(u.access_type || u.role)}</td><td>${u.active ? 'Active' : 'Inactive'}</td>
         <td><button class="btn btn-ghost btn-sm" data-edit-user="${this.escape(u.email)}">Edit</button></td></tr>`).join('')}
@@ -5782,7 +6170,7 @@ const App = {
     const metricByGoalKey = {};
     this.MANUAL_QUARTER_METRICS.forEach(m=>{ metricByGoalKey[m.goalKey] = m; });
     return `<div class="card" style="margin-bottom:16px;">
-      <div class="card-header"><div class="card-title">Annual Goals & Progress</div><span class="badge badge-gray">Through ${q}</span></div>
+      <div class="card-header"><h2 class="card-title">Annual Goals & Progress</h2><span class="badge badge-gray">Through ${q}</span></div>
       <div class="card-body">
         <div class="goal-list">
           ${goals.map(g => {
@@ -5919,7 +6307,7 @@ const App = {
         <td><div class="client-actions">${c?`<button class="btn btn-ghost btn-sm" data-open-incident-client="${c.id}">Open Client</button>`:''}<button class="btn btn-ghost btn-sm" data-edit-incident="${this.escape(i.id)}">Edit</button></div></td>
       </tr>`;
     }).join('') || '<tr><td colspan="9" class="empty-table-state">No incidents match the current filter.</td></tr>';
-    el.innerHTML = `<div class="page-header"><div><div class="page-title">Incident Log</div><div class="page-subtitle">Documentation of behavioral issues, grievances, and other incidents for the caseload.</div></div><button class="btn btn-gold" id="btn-new-incident">+ Log Incident</button></div>
+    el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Incident Log</h1><div class="page-subtitle">Documentation of behavioral issues, grievances, and other incidents for the caseload.</div></div><button class="btn btn-gold" id="btn-new-incident">+ Log Incident</button></div>
       <div class="table-filter-row" style="margin-top:16px;">
         <div class="field-group" style="margin:0;"><label class="field-label" for="incident-filter-client" style="margin-bottom:4px;">Filter by client</label><select id="incident-filter-client" class="field-select"><option value="">All clients (${(this.data.clientIncidents||[]).length})</option>${filterOptions.map(o=>`<option value="${this.escape(o.id)}" ${this._incidentFilterClient===o.id?'selected':''}>${this.escape(o.label)}</option>`).join('')}</select></div>
         ${this._incidentFilterClient ? `<button class="btn btn-ghost btn-sm" id="btn-clear-incident-filter" style="margin-top:18px;">Clear filter</button>` : ''}
@@ -5955,7 +6343,7 @@ const App = {
     modal.setAttribute('aria-modal','true');
     modal.setAttribute('aria-labelledby','incident-title');
     modal.innerHTML=`<div class="form-modal wide">
-      <div class="form-modal-header"><div><div class="form-modal-title" id="incident-title">Incident Report</div><div class="form-modal-meta"></div></div><button class="form-close-btn" data-close-incident="1">✕</button></div>
+      <div class="form-modal-header"><div><h2 class="form-modal-title" id="incident-title">Incident Report</h2><div class="form-modal-meta"></div></div><button class="form-close-btn" data-close-incident="1">✕</button></div>
       <div class="form-gold-bar"></div>
       <div class="form-body" id="incident-body"></div>
       <div class="form-footer"><div class="save-state" id="incident-save-state">Not saved this session</div><div style="display:flex;gap:10px;"><button class="btn btn-ghost" data-close-incident="1">Close</button><button class="btn btn-gold" id="btn-save-incident">Save Incident</button></div></div>
@@ -6300,8 +6688,12 @@ const App = {
     el.querySelector('#dup-alert')?.remove();
     const html = this.duplicateAlertHtml();
     if (!html) return;
-    const header = el.querySelector('.page-header');
-    if (header) header.insertAdjacentHTML('afterend', html);
+    // Sit below the live census rather than above it. The census is the
+    // orienting view for the page; a possible-duplicate warning is important
+    // but secondary, and pushing the census below the fold to show it made
+    // the screen open on an exception instead of on the current state.
+    const anchor = el.querySelector('.census-card') || el.querySelector('.exit-tile-row') || el.querySelector('.page-header');
+    if (anchor) anchor.insertAdjacentHTML('afterend', html);
     else el.insertAdjacentHTML('afterbegin', html);
     el.querySelectorAll('[data-dup-open]').forEach(b => b.addEventListener('click', () => this.openClientForm(b.dataset.dupOpen)));
     el.querySelectorAll('[data-dup-delete]').forEach(b => b.addEventListener('click', () => this.openDeleteClient(b.dataset.dupDelete)));
@@ -6348,7 +6740,7 @@ const App = {
       <div class="form-modal">
         <div class="form-modal-header">
           <div>
-            <div class="form-modal-title" id="deleteclient-title">Delete Client Record</div>
+            <h2 class="form-modal-title" id="deleteclient-title">Delete Client Record</h2>
             <div class="form-modal-meta">Permanent — this cannot be undone</div>
           </div>
           <button class="form-close-btn" id="dc-close" aria-label="Close">✕</button>
@@ -7112,7 +7504,7 @@ const App = {
     const { start, end } = this.qRange(q);
     const launch = this.PROGRAM_LAUNCH_DATE;
     const effectiveStart = this.dateMax(start, launch);
-    m.available = effectiveStart > end ? 0 : 20 * this.daysInclusive(effectiveStart, end);
+    m.available = effectiveStart > end ? 0 : this.bedCapacity() * this.daysInclusive(effectiveStart, end);
     return m;
   };
 })();
@@ -7193,6 +7585,121 @@ const App = {
     const state = document.getElementById('narrative-page-save-state');
     if (state) state.textContent = 'Reverted to your original wording.';
   };
+})();
+
+
+// ---------- View state preservation + accessibility polish ----------
+/* ============================================================
+   EXTENSION 19 — Every render in this app rebuilds its whole
+   section with innerHTML, which threw away the user's scroll
+   position and silently collapsed any <details> they had open.
+   Switching quarters on the Dashboard closed the Program
+   Operations drawer every single time. This wraps the three
+   list/summary renderers to snapshot and restore that state,
+   and cleans up the ARIA gaps those same screens introduced.
+   ============================================================ */
+(function(){
+
+  // Identify a <details> by its position among same-classed siblings, since
+  // most of them have no id. Stable as long as the render output is stable.
+  const detailsKey = (d, i) => `${d.className || 'details'}#${i}`;
+
+  App.preserveViewState = function(sectionId, render){
+    const el = document.getElementById(sectionId);
+    const open = new Set();
+    if (el) {
+      [...el.querySelectorAll('details')].forEach((d,i) => { if (d.open) open.add(detailsKey(d,i)); });
+    }
+    const scrollY = window.scrollY;
+    const activeId = document.activeElement?.id || null;
+
+    render.call(this);
+
+    const after = document.getElementById(sectionId);
+    if (after && open.size) {
+      [...after.querySelectorAll('details')].forEach((d,i) => { if (open.has(detailsKey(d,i))) d.open = true; });
+    }
+    // Restore scroll on the next frame, once layout has settled.
+    if (scrollY) requestAnimationFrame(() => window.scrollTo({ top: scrollY }));
+    // Search inputs re-render on every keystroke; keep the caret where it was.
+    if (activeId && !document.getElementById(activeId)?.isSameNode(document.activeElement)) {
+      const restored = document.getElementById(activeId);
+      if (restored && typeof restored.focus === 'function' && restored.tagName === 'INPUT') {
+        restored.focus();
+        if (restored.setSelectionRange && restored.type !== 'date') {
+          try { restored.setSelectionRange(restored.value.length, restored.value.length); } catch(e){}
+        }
+      }
+    }
+  };
+
+  [['renderDashboard','view-dashboard'],
+   ['renderClientExits','view-client-exits'],
+   ['renderClients','view-clients']].forEach(([method, sectionId]) => {
+    const base = App[method];
+    if (typeof base !== 'function') return;
+    App[method] = function(){ this.preserveViewState(sectionId, base); };
+  });
+
+  /* ---- Accessibility ---------------------------------------------------
+     Status was communicated with bare emoji in three renderers. Two of them
+     wrapped it in aria-hidden and one did not, so screen readers announced
+     "check mark" / "warning sign" as if it were content. Wrap them all and
+     give the demographic bars real progressbar semantics.              */
+
+  const hideDecorativeGlyphs = (root) => {
+    if (!root) return;
+    root.querySelectorAll('.readiness-check > span:first-child, .check-row > span:first-child').forEach(span => {
+      if (span.hasAttribute('aria-hidden')) return;
+      const glyph = span.textContent.trim();
+      if (!glyph || glyph.length > 2) return;
+      span.setAttribute('aria-hidden','true');
+      const label = glyph === '✓' || glyph === '✅' ? 'Complete: ' : 'Needs attention: ';
+      const sr = document.createElement('span');
+      sr.className = 'sr-only';
+      sr.textContent = label;
+      span.parentNode.insertBefore(sr, span.nextSibling);
+    });
+  };
+
+  const labelDemoBars = (root) => {
+    if (!root) return;
+    root.querySelectorAll('.demo-bar-row').forEach(row => {
+      const track = row.querySelector('.demo-bar-track');
+      const fill = row.querySelector('.demo-bar-fill');
+      if (!track || !fill || track.hasAttribute('role')) return;
+      const label = row.querySelector('.demo-bar-label')?.textContent?.trim() || '';
+      const pct = parseInt(String(fill.style.width).replace('%',''), 10) || 0;
+      track.setAttribute('role','progressbar');
+      track.setAttribute('aria-valuenow', String(pct));
+      track.setAttribute('aria-valuemin','0');
+      track.setAttribute('aria-valuemax','100');
+      track.setAttribute('aria-label', `${label}: ${pct}% of participants`);
+    });
+  };
+
+  const baseRenderDashboardForA11y = App.renderDashboard;
+  App.renderDashboard = function(){
+    baseRenderDashboardForA11y.call(this);
+    const el = document.getElementById('view-dashboard');
+    hideDecorativeGlyphs(el);
+    labelDemoBars(el);
+  };
+
+  /* ---- Attention popover dismissal -------------------------------------
+     It is a <details> positioned over page content. Native <details> does
+     not close on outside click or Escape, so once opened it sat on top of
+     the dashboard until the user found the summary again. */
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('details.attention-chip[open]').forEach(d => {
+      if (!d.contains(e.target)) d.open = false;
+    });
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const open = document.querySelector('details.attention-chip[open]');
+    if (open) { open.open = false; open.querySelector('summary')?.focus(); }
+  });
 })();
 
 
