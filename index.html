@@ -1059,6 +1059,13 @@ th.sortable:hover { color:var(--navy); }
 .chat-input { flex:1; min-height:52px; resize:vertical; font-family:inherit; }
 .chat-input-row .btn { flex-shrink:0; }
 @media (max-width:800px) { .chat-input-row { flex-direction:column; align-items:stretch; } }
+/* ── CONTRACT YEAR SWITCHER ──────────────────────────────────────────────
+   Replaces the static FY badge in the topbar when a program has more than
+   one contract period on record. */
+.fy-switcher { background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.22); color:var(--white); border-radius:20px; padding:4px 10px; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; }
+.fy-switcher:hover { background:rgba(255,255,255,.2); }
+.fy-switcher option { color:var(--gray-800); background:var(--white); }
+
 </style>
 </head>
 
@@ -1384,8 +1391,10 @@ th.sortable:hover { color:var(--navy); }
  *   PROGRAM_NAME       Default program name lookup string used when PROGRAM_ID is not set.
  *   PROGRAM_ID         When set to a UUID string, ensureProfile() queries programs by id
  *                      instead of by name. PROGRAM_ID overrides PROGRAM_NAME.
- *   FISCAL_YEAR_LABEL  Display label for the active fiscal year.
- *   QUARTERS           Quarter-period and due-date metadata used across forms and prints.
+ *   FALLBACK_CONTRACT  Contract term used ONLY when holloway_contract_periods
+ *                      has no row for this program. The real reporting
+ *                      calendar comes from the database; this exists so a
+ *                      fresh or offline deployment still renders.
  *   DEMOGRAPHICS       Age band, ethnicity, language, and gender keys used by the
  *                      demographic grids and the YTD reconciliation logic.
  *   SCOPE_ROWS         Authoritative list of Scope-of-Services metric rows, replacing
@@ -1402,7 +1411,29 @@ th.sortable:hover { color:var(--navy); }
 const CONFIG = {
   PROGRAM_NAME: 'Holloway Interim Housing Program',
   PROGRAM_ID: null,
-  FISCAL_YEAR_LABEL: 'FY 2025-26',
+  /* Reporting calendar fallback.
+   *
+   * Quarters, fiscal-year tags and due dates are DERIVED from contract period
+   * rows (holloway_contract_periods) at runtime — see 05-contract-periods.js.
+   * The literal QUARTERS map and FISCAL_YEAR_LABEL that used to live here were
+   * a second and third copy of dates that also existed in qRange() and in bare
+   * string literals through the metrics code, so a new contract year meant
+   * editing several places consistently.
+   *
+   * This block is the last resort: used only if the database returns no
+   * contract period for the program. Editing it is not how you roll over a
+   * year — add a row to holloway_contract_periods instead.
+   */
+  FALLBACK_CONTRACT: {
+    fiscalYear: 'FY2025-26',
+    start: '2025-10-01',
+    end:   '2026-09-30'
+  },
+
+  // Months per reporting period, and how many days after a period closes the
+  // report is due. Both feed deriveQuarters().
+  MONTHS_PER_PERIOD: 3,
+  REPORT_DUE_OFFSET_DAYS: 15,
 
   // Licensed bed count. A program record with its own bed_capacity overrides
   // this at runtime (see App.bedCapacity). Previously the number 20 was
@@ -1484,12 +1515,6 @@ const CONFIG = {
   // equity breakdown.
   MIN_EXITS_FOR_RATE: 5,
 
-  QUARTERS: {
-    Q1: { period:'October 1 – December 31, 2025', due:'2026-01-15', label:'Q1' },
-    Q2: { period:'January 1 – March 31, 2026',    due:'2026-04-15', label:'Q2' },
-    Q3: { period:'April 1 – June 30, 2026',       due:'2026-07-15', label:'Q3' },
-    Q4: { period:'July 1 – September 30, 2026',   due:'2026-10-15', label:'Q4' }
-  },
 
   DEMOGRAPHICS: {
     ageBands: ['18–24','25–39','40–49','50–61','62–64','65–74','75–84','85+'],
@@ -1613,15 +1638,155 @@ const CONFIG = {
   ]
 };
 
+/* ============================================================================
+   CONTRACT PERIODS — derives fiscal years and reporting quarters from dates
+   ----------------------------------------------------------------------------
+   Everything about the reporting calendar used to be hardcoded: a QUARTERS
+   literal in CONFIG, a second copy of the same dates inside qRange(), and
+   bare '2025-10-01' / '2026-09-30' strings scattered through the metrics
+   code. Rolling to a new contract year meant editing all of them and hoping
+   none were missed, and the fiscal year label was a third independent copy.
+
+   Now a contract period is a row in holloway_contract_periods (fiscal_year,
+   start_date, end_date, optional bed_capacity) and every quarter boundary,
+   label and year-to-date window is computed from it.
+
+   Loaded before 10-core.js so App can reference these helpers.
+   ========================================================================== */
+
+const ContractPeriods = {
+
+  /* Split a term into consecutive 3-month reporting quarters.
+     Contracts are not always 12 months — a bridge program might run 6 months,
+     an extended term 18 — so the count comes from the dates rather than being
+     assumed to be four. A trailing partial period (e.g. a 14-month term) is
+     kept as a short final quarter rather than being dropped or padded, since
+     the work in it still has to be reported. */
+  deriveQuarters(startDate, endDate, opts = {}) {
+    const monthsPer = opts.monthsPerPeriod || 3;
+    const dueOffsetDays = opts.dueOffsetDays ?? 15;
+    const prefix = opts.prefix || 'Q';
+
+    const start = this.parse(startDate);
+    const end = this.parse(endDate);
+    if (!start || !end || end <= start) return {};
+
+    const out = {};
+    let cursor = new Date(start);
+    let n = 1;
+
+    // Hard stop well above any plausible contract; a malformed pair of dates
+    // should not spin here.
+    while (cursor <= end && n <= 40) {
+      const periodStart = new Date(cursor);
+      const periodEnd = new Date(cursor);
+      periodEnd.setMonth(periodEnd.getMonth() + monthsPer);
+      periodEnd.setDate(periodEnd.getDate() - 1);
+      const clampedEnd = periodEnd > end ? new Date(end) : periodEnd;
+
+      const due = new Date(clampedEnd);
+      due.setDate(due.getDate() + dueOffsetDays);
+
+      const key = `${prefix}${n}`;
+      out[key] = {
+        label: key,
+        start: this.iso(periodStart),
+        end: this.iso(clampedEnd),
+        period: `${this.longDate(periodStart)} – ${this.longDate(clampedEnd)}`,
+        due: this.iso(due),
+        partial: clampedEnd < periodEnd
+      };
+
+      cursor = new Date(clampedEnd);
+      cursor.setDate(cursor.getDate() + 1);
+      n++;
+    }
+    return out;
+  },
+
+  /* A fiscal-year tag like 'FY2025-26' from a start/end pair. Used only when a
+     contract period row has no fiscal_year of its own — the stored value wins,
+     because it has to match the fiscal_year already written on reporting rows
+     and guessing a different format would orphan them. */
+  deriveFiscalYear(startDate, endDate) {
+    const s = this.parse(startDate), e = this.parse(endDate);
+    if (!s || !e) return null;
+    const sy = s.getFullYear();
+    const ey = e.getFullYear();
+    return ey === sy ? `FY${sy}` : `FY${sy}-${String(ey).slice(2)}`;
+  },
+
+  deriveLabel(fiscalYear, startDate, endDate) {
+    const fy = fiscalYear || this.deriveFiscalYear(startDate, endDate) || '';
+    // 'FY2025-26' → 'FY 2025–26' for display; leave anything else alone.
+    const m = /^FY(\d{4})-(\d{2})$/.exec(fy);
+    if (m) return `FY ${m[1]}–${m[2]}`;
+    const single = /^FY(\d{4})$/.exec(fy);
+    if (single) return `FY ${single[1]}`;
+    return fy;
+  },
+
+  /* Build the App-facing shape for one period row. */
+  fromRow(row = {}, fallback = {}) {
+    const start = this.iso(this.parse(row.start_date || fallback.start));
+    const end = this.iso(this.parse(row.end_date || fallback.end));
+    const fiscalYear = row.fiscal_year || this.deriveFiscalYear(start, end);
+    return {
+      id: row.id || null,
+      fiscalYear,
+      label: row.label || this.deriveLabel(fiscalYear, start, end),
+      start,
+      end,
+      bedCapacity: row.bed_capacity ?? null,
+      quarters: this.deriveQuarters(start, end)
+    };
+  },
+
+  // Which period contains a given date; otherwise the most recent one that has
+  // already started; otherwise the earliest. Mirrors how staff think about it:
+  // during a term you want that term, after it ends you are still writing it up.
+  pick(periods, today) {
+    if (!periods.length) return null;
+    const sorted = [...periods].sort((a, b) => String(a.start).localeCompare(String(b.start)));
+    const current = sorted.find(p => today >= p.start && today <= p.end);
+    if (current) return current;
+    const started = sorted.filter(p => p.start <= today);
+    return started.length ? started[started.length - 1] : sorted[0];
+  },
+
+  // ── date helpers ────────────────────────────────────────────────────────
+  // Noon anchoring keeps a date-only value on its own calendar day regardless
+  // of the browser's offset; parsing '2025-10-01' as UTC midnight lands on
+  // September 30th anywhere west of Greenwich.
+  parse(v) {
+    if (!v) return null;
+    if (v instanceof Date) return isNaN(v) ? null : v;
+    const s = String(v).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+    const d = new Date(s + 'T12:00:00');
+    return isNaN(d) ? null : d;
+  },
+  iso(d) {
+    if (!d) return null;
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  },
+  longDate(d) {
+    return d ? d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
+  }
+};
+
 const App = {
   sb: null,
   user: null,
   profile: null,
   program: null,
-  fiscalYear: 'FY2025-26',
-  // Set from today's date at startup by resolveCurrentQuarter(). The literal
-  // below is only a pre-boot placeholder; it used to be the permanent value,
-  // which meant everyone landed on Q3 no matter what month it was.
+  // All three are replaced at startup by applyContractPeriod(), which derives
+  // them from the active row in holloway_contract_periods. The literals are
+  // pre-boot placeholders only.
+  fiscalYear: CONFIG.FALLBACK_CONTRACT.fiscalYear,
+  contractPeriod: null,     // the active period object
+  contractPeriods: [],      // every period for this program, oldest first
   currentQuarter: 'Q1',
   dashboardScope: 'quarter',
   view: 'dashboard',
@@ -1642,8 +1807,14 @@ const App = {
   errors: {},
   focusReturn: null,
 
-  // Pulled from CONFIG so any tuning happens in one place.
-  quarters: CONFIG.QUARTERS,
+  // Seeded from the fallback term so the app is never quarter-less between
+  // script evaluation and the contract-period fetch; applyContractPeriod()
+  // replaces it with the real calendar as soon as the program resolves.
+  quarters: ContractPeriods.deriveQuarters(
+    CONFIG.FALLBACK_CONTRACT.start,
+    CONFIG.FALLBACK_CONTRACT.end,
+    { monthsPerPeriod: CONFIG.MONTHS_PER_PERIOD, dueOffsetDays: CONFIG.REPORT_DUE_OFFSET_DAYS }
+  ),
   ageBands: CONFIG.DEMOGRAPHICS.ageBands,
   ethnicityKeys: CONFIG.DEMOGRAPHICS.ethnicityKeys,
   languageKeys: CONFIG.DEMOGRAPHICS.languageKeys,
@@ -1936,6 +2107,9 @@ const App = {
     if (pErr) throw pErr;
     this.program = programs?.[0] || null;
     if (!this.program) throw new Error((CONFIG.PROGRAM_NAME || 'Program') + ' not found.');
+    // Must happen before loadAll(): every query filters on this.fiscalYear,
+    // and the quarter map has to exist before any view renders.
+    await this.loadContractPeriods();
   },
 
   isAdmin() { return this.profile?.role === 'city_admin' || this.profile?.access_type === 'city_admin'; },
@@ -2191,6 +2365,25 @@ const App = {
     return rows.reduce((acc, r) => { acc[r.quarter] = r; return acc; }, {});
   },
 
+  /* Year selector. Only rendered when more than one contract period exists —
+     a single-year program should not carry a dropdown with one entry. */
+  renderFiscalYearSwitcher() {
+    const badge = document.getElementById('topbar-fy');
+    if (!badge) return;
+    document.getElementById('fy-switcher')?.remove();
+    if ((this.contractPeriods || []).length < 2) { badge.style.display = ''; return; }
+    badge.style.display = 'none';
+    const sel = document.createElement('select');
+    sel.id = 'fy-switcher';
+    sel.className = 'fy-switcher';
+    sel.setAttribute('aria-label', 'Contract year');
+    sel.innerHTML = this.contractPeriods.map(p =>
+      `<option value="${this.escape(p.fiscalYear)}" ${p.fiscalYear === this.fiscalYear ? 'selected' : ''}>${this.escape(p.label)}</option>`
+    ).join('');
+    sel.addEventListener('change', e => this.setFiscalYear(e.target.value));
+    badge.parentNode.insertBefore(sel, badge);
+  },
+
   renderUser() {
     const name = this.profile?.full_name || this.user?.email || 'User';
     document.getElementById('user-name').textContent = name;
@@ -2207,7 +2400,8 @@ const App = {
     document.querySelectorAll('.sidebar-item[data-action]').forEach(el => { el.style.display = showForms ? 'flex' : 'none'; });
     // Update the topbar FY label.
     const fy = document.getElementById('topbar-fy');
-    if (fy) fy.textContent = CONFIG.FISCAL_YEAR_LABEL.replace('-','–');
+    if (fy) fy.textContent = this.fyLabel();
+    this.renderFiscalYearSwitcher();
     this.updateReviewQueueBadge();
   },
 
@@ -2332,16 +2526,90 @@ const App = {
   // still being written up.
   resolveCurrentQuarter(today=this.localDate()) {
     const order = Object.keys(this.quarters);
+    if (!order.length) return 'Q1';
     for (const q of order) {
-      const { start, end } = this.qRange(q);
-      if (today >= start && today <= end) return q;
+      const spec = this.quarters[q];
+      if (today >= spec.start && today <= spec.end) return q;
     }
-    return today < this.qRange(order[0]).start ? order[0] : order[order.length-1];
+    return today < this.quarters[order[0]].start ? order[0] : order[order.length-1];
   },
 
+  // Reads the derived quarter map rather than a second hardcoded copy of the
+  // dates. Falls back to the whole contract window for an unknown key.
   qRange(q=this.currentQuarter) {
-    const map = { Q1:['2025-10-01','2025-12-31'], Q2:['2026-01-01','2026-03-31'], Q3:['2026-04-01','2026-06-30'], Q4:['2026-07-01','2026-09-30'] };
-    return { start: map[q]?.[0] || '2025-10-01', end: map[q]?.[1] || '2026-09-30', label: this.quarters[q]?.period || '' };
+    const spec = this.quarters[q];
+    if (spec) return { start: spec.start, end: spec.end, label: spec.period || '' };
+    return { start: this.fyStart(), end: this.fyEnd(), label: '' };
+  },
+
+  // Contract window. These replace the bare '2025-10-01' / '2026-09-30'
+  // literals that were previously inlined wherever a year-to-date boundary
+  // was needed.
+  fyStart() { return this.contractPeriod?.start || CONFIG.FALLBACK_CONTRACT.start; },
+  fyEnd()   { return this.contractPeriod?.end   || CONFIG.FALLBACK_CONTRACT.end; },
+  fyLabel() { return this.contractPeriod?.label || ContractPeriods.deriveLabel(this.fiscalYear, this.fyStart(), this.fyEnd()); },
+  quarterKeys() { return Object.keys(this.quarters); },
+  lastQuarterKey() { const k = this.quarterKeys(); return k[k.length-1] || 'Q1'; },
+
+  /* Adopt a contract period: sets the fiscal-year tag every query filters on,
+     rebuilds the quarter map, and re-picks the current quarter. Everything
+     downstream reads these rather than constants. */
+  applyContractPeriod(period) {
+    if (!period) return;
+    this.contractPeriod = period;
+    this.fiscalYear = period.fiscalYear;
+    this.quarters = period.quarters && Object.keys(period.quarters).length
+      ? period.quarters
+      : ContractPeriods.deriveQuarters(period.start, period.end, {
+          monthsPerPeriod: CONFIG.MONTHS_PER_PERIOD,
+          dueOffsetDays: CONFIG.REPORT_DUE_OFFSET_DAYS
+        });
+    this.currentQuarter = this.resolveCurrentQuarter();
+  },
+
+  /* Load every contract term for this program and adopt the one covering
+     today. Falls back to CONFIG.FALLBACK_CONTRACT if the table is empty or
+     unreadable, so a fresh deployment still renders. */
+  async loadContractPeriods() {
+    const pid = this.program?.id;
+    let rows = [];
+    if (pid) {
+      const { data, error } = await this.sb.from('holloway_contract_periods')
+        .select('*').eq('program_id', pid).order('start_date', { ascending: true });
+      if (error) console.warn('contract periods unavailable, using fallback', error);
+      else rows = data || [];
+    }
+    if (!rows.length && this.program?.contract_year_start && this.program?.contract_year_end) {
+      // Older deployments carry the term on the program row itself.
+      rows = [{
+        fiscal_year: CONFIG.FALLBACK_CONTRACT.fiscalYear,
+        start_date: this.program.contract_year_start,
+        end_date: this.program.contract_year_end,
+        bed_capacity: this.program.bed_capacity
+      }];
+    }
+    this.contractPeriods = rows.length
+      ? rows.map(r => ContractPeriods.fromRow(r))
+      : [ContractPeriods.fromRow({
+          fiscal_year: CONFIG.FALLBACK_CONTRACT.fiscalYear,
+          start_date: CONFIG.FALLBACK_CONTRACT.start,
+          end_date: CONFIG.FALLBACK_CONTRACT.end
+        })];
+    this.applyContractPeriod(ContractPeriods.pick(this.contractPeriods, this.localDate()));
+  },
+
+  // Switching year re-tags every query and reloads. Used by the year selector,
+  // which only appears when more than one period exists.
+  async setFiscalYear(fy) {
+    const period = this.contractPeriods.find(p => p.fiscalYear === fy);
+    if (!period || period.fiscalYear === this.fiscalYear) return;
+    this.applyContractPeriod(period);
+    this.rosterPage = 0;
+    await this.loadAll();
+    this.renderSidebarForRole();
+    this.renderDeadlineChip();
+    this.showView(this.view);
+    this.toast(`Switched to ${period.label}.`);
   },
   dateOnly(v){ return v ? String(v).slice(0,10) : ''; },
   dateMax(a,b){ return a > b ? a : b; },
@@ -2350,7 +2618,8 @@ const App = {
   clientName(c) { return this.isAdmin() ? 'Agency-visible only' : (c.client_name || '—'); },
   // Single source of truth for licensed bed count: the program record wins,
   // CONFIG is the fallback. Read this instead of writing the number inline.
-  bedCapacity() { return Number(this.program?.bed_capacity || CONFIG.BED_CAPACITY || 20); },
+  // Period override first — capacity can change between contract years.
+  bedCapacity() { return Number(this.contractPeriod?.bedCapacity ?? this.program?.bed_capacity ?? CONFIG.BED_CAPACITY ?? 20); },
 
   /* Today's date in the LOCAL calendar, as YYYY-MM-DD.
    *
@@ -2618,7 +2887,7 @@ const App = {
   outcomeSummary(q=this.currentQuarter, scope='quarter') {
     const {end} = this.qRange(q);
     const exits = scope === 'ytd'
-      ? (this.data.clients||[]).filter(c => c.exit_date && this.dateOnly(c.exit_date) >= '2025-10-01' && this.dateOnly(c.exit_date) <= end)
+      ? (this.data.clients||[]).filter(c => c.exit_date && this.dateOnly(c.exit_date) >= this.fyStart() && this.dateOnly(c.exit_date) <= end)
       : this.clientMetrics(q).exits;
     // byStability was dropped here along with the table that displayed it —
     // it was a projection re-derived from the same destination that produces
@@ -2709,7 +2978,7 @@ const App = {
       ${equityHtml}
     </div></div>`;
   },
-  ytdClientsServed(q=this.currentQuarter) { const order=['Q1','Q2','Q3','Q4']; const idx=Math.max(0,order.indexOf(q)); const end=this.qRange(order[idx]).end; return (this.data.clients||[]).filter(c=>this.dateOnly(c.entry_date)<=end && (!this.dateOnly(c.exit_date) || this.dateOnly(c.exit_date)>='2025-10-01')); },
+  ytdClientsServed(q=this.currentQuarter) { const order=this.quarterKeys(); const idx=Math.max(0,order.indexOf(q)); const end=this.qRange(order[idx]||q).end; const fyStart=this.fyStart(); return (this.data.clients||[]).filter(c=>this.dateOnly(c.entry_date)<=end && (!this.dateOnly(c.exit_date) || this.dateOnly(c.exit_date)>=fyStart)); },
   countQuarterUpdates(q,field,value){ return (this.data.clientUpdates||[]).filter(u=>u.quarter===q && String(u[field]||'')===value).length; },
   clientOptionList(selected='') { return (this.data.clients||[]).map(c=>`<option value="${this.escape(c.id)}" ${c.id===selected?'selected':''}>${this.escape(c.id)}${this.isAdmin()?'':' · '+this.escape(c.client_name||'')}</option>`).join(''); },
 
@@ -2719,14 +2988,14 @@ const App = {
     const el = document.getElementById('view-dashboard');
     const q = this.currentQuarter;
     const scope = this.dashboardScope;
-    const todayClamped = this.dateMin(this.localDate(), '2026-09-30');
+    const todayClamped = this.dateMin(this.localDate(), this.fyEnd());
     const periodLabel = scope === 'ytd'
-      ? `Year to Date &middot; October 1, 2025 &ndash; ${this.formatDate(todayClamped)}`
+      ? `Year to date &middot; ${this.escape(ContractPeriods.longDate(ContractPeriods.parse(this.fyStart())))} &ndash; ${this.formatDate(todayClamped)}`
       : `${this.escape(q)} &middot; ${this.escape(this.quarters[q].period)} &middot; Due ${this.formatDate(this.quarters[q].due)}`;
     el.innerHTML = `
       <div class="page-header">
         <div><h1 class="page-title">${this.isAdmin() ? 'City Admin Dashboard' : 'Agency Reporting Workspace'}</h1>
-        <div class="page-subtitle">${this.escape(this.programName())} · Contract Year: October 1, 2025 – September 30, 2026</div></div>
+        <div class="page-subtitle">${this.escape(this.programName())} · Contract year: ${this.escape(ContractPeriods.longDate(ContractPeriods.parse(this.fyStart())))} – ${this.escape(ContractPeriods.longDate(ContractPeriods.parse(this.fyEnd())))}</div></div>
         <div style="display:flex;gap:10px;">
           <button class="btn btn-ghost btn-sm" id="btn-print-current">Print / Save PDF</button>
           <button class="btn btn-gold" data-open="quarterly">${this.bundleStatus(q)==='accepted'?'View Report':'Start / Continue Report'}</button>
@@ -4021,7 +4290,7 @@ const App = {
       <div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div><strong>${q} Cover Page</strong><br>${generatedMode ? 'Client counts are generated from client records for the reporting period. Only narrative, certification, and HMIS backup documentation require manual completion.' : 'Enter current-quarter values. YTD values are calculated from accepted prior quarters plus this quarter.'}</div></div>
       <div class="form-section"><div class="form-section-title">Program Information</div>
         <div class="form-row"><div class="field-group"><label class="field-label" for="qr-agency-name">Agency</label><input class="field-input" id="qr-agency-name" value="${this.escape(this.agencyName())}" readonly></div><div class="field-group"><label class="field-label" for="qr-program-name">Program</label><input class="field-input" id="qr-program-name" value="${this.escape(this.programName())}" readonly></div></div>
-        <div class="form-row"><div class="field-group"><label class="field-label">Reporting Quarter</label><input class="field-input" value="${q} · ${this.quarters[q].period}" readonly></div><div class="field-group"><label class="field-label">Contract Year</label><input class="field-input" value="October 1, 2025 – September 30, 2026" readonly></div></div>
+        <div class="form-row"><div class="field-group"><label class="field-label">Reporting Quarter</label><input class="field-input" value="${q} · ${this.quarters[q].period}" readonly></div><div class="field-group"><label class="field-label">Contract Year</label><input class="field-input" value="${this.escape(ContractPeriods.longDate(ContractPeriods.parse(this.fyStart())) + ' – ' + ContractPeriods.longDate(ContractPeriods.parse(this.fyEnd())))}" readonly></div></div>
       </div>
       <div class="form-section"><div class="form-section-title">New, Unduplicated Persons Served</div>
         <div class="form-row three">
@@ -4927,7 +5196,7 @@ const App = {
     const voluntarySummary = Object.entries(voluntaryCounts).map(([k,v]) => `${this.escape(k)}: ${v}`).join(' · ') || 'No detailed exit rows recorded.';
 
     document.getElementById('print-report').innerHTML = `
-      <div class="print-page-header"><strong>${this.escape(this.programName())}</strong> · ${this.escape(CONFIG.FISCAL_YEAR_LABEL)} · Generated ${new Date().toLocaleDateString()}</div>
+      <div class="print-page-header"><strong>${this.escape(this.programName())}</strong> · ${this.escape(this.fyLabel())} · Generated ${new Date().toLocaleDateString()}</div>
 
       <div class="print-cover">
         <div class="print-brand">
@@ -6326,12 +6595,12 @@ const App = {
       const scope = this.reportScope(q);
       CONFIG.SCOPE_ROWS.forEach(row => {
         if (row.mode === 'personsYtd') return;
-        rows.push({ 'Fiscal Year': CONFIG.FISCAL_YEAR_LABEL, 'Quarter': q, 'Metric': row.label, 'Value': Number(scope[row.key] ?? 0) });
+        rows.push({ 'Fiscal Year': this.fyLabel(), 'Quarter': q, 'Metric': row.label, 'Value': Number(scope[row.key] ?? 0) });
       });
       const personsQuarter = this.generatedPersonsQuarter ? this.generatedPersonsQuarter(q) : Number(this.data.reports[q]?.persons_quarter || 0);
       const personsYtd = this.generatedPersonsYtd ? this.generatedPersonsYtd(q) : this.calcPersonsYtd(q);
-      rows.push({ 'Fiscal Year': CONFIG.FISCAL_YEAR_LABEL, 'Quarter': q, 'Metric': 'Unduplicated Persons Served (Quarter)', 'Value': Number(personsQuarter||0) });
-      rows.push({ 'Fiscal Year': CONFIG.FISCAL_YEAR_LABEL, 'Quarter': q, 'Metric': 'Unduplicated Persons Served (YTD)', 'Value': Number(personsYtd||0) });
+      rows.push({ 'Fiscal Year': this.fyLabel(), 'Quarter': q, 'Metric': 'Unduplicated Persons Served (Quarter)', 'Value': Number(personsQuarter||0) });
+      rows.push({ 'Fiscal Year': this.fyLabel(), 'Quarter': q, 'Metric': 'Unduplicated Persons Served (YTD)', 'Value': Number(personsYtd||0) });
     });
     return rows;
   };
@@ -6344,11 +6613,11 @@ const App = {
       this.ageBands.forEach(age => {
         const row = demo.ageGender[age] || {};
         ['male','female','nb','unk'].forEach(k => {
-          rows.push({ 'Fiscal Year': CONFIG.FISCAL_YEAR_LABEL, 'Quarter': q, 'Demographic Type': 'Age & Gender', 'Category': age, 'Subcategory': k, 'Count': Number(row[k]||0) });
+          rows.push({ 'Fiscal Year': this.fyLabel(), 'Quarter': q, 'Demographic Type': 'Age & Gender', 'Category': age, 'Subcategory': k, 'Count': Number(row[k]||0) });
         });
       });
-      this.ethnicityKeys.forEach(k => rows.push({ 'Fiscal Year': CONFIG.FISCAL_YEAR_LABEL, 'Quarter': q, 'Demographic Type': 'Ethnicity', 'Category': k, 'Subcategory': '', 'Count': Number(demo.ethnicity[k]||0) }));
-      this.languageKeys.forEach(k => rows.push({ 'Fiscal Year': CONFIG.FISCAL_YEAR_LABEL, 'Quarter': q, 'Demographic Type': 'Language', 'Category': k, 'Subcategory': '', 'Count': Number(demo.language[k]||0) }));
+      this.ethnicityKeys.forEach(k => rows.push({ 'Fiscal Year': this.fyLabel(), 'Quarter': q, 'Demographic Type': 'Ethnicity', 'Category': k, 'Subcategory': '', 'Count': Number(demo.ethnicity[k]||0) }));
+      this.languageKeys.forEach(k => rows.push({ 'Fiscal Year': this.fyLabel(), 'Quarter': q, 'Demographic Type': 'Language', 'Category': k, 'Subcategory': '', 'Count': Number(demo.language[k]||0) }));
     });
     return rows;
   };
