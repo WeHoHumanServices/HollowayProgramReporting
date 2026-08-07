@@ -840,6 +840,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .perf-strip-link:hover .strip-go { opacity:1; transform:translateX(2px); }
 .strip-go { font-size:13px; margin-left:6px; color:var(--gray-400); opacity:0; transition:all .15s ease; display:inline-block; }
 
+/* ── GROUP SESSIONS / ON-SITE PARTICIPATION ──────────────────────────── */
+.attendee-toolbar { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.attendee-count { font-size:11.5px; color:var(--gray-500); margin-left:auto; }
+.attendee-list { max-height:230px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius); padding:4px; background:var(--white); }
+.attendee-row { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:6px; font-size:13px; cursor:pointer; }
+.attendee-row:hover { background:var(--gray-100); }
+.attendee-row input { width:16px; height:16px; flex:0 0 auto; cursor:pointer; }
+.attendee-row:has(input:checked) { background:#EEF2FA; }
+.group-session-note { display:inline-block; margin-top:8px; background:#EEF2FA; color:var(--navy); border:1px solid #DCE6F7; border-radius:999px; padding:3px 11px; font-size:11px; font-weight:700; }
+.group-pill { font-size:10px; font-weight:800; letter-spacing:.03em; }
+.quick-chip-onsite { border-color:#B9CBEA; background:#F6F9FE; }
+.quick-chip-onsite:hover { background:#EEF2FA; border-color:var(--navy); }
+
 /* ── LIVE CENSUS (Active Caseload) ───────────────────────────────────── */
 .census-card { margin-bottom:16px; }
 .census-head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; }
@@ -1457,7 +1470,50 @@ const CONFIG = {
   },
 
   AUTOSAVE_DEBOUNCE_MS: 10000,
-  ROSTER_PAGE_SIZE: 50
+  ROSTER_PAGE_SIZE: 50,
+
+  /* SERVICE_TYPES — the Service Type dropdown, in display order.
+   *
+   *   group:   optgroup heading the option sits under.
+   *   session: true when the service is delivered to several residents at
+   *            once. Those types switch the service form to multi-attendee
+   *            entry — one workshop is logged once and produces a linked
+   *            service row per resident who attended.
+   *   specify: true when staff type the name themselves (the Other rows).
+   *
+   * Add a new on-site offering by adding a row here. Nothing else needs
+   * editing — the form, the tallies, and the export all read this list.
+   */
+  SERVICE_TYPES: [
+    { label:'Case Management',                     group:'Case Management & Housing' },
+    { label:'Housing Navigation',                  group:'Case Management & Housing' },
+    { label:'Landlord Coordination',               group:'Case Management & Housing' },
+    { label:'Move-In Support',                     group:'Case Management & Housing' },
+    { label:'Document Readiness',                  group:'Case Management & Housing' },
+    { label:'Care Coordination / Case Conference', group:'Case Management & Housing' },
+    { label:'Follow-Up Contact',                   group:'Case Management & Housing' },
+
+    { label:'Trauma Therapy',                        group:'On-Site Participation', session:true },
+    { label:'Occupational Therapy',                  group:'On-Site Participation', session:true },
+    { label:'Mindful Floral Wellness Workshop',      group:'On-Site Participation', session:true },
+    { label:'Sunday Night Knitting Class',           group:'On-Site Participation', session:true },
+    { label:'On-Site Service — Other',               group:'On-Site Participation', session:true, specify:true },
+
+    { label:'Benefits Assistance',                 group:'Income & Benefits' },
+    { label:'Income / Employment Support',         group:'Income & Benefits' },
+
+    { label:'Mental Health Referral',              group:'Referrals & Health' },
+    { label:'Medical Coordination',                group:'Referrals & Health' },
+    { label:'Substance Use Services Referral',     group:'Referrals & Health' },
+
+    { label:'Life Skills / ADL Support',           group:'Support & Safety' },
+    { label:'Transportation Assistance',           group:'Support & Safety' },
+    { label:'Family / Partner Reunification Planning', group:'Support & Safety' },
+    { label:'Crisis Intervention',                 group:'Support & Safety' },
+    { label:'Safety Planning',                     group:'Support & Safety' },
+
+    { label:'Other',                               group:'Other', specify:true }
+  ]
 };
 
 const App = {
@@ -2274,7 +2330,39 @@ const App = {
   hmisRaceEthnicityOptions() { return ['American Indian, Alaska Native, or Indigenous','Asian or Asian American','Black, African American, or African','Hispanic/Latina/e/o','Middle Eastern or North African','Native Hawaiian or Pacific Islander','White','Additional Race/Ethnicity Detail','Client doesn’t know','Client prefers not to answer','Data not collected']; },
   hmisYesNoOptions() { return ['Yes','No','Client doesn’t know','Client prefers not to answer','Data not collected']; },
   housingPlanStatusOptions() { return ['Not Started','Assessment','Document Collection','Benefits / Income','Housing Search','Application Submitted','Lease Pending','Move-In Scheduled','Permanently Housed','Inactive / On Hold']; },
-  serviceTypeOptions() { return ['Case Management','Housing Navigation','Benefits Assistance','Document Readiness','Income / Employment Support','Mental Health Referral','Medical Coordination','Substance Use Services Referral','Life Skills / ADL Support','Transportation Assistance','Landlord Coordination','Move-In Support','Family / Partner Reunification Planning','Crisis Intervention','Safety Planning','Care Coordination / Case Conference','Follow-Up Contact','Other']; },
+  // Flat list of service type labels, kept for any caller that just wants the
+  // names. The form uses serviceTypeGroups() so the optgroups survive.
+  serviceTypeOptions() { return CONFIG.SERVICE_TYPES.map(t => t.label); },
+
+  serviceTypeMeta(label) { return CONFIG.SERVICE_TYPES.find(t => t.label === label) || null; },
+
+  // Ordered [groupName, [types]] pairs for rendering <optgroup>s.
+  serviceTypeGroups() {
+    const out = [];
+    CONFIG.SERVICE_TYPES.forEach(t => {
+      let bucket = out.find(g => g[0] === t.group);
+      if (!bucket) { bucket = [t.group, []]; out.push(bucket); }
+      bucket[1].push(t);
+    });
+    return out;
+  },
+
+  isGroupSessionType(label) { return !!this.serviceTypeMeta(label)?.session; },
+  typeNeedsSpecify(label)   { return !!this.serviceTypeMeta(label)?.specify; },
+
+  // What a service should be called on screen. A specify-type service carries
+  // the staff-entered name; everything else is just its type. Falls back to the
+  // bare type when service_type_other is absent — which is the case for every
+  // row saved before that column existed.
+  serviceLabel(s = {}) {
+    const base = s.service_type || '—';
+    const custom = (s.service_type_other || '').trim();
+    return this.typeNeedsSpecify(base) && custom ? custom : base;
+  },
+
+  // The type to group by in tallies. Custom names roll up under their parent
+  // so "Sunday Supper Club" does not become its own reporting category.
+  serviceGroupKey(s = {}) { return s.service_type || '—'; },
   isPermanentExit(c) { return this.exitDestinationCategory(c) === 'permanent'; },
   isPositiveNonPermanentExit(c) { return this.exitDestinationCategory(c) === 'positive_non_permanent'; },
   isDeceasedExit(c) { return this.exitDestinationCategory(c) === 'deceased'; },
@@ -5485,25 +5573,175 @@ const App = {
   // Accurate demographic capture + reusable "Other, specify" support.
   App.hmisGenderOptions = function(){ return ['Woman (Girl, if child)','Man (Boy, if child)','Culturally Specific Identity','Non-Binary','Questioning','Different Identity','Client doesn’t know','Client prefers not to answer','Data not collected']; };
 
-  App.openServiceForm = function(id=null,clientId=null) {
+  // presetType comes from the One-Click Service Entry chips. The chips have
+  // always passed it as a third argument, but this function only declared two
+  // parameters, so the preset was silently dropped and every chip opened a
+  // blank form defaulting to the first service type in the list.
+  App.openServiceForm = function(id=null,clientId=null,presetType=null) {
     this.currentServiceId=id;
     const s=id ? (this.data.clientServices||[]).find(x=>x.id===id)||{} : {client_id:clientId||''};
-    document.getElementById('service-body').innerHTML=`<div class="form-section"><div class="form-section-title">Service Contact</div><div class="client-form-grid"><div class="field-group full"><label class="field-label required">Client</label><select id="sf-client" class="field-select">${this.clientOptionList(s.client_id)}</select></div><div class="field-group"><label class="field-label required">Service Date</label><input id="sf-date" type="date" class="field-input" value="${this.dateOnly(s.service_date) || new Date().toISOString().slice(0,10)}"></div><div class="field-group"><label class="field-label required">Service Type</label><select id="sf-type" class="field-select">${this.serviceTypeOptions().map(x=>`<option value="${this.escape(x)}" ${s.service_type===x?'selected':''}>${this.escape(x)}</option>`).join('')}</select><div id="sf-type-other-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify service type</label><input id="sf-type-other" class="field-input" value="${this.escape(s.service_type_other||'')}"></div></div><div class="field-group"><label class="field-label">Duration Minutes</label><input id="sf-minutes" type="number" class="field-input" value="${s.duration_minutes||30}"></div><div class="field-group"><label class="field-label">Staff</label><input id="sf-staff" class="field-input" value="${this.escape(s.staff_name||'')}"></div><div class="field-group full"><label class="field-label">Notes</label><textarea id="sf-notes" class="field-textarea">${this.escape(s.notes||'')}</textarea></div></div></div>`;
+    if (presetType && !id) s.service_type = presetType;
+    const editing = !!id;
+
+    const typeSelect = this.serviceTypeGroups().map(([group, types]) =>
+      `<optgroup label="${this.escape(group)}">${types.map(t =>
+        `<option value="${this.escape(t.label)}" ${s.service_type===t.label?'selected':''}>${this.escape(t.label)}</option>`
+      ).join('')}</optgroup>`).join('');
+
+    // Group sessions are attended by several residents at once. Rather than
+    // making staff repeat the same workshop entry per person, the client field
+    // becomes a checklist of active residents and one save produces a linked
+    // row for each attendee. Editing an existing row stays single-client — you
+    // are correcting one person's record, not re-running the session.
+    const active = (this.data.clients||[]).filter(c=>this.clientStatus(c)!=='Exited');
+    const attendeeList = active.length
+      ? active.map(c=>`<label class="attendee-row"><input type="checkbox" class="sf-attendee" value="${this.escape(c.id)}" ${c.id===s.client_id?'checked':''}><span><strong>${this.escape(this.clientDisplayId(c))}</strong>${this.isAdmin()?'':' · '+this.escape(this.clientName(c))}</span></label>`).join('')
+      : '<p class="field-hint">No active residents to select.</p>';
+
+    document.getElementById('service-body').innerHTML=`<div class="form-section"><div class="form-section-title">Service Contact</div><div class="client-form-grid">
+      <div class="field-group full" id="sf-client-single"><label class="field-label required" for="sf-client">Client</label><select id="sf-client" class="field-select">${this.clientOptionList(s.client_id)}</select></div>
+      <div class="field-group full" id="sf-client-multi" style="display:none;">
+        <label class="field-label required">Attendees</label>
+        <div class="field-hint" style="margin-bottom:8px;">Group session — tick everyone who attended. One entry is saved per attendee.</div>
+        <div class="attendee-toolbar"><button type="button" class="btn btn-ghost btn-sm" id="sf-attend-all">Select all</button><button type="button" class="btn btn-ghost btn-sm" id="sf-attend-none">Clear</button><span class="attendee-count" id="sf-attend-count"></span></div>
+        <div class="attendee-list">${attendeeList}</div>
+      </div>
+      <div class="field-group"><label class="field-label required" for="sf-date">Service Date</label><input id="sf-date" type="date" class="field-input" value="${this.dateOnly(s.service_date) || new Date().toISOString().slice(0,10)}"></div>
+      <div class="field-group"><label class="field-label required" for="sf-type">Service Type</label><select id="sf-type" class="field-select">${typeSelect}</select>
+        <div id="sf-type-other-wrap" style="display:none;margin-top:8px;"><label class="field-label required" for="sf-type-other">Name of this service</label><input id="sf-type-other" class="field-input" placeholder="e.g. Sunday Supper Club" value="${this.escape(s.service_type_other||'')}"><div class="field-hint">Staff-defined. Reporting still rolls this up under On-Site Participation.</div></div>
+        <div id="sf-group-note" class="group-session-note" style="display:none;">On-site group session</div>
+      </div>
+      <div class="field-group"><label class="field-label" for="sf-minutes">Duration Minutes</label><input id="sf-minutes" type="number" min="0" class="field-input" value="${s.duration_minutes||30}"></div>
+      <div class="field-group"><label class="field-label" for="sf-staff">Staff</label><input id="sf-staff" class="field-input" value="${this.escape(s.staff_name||'')}"></div>
+      <div class="field-group full"><label class="field-label" for="sf-notes">Notes</label><textarea id="sf-notes" class="field-textarea">${this.escape(s.notes||'')}</textarea></div>
+    </div></div>`;
     this.openOverlay('service');
-    const toggle=()=>{ const show=String(document.getElementById('sf-type')?.value||'').toLowerCase().includes('other'); const wrap=document.getElementById('sf-type-other-wrap'); const inp=document.getElementById('sf-type-other'); if(wrap) wrap.style.display=show?'block':'none'; if(!show && inp) inp.value=''; };
-    document.getElementById('sf-type')?.addEventListener('change',toggle);
+
+    const countEl = () => document.getElementById('sf-attend-count');
+    const refreshCount = () => {
+      const n = document.querySelectorAll('.sf-attendee:checked').length;
+      const el = countEl();
+      if (el) el.textContent = n === 1 ? '1 attendee selected' : `${n} attendees selected`;
+    };
+
+    const toggle = () => {
+      const val = document.getElementById('sf-type')?.value || '';
+      const needsSpecify = this.typeNeedsSpecify(val);
+      const isGroup = this.isGroupSessionType(val) && !editing;
+      const wrap = document.getElementById('sf-type-other-wrap');
+      const inp = document.getElementById('sf-type-other');
+      if (wrap) wrap.style.display = needsSpecify ? 'block' : 'none';
+      if (!needsSpecify && inp) inp.value = '';
+      const note = document.getElementById('sf-group-note');
+      if (note) note.style.display = this.isGroupSessionType(val) ? 'inline-block' : 'none';
+      const single = document.getElementById('sf-client-single');
+      const multi = document.getElementById('sf-client-multi');
+      if (single) single.style.display = isGroup ? 'none' : 'block';
+      if (multi) multi.style.display = isGroup ? 'block' : 'none';
+      refreshCount();
+    };
+
+    document.getElementById('sf-type')?.addEventListener('change', toggle);
+    document.getElementById('sf-attend-all')?.addEventListener('click', () => {
+      document.querySelectorAll('.sf-attendee').forEach(cb => cb.checked = true); refreshCount();
+    });
+    document.getElementById('sf-attend-none')?.addEventListener('click', () => {
+      document.querySelectorAll('.sf-attendee').forEach(cb => cb.checked = false); refreshCount();
+    });
+    document.querySelectorAll('.sf-attendee').forEach(cb => cb.addEventListener('change', refreshCount));
     toggle();
   };
 
+  // Columns added by the on-site-services migration. Until that migration is
+  // applied these do not exist, and PostgREST rejects the whole insert with
+  // PGRST204. Rather than break every save, we detect that specific failure,
+  // strip the new fields, retry, and tell the user what was dropped — so the
+  // app keeps working before the migration and gains the fields after it.
+  App.SERVICE_MIGRATION_FIELDS = ['service_type_other','is_group_session','group_session_id'];
+
+  App.isMissingColumnError = function(error){
+    if (!error) return false;
+    const msg = `${error.code||''} ${error.message||''}`.toLowerCase();
+    return msg.includes('pgrst204') || (msg.includes('column') && (msg.includes('does not exist') || msg.includes('could not find')));
+  };
+
+  App.upsertServiceRows = async function(rows){
+    let { error } = await this.sb.from('holloway_client_services').upsert(rows, { onConflict:'id' });
+    if (error && this.isMissingColumnError(error)) {
+      const stripped = rows.map(r => {
+        const copy = { ...r };
+        this.SERVICE_MIGRATION_FIELDS.forEach(f => delete copy[f]);
+        return copy;
+      });
+      const retry = await this.sb.from('holloway_client_services').upsert(stripped, { onConflict:'id' });
+      if (retry.error) return { error: retry.error, degraded:false };
+      return { error:null, degraded:true };
+    }
+    return { error, degraded:false };
+  };
+
   App.saveService = async function() {
-    const id=this.currentServiceId || (crypto.randomUUID ? crypto.randomUUID() : 'svc_'+Date.now());
-    const serviceType=document.getElementById('sf-type').value||null;
-    const serviceTypeOther=document.getElementById('sf-type-other')?.value.trim()||null;
-    if(String(serviceType||'').toLowerCase().includes('other') && !serviceTypeOther){ document.getElementById('service-save-state').textContent='Please specify service type.'; return; }
-    const payload={id, program_id:this.program.id, fiscal_year:this.fiscalYear, client_id:document.getElementById('sf-client').value, service_date:document.getElementById('sf-date').value||null, service_type:serviceType, duration_minutes:Number(document.getElementById('sf-minutes').value||0)||0, staff_name:document.getElementById('sf-staff').value.trim()||null, notes:document.getElementById('sf-notes').value.trim()||null, updated_by:this.user?.email||null, updated_at:new Date().toISOString()};
-    const {error}=await this.sb.from('holloway_client_services').upsert(payload,{onConflict:'id'});
-    if(error){ document.getElementById('service-save-state').textContent='Save failed: '+error.message; return; }
-    document.getElementById('service-save-state').textContent='Saved.'; await this.loadAll(); this.closeForm('service'); this.showView(this.view||'services');
+    const state = document.getElementById('service-save-state');
+    const serviceType = document.getElementById('sf-type').value || null;
+    const serviceTypeOther = document.getElementById('sf-type-other')?.value.trim() || null;
+    const editing = !!this.currentServiceId;
+
+    if (this.typeNeedsSpecify(serviceType) && !serviceTypeOther) {
+      state.textContent = 'Please name this service.'; return;
+    }
+
+    const isGroup = this.isGroupSessionType(serviceType);
+    const multiMode = isGroup && !editing;
+    const attendees = multiMode
+      ? [...document.querySelectorAll('.sf-attendee:checked')].map(cb => cb.value)
+      : [document.getElementById('sf-client').value].filter(Boolean);
+
+    if (!attendees.length) {
+      state.textContent = multiMode ? 'Select at least one attendee.' : 'Select a client.'; return;
+    }
+
+    const newId = () => crypto.randomUUID ? crypto.randomUUID() : 'svc_' + Date.now() + '_' + Math.round(performance.now()*1000);
+    // One shared id ties the attendee rows together as a single session, so a
+    // workshop can later be found, corrected, or removed as one thing.
+    const existing = editing ? (this.data.clientServices||[]).find(x => x.id === this.currentServiceId) : null;
+    const sessionId = multiMode ? newId() : (existing?.group_session_id || null);
+    const common = {
+      program_id: this.program.id,
+      fiscal_year: this.fiscalYear,
+      service_date: document.getElementById('sf-date').value || null,
+      service_type: serviceType,
+      service_type_other: this.typeNeedsSpecify(serviceType) ? serviceTypeOther : null,
+      is_group_session: isGroup,
+      duration_minutes: Number(document.getElementById('sf-minutes').value || 0) || 0,
+      staff_name: document.getElementById('sf-staff').value.trim() || null,
+      notes: document.getElementById('sf-notes').value.trim() || null,
+      updated_by: this.user?.email || null,
+      updated_at: new Date().toISOString()
+    };
+
+    const rows = attendees.map((clientId, i) => ({
+      ...common,
+      id: editing ? this.currentServiceId : newId(),
+      client_id: clientId,
+      group_session_id: isGroup ? (sessionId || newId()) : null
+    }));
+
+    state.textContent = 'Saving…';
+    const { error, degraded } = await this.upsertServiceRows(rows);
+    if (error) { state.textContent = 'Save failed: ' + error.message; return; }
+
+    state.textContent = 'Saved.';
+    await this.loadAll();
+    this.closeForm('service');
+    this.showView(this.view || 'services');
+    // toast() sets textContent, so the label is inserted as text, not markup.
+    const label = this.serviceLabel(rows[0]);
+    this.toast(rows.length > 1
+      ? `${label} logged for ${rows.length} attendees.`
+      : `${label} saved.`);
+    if (degraded) {
+      this.toast('Saved — but the service name and group flag were not stored. The database migration has not been applied yet.', { error:true });
+    }
   };
 
   // Quarterly income/benefits status check for an active client — feeds the
@@ -5722,6 +5960,9 @@ const App = {
         'HMIS ID': this.clientDisplayId(c) || s.client_id || '',
         'Service Date': this.excelDateOrNull(s.service_date),
         'Service Type': s.service_type || '',
+        'Service Name': this.serviceLabel(s),
+        'Group Session': s.is_group_session ? 'Yes' : 'No',
+        'Group Session ID': s.group_session_id || '',
         'Duration (Minutes)': Number(s.duration_minutes || 0),
         'Staff': s.staff_name || '',
         'Notes': s.notes || ''
@@ -6130,22 +6371,32 @@ const App = {
       date: s=>this.dateOnly(s.service_date)||'',
       clientId: s=>(clientMap.get(s.client_id)||{}).id||s.client_id||'',
       name: s=>this.isAdmin() ? '' : ((clientMap.get(s.client_id)||{}).client_name||''),
-      type: s=>s.service_type||'',
+      type: s=>this.serviceLabel(s),
       minutes: s=>Number(s.duration_minutes||0),
       staff: s=>s.staff_name||''
     };
     const sorted = this.applySort(services, this._servicesSort, accessors);
     const rows=sorted.map(s=>{
       const c=clientMap.get(s.client_id)||{};
-      return `<tr><td>${this.formatDate(s.service_date)}</td><td>${this.escape(c.id||'—')}</td><td>${this.escape(this.isAdmin()?'Agency-visible only':(c.client_name||'—'))}</td><td>${this.escape(s.service_type||'—')}</td><td>${s.duration_minutes||0}</td><td>${this.escape(s.staff_name||'—')}</td><td>${this.escape(s.notes||'')}</td></tr>`;
+      // Show the staff-defined name when there is one, with the parent type kept
+      // visible underneath so the reporting category is never guesswork.
+      const label = this.serviceLabel(s);
+      const showsParent = label !== (s.service_type||'');
+      const typeCell = `<td>${this.escape(label)}${s.is_group_session?' <span class="badge badge-navy group-pill">Group</span>':''}${showsParent?`<br><span class="field-hint">${this.escape(s.service_type||'')}</span>`:''}</td>`;
+      return `<tr><td>${this.formatDate(s.service_date)}</td><td>${this.escape(c.id||'—')}</td><td>${this.escape(this.isAdmin()?'Agency-visible only':(c.client_name||'—'))}</td>${typeCell}<td>${s.duration_minutes||0}</td><td>${this.escape(s.staff_name||'—')}</td><td>${this.escape(s.notes||'')}</td></tr>`;
     }).join('') || '<tr><td colspan="7" class="empty-table-state">No services entered for this quarter.</td></tr>';
-    const byType={}; services.forEach(s=>{byType[s.service_type||'Other']=(byType[s.service_type||'Other']||0)+1});
-    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Services</h1><div class="page-subtitle">Individual service contacts generate service tallies automatically.</div></div><button class="btn btn-gold" id="btn-new-service">+ Add Service</button></div>${this.renderQuarterButtons()}<div class="generated-metric-grid"><div class="generated-metric"><div class="label">Service Contacts</div><div class="value">${services.length}</div></div><div class="generated-metric"><div class="label">Clients Engaged</div><div class="value">${new Set(services.map(s=>s.client_id)).size}</div></div><div class="generated-metric"><div class="label">Minutes</div><div class="value">${services.reduce((a,b)=>a+Number(b.duration_minutes||0),0)}</div></div><div class="generated-metric"><div class="label">Service Types</div><div class="value">${Object.keys(byType).length}</div></div></div><div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._servicesSort,'date','Date')}${this.sortableHeader(this._servicesSort,'clientId','Client ID')}${this.sortableHeader(this._servicesSort,'name','Name')}${this.sortableHeader(this._servicesSort,'type','Service Type')}${this.sortableHeader(this._servicesSort,'minutes','Minutes')}${this.sortableHeader(this._servicesSort,'staff','Staff')}<th>Notes</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    // Tally by parent type, not by the staff-defined name, so a custom on-site
+    // offering rolls up under On-Site Participation instead of inflating the
+    // distinct-service-type count by one for every name someone invents.
+    const byType={}; services.forEach(s=>{const k=this.serviceGroupKey(s); byType[k]=(byType[k]||0)+1});
+    const onsite=services.filter(s=>this.isGroupSessionType(s.service_type));
+    const sessionCount=new Set(onsite.map(s=>s.group_session_id||s.id)).size;
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Services</h1><div class="page-subtitle">Individual service contacts generate service tallies automatically.</div></div><button class="btn btn-gold" id="btn-new-service">+ Add Service</button></div>${this.renderQuarterButtons()}<div class="generated-metric-grid"><div class="generated-metric"><div class="label">Service Contacts</div><div class="value">${services.length}</div></div><div class="generated-metric"><div class="label">Clients Engaged</div><div class="value">${new Set(services.map(s=>s.client_id)).size}</div></div><div class="generated-metric"><div class="label">Minutes</div><div class="value">${services.reduce((a,b)=>a+Number(b.duration_minutes||0),0)}</div></div><div class="generated-metric"><div class="label">Service Types</div><div class="value">${Object.keys(byType).length}</div></div><div class="generated-metric"><div class="label">On-Site Participation</div><div class="value">${onsite.length}</div><div class="field-hint">${sessionCount} session${sessionCount===1?'':'s'} · ${new Set(onsite.map(s=>s.client_id)).size} resident${new Set(onsite.map(s=>s.client_id)).size===1?'':'s'}</div></div></div><div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._servicesSort,'date','Date')}${this.sortableHeader(this._servicesSort,'clientId','Client ID')}${this.sortableHeader(this._servicesSort,'name','Name')}${this.sortableHeader(this._servicesSort,'type','Service Type')}${this.sortableHeader(this._servicesSort,'minutes','Minutes')}${this.sortableHeader(this._servicesSort,'staff','Staff')}<th>Notes</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     this.bindQuarterButtons(el);
     this.wireSortableHeaders(el, this._servicesSort, ()=>this.renderServices());
     el.querySelector('#btn-new-service').addEventListener('click',()=>this.openServiceForm());
     const header=el.querySelector('.page-header');
-    const quick=`<div class="card" style="margin-bottom:16px;"><div class="card-header"><div><h2 class="card-title">One-Click Service Entry</h2><div class="field-hint">Choose a service type, then select the client. Today's date and 30 minutes are filled automatically.</div></div></div><div class="card-body"><div class="quick-service-bar">${['Case Management','Housing Navigation','Benefits Assistance','Document Readiness','Landlord Coordination','Mental Health Referral'].map(t=>`<button class="quick-chip" data-quick-service="${this.escape(t)}">+ ${this.escape(t)}</button>`).join('')}</div></div></div>`;
+    const quick=`<div class="card" style="margin-bottom:16px;"><div class="card-header"><div><h2 class="card-title">One-Click Service Entry</h2><div class="field-hint">Choose a service type, then select the client. Today's date and 30 minutes are filled automatically.</div></div></div><div class="card-body"><div class="quick-service-bar">${['Case Management','Housing Navigation','Benefits Assistance','Document Readiness','Landlord Coordination','Mental Health Referral','Trauma Therapy','Occupational Therapy','Mindful Floral Wellness Workshop','Sunday Night Knitting Class'].map(t=>`<button class="quick-chip${this.isGroupSessionType(t)?' quick-chip-onsite':''}" data-quick-service="${this.escape(t)}">+ ${this.escape(t)}</button>`).join('')}</div></div></div>`;
     if(header) header.insertAdjacentHTML('afterend',quick);
     el.querySelectorAll('[data-quick-service]').forEach(b=>b.addEventListener('click',()=>this.openServiceForm(null,null,b.dataset.quickService)));
   };
