@@ -2293,10 +2293,12 @@ const App = {
     const role = this.profile?.role;
     return roles.includes(accessType) || roles.includes(role);
   },
+  isAgencyFiscal() { return this.agencyGroup === 'fiscal' || this.profile?.agency_group === 'fiscal' || this.hasRole('agency_fiscal'); },
   canEditQuarter() {
+    // Agency-Fiscal is intentionally excluded from all program-report editing.
     // Agency reporters, editors, and signers can edit incomplete/draft/returned quarters.
     // City admins review rather than edit report content.
-    if (this.isAdmin()) return false;
+    if (this.isAdmin() || this.isAgencyFiscal()) return false;
     if (this.hasRole('agency_reporter','reporter','agency_editor','agency_signer','agency_admin','agency_support','agency_management')) return true;
     // Fallback: authenticated agency user with a program association but no explicit access_type.
     const hasNoRole = !this.profile?.access_type && !this.profile?.role;
@@ -2304,7 +2306,9 @@ const App = {
     return hasNoRole && isAgencyUser;
   },
   canSign() {
-    // Allow agency reporters/signers/admins to submit in this single-program workflow.
+    // Agency-Fiscal can submit fiscal invoices through the separate fiscal RPC,
+    // but cannot certify or submit quarterly program reports.
+    if (this.isAgencyFiscal()) return false;
     return this.hasRole('agency_reporter','reporter','agency_signer','agency_admin','agency_support','agency_management','city_admin');
   },
   canCityReview() {
@@ -2468,17 +2472,33 @@ const App = {
 
   async loadAll() {
     const pid = this.program.id;
+    const fiscalOnly = this.isAgencyFiscal?.();
+    const empty = () => Promise.resolve({data:[], count:0});
+
+    // Agency-Fiscal receives only the minimum program fields needed to render
+    // aggregate dashboard measures. Names, narratives, roster backup, detailed
+    // exit rows, activity logs, case-management updates and other operational
+    // data are deliberately not loaded into the browser for this role.
+    const reportsQ = fiscalOnly
+      ? this.sb.from('quarterly_reports').select('program_id,fiscal_year,quarter,income_increase,income_maintained,satisfaction_satisfied,satisfaction_total').eq('program_id', pid).eq('fiscal_year', this.fiscalYear)
+      : this.sb.from('quarterly_reports').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear);
+    const clientsQ = fiscalOnly
+      ? this.sb.from('holloway_clients').select('id,program_id,fiscal_year,entry_date,exit_date,exit_destination_type,age,gender,gender_other,transgender_status,race_ethnicity,race_ethnicity_other,primary_language,veteran,disability').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('entry_date', { ascending: false })
+      : this.sb.from('holloway_clients').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('entry_date', { ascending: false });
+    const servicesQ = fiscalOnly
+      ? this.sb.from('holloway_client_services').select('client_id,service_date').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('service_date', { ascending: false })
+      : this.sb.from('holloway_client_services').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('service_date', { ascending: false });
 
     const [reports, rosters, bundles, exits, approved, activity, clients, clientServices, clientUpdates] = await Promise.all([
-      this.sb.from('quarterly_reports').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear),
-      this.sb.from('client_rosters').select('*', { count: 'exact' }).eq('program_id', pid).eq('fiscal_year', this.fiscalYear).range(this.rosterPage * CONFIG.ROSTER_PAGE_SIZE, (this.rosterPage + 1) * CONFIG.ROSTER_PAGE_SIZE - 1),
-      this.sb.from('submission_bundles').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('quarter'),
-      this.sb.from('non_permanent_exits').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('quarter').order('exit_number'),
-      this.isAdmin() ? this.sb.from('approved_users').select('*').order('email') : Promise.resolve({data:[]}),
-      this.sb.from('bundle_status_log').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('created_at', { ascending: false }).then(r => r).catch(() => ({data:[]})),
-      this.sb.from('holloway_clients').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('entry_date', { ascending: false }).then(r => r).catch(err => ({data:[], error:err})),
-      this.sb.from('holloway_client_services').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('service_date', { ascending: false }).then(r => r).catch(err => ({data:[], error:err})),
-      this.sb.from('holloway_client_quarterly_updates').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).then(r => r).catch(err => ({data:[], error:err}))
+      reportsQ,
+      fiscalOnly ? empty() : this.sb.from('client_rosters').select('*', { count: 'exact' }).eq('program_id', pid).eq('fiscal_year', this.fiscalYear).range(this.rosterPage * CONFIG.ROSTER_PAGE_SIZE, (this.rosterPage + 1) * CONFIG.ROSTER_PAGE_SIZE - 1),
+      fiscalOnly ? empty() : this.sb.from('submission_bundles').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('quarter'),
+      fiscalOnly ? empty() : this.sb.from('non_permanent_exits').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('quarter').order('exit_number'),
+      this.isAdmin() ? this.sb.from('approved_users').select('*').order('email') : empty(),
+      fiscalOnly ? empty() : this.sb.from('bundle_status_log').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('created_at', { ascending: false }).then(r => r).catch(() => ({data:[]})),
+      clientsQ.then(r => r).catch(err => ({data:[], error:err})),
+      servicesQ.then(r => r).catch(err => ({data:[], error:err})),
+      fiscalOnly ? empty() : this.sb.from('holloway_client_quarterly_updates').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).then(r => r).catch(err => ({data:[], error:err}))
     ]);
 
     if (reports.error) console.warn('reports', reports.error);
@@ -2494,21 +2514,23 @@ const App = {
     this.data.approvedUsers = approved.data || [];
     this.data.activity = activity.data || [];
     this.data.clients = clients?.data || [];
-    try {
-      const clientIds = this.data.clients.map(c => c.id).filter(Boolean);
-      if (clientIds.length) {
-        const { data: identity, error: identityErr } = await this.sb.from('holloway_client_identity').select('*').in('client_id', clientIds);
-        if (identityErr) console.warn('client identity', identityErr);
-        else {
-          const nameMap = new Map((identity || []).map(r => [r.client_id, r.client_name]));
-          this.data.clients.forEach(c => { c.client_name = nameMap.get(c.id) || c.client_name || null; });
+    if (!fiscalOnly) {
+      try {
+        const clientIds = this.data.clients.map(c => c.id).filter(Boolean);
+        if (clientIds.length) {
+          const { data: identity, error: identityErr } = await this.sb.from('holloway_client_identity').select('*').in('client_id', clientIds);
+          if (identityErr) console.warn('client identity', identityErr);
+          else {
+            const nameMap = new Map((identity || []).map(r => [r.client_id, r.client_name]));
+            this.data.clients.forEach(c => { c.client_name = nameMap.get(c.id) || c.client_name || null; });
+          }
         }
-      }
-    } catch (identityErr) { console.warn('client identity fetch failed', identityErr); }
+      } catch (identityErr) { console.warn('client identity fetch failed', identityErr); }
+    }
     this.data.clientServices = clientServices?.data || [];
     this.data.clientUpdates = clientUpdates?.data || [];
 
-    await this.ensureBundlesExist();
+    if (!fiscalOnly) await this.ensureBundlesExist();
   },
 
   async ensureBundlesExist() {
@@ -2558,11 +2580,28 @@ const App = {
   },
 
   renderSidebarForRole() {
-    document.getElementById('role-nav-label').textContent = this.isAdmin() ? 'City Admin' : (this.agencyGroup === 'management' ? 'Agency Management' : 'Agency Support Staff');
+    const fiscalOnly = this.isAgencyFiscal?.();
+    document.getElementById('role-nav-label').textContent = this.isAdmin() ? 'City Admin' : (fiscalOnly ? 'Agency-Fiscal' : (this.agencyGroup === 'management' ? 'Agency Management' : 'Agency Support Staff'));
     document.getElementById('nav-review').style.display = this.isAdmin() ? 'flex' : 'none';
     document.getElementById('nav-access').style.display = this.isAdmin() ? 'flex' : 'none';
     const fiscalNav = document.getElementById('nav-fiscal');
     if (fiscalNav) fiscalNav.style.display = this.canViewFiscal?.() ? 'flex' : 'none';
+
+    // Agency-Fiscal has a deliberately narrow workspace: aggregate Program
+    // Dashboard plus Fiscal Reporting only. Hide every other program view.
+    if (fiscalOnly) {
+      document.querySelectorAll('.sidebar-item[data-view]').forEach(el => {
+        const v = el.dataset.view;
+        el.style.display = (v === 'dashboard' || v === 'fiscal') ? 'flex' : 'none';
+      });
+      document.querySelectorAll('.sidebar-section').forEach(section => {
+        const visible = [...section.querySelectorAll('.sidebar-item')].some(el => getComputedStyle(el).display !== 'none');
+        section.style.display = visible ? '' : 'none';
+      });
+    } else {
+      document.querySelectorAll('.sidebar-section').forEach(section => { section.style.display = ''; });
+    }
+
     // Hide form actions in the sidebar from non-editors so unauthorized users
     // don't see UI they can't use (rather than rendering then no-op'ing).
     const showForms = this.canEditQuarter();
@@ -2575,6 +2614,10 @@ const App = {
   },
 
   showView(view) {
+    if (this.isAgencyFiscal?.() && !['dashboard','fiscal'].includes(view)) {
+      view = 'dashboard';
+      this.toast?.('Agency-Fiscal access is limited to the Program Dashboard and Fiscal Reporting.', {error:true});
+    }
     this.view = view;
     document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
     document.getElementById('view-' + view)?.classList.add('active');
@@ -4328,7 +4371,7 @@ const App = {
     document.getElementById('au-name').value = u.full_name || '';
     document.getElementById('au-org').value = u.organization || '';
     const isCity = u.access_type === 'city_admin' || u.role === 'city_admin';
-    document.getElementById('au-access').value = isCity ? 'city_admin' : (u.agency_group === 'management' ? 'agency_management' : 'agency_support');
+    document.getElementById('au-access').value = isCity ? 'city_admin' : (u.agency_group === 'fiscal' ? 'agency_fiscal' : (u.agency_group === 'management' ? 'agency_management' : 'agency_support'));
     document.getElementById('au-active').value = String(u.active !== false);
   },
 
@@ -4346,10 +4389,15 @@ const App = {
     // role so changing Management/Support never changes their current program
     // permissions. New agency users use the portal's standard reporter role.
     const isManagement = selectedGroup === 'agency_management';
+    const isFiscal = selectedGroup === 'agency_fiscal';
+    // agency_group is the authoritative distinction. Preserve the existing
+    // underlying agency role so existing read policies continue to work; the
+    // app gate plus the database write-guard below prevent Agency-Fiscal from
+    // editing program-management/reporting records.
     const access_type = isCity ? 'city_admin' : (isManagement ? 'agency_reporter' : ((existing?.access_type && existing.access_type !== 'city_admin') ? existing.access_type : 'agency_reporter'));
     const role = isCity ? 'city_admin' : (isManagement ? 'reporter' : ((existing?.role && existing.role !== 'city_admin') ? existing.role : 'reporter'));
     const program_id = isCity ? null : this.program.id;
-    const agency_group = isCity ? null : (isManagement ? 'management' : 'support');
+    const agency_group = isCity ? null : (isFiscal ? 'fiscal' : (isManagement ? 'management' : 'support'));
     const { error } = await this.sb.from('approved_users').upsert({ email, full_name, organization, access_type, role, active, program_id, agency_group });
     if (error) document.getElementById('au-msg').textContent = /agency_group/i.test(error.message||'') ? 'Run the updated fiscal access migration first, then save this user again.' : error.message;
     else { document.getElementById('au-msg').textContent = 'Saved.'; await this.loadAll(); this.renderAccessManagement(); }
@@ -5585,7 +5633,7 @@ const App = {
     const pid = this.program?.id;
     if (!pid) { this.data.housingFollowUps = []; return; }
     const { data, error } = await this.sb.from('holloway_housing_followups')
-      .select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear)
+      .select(this.isAgencyFiscal?.() ? 'client_id,followup_type,due_date,status,housing_status' : '*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear)
       .order('due_date', { ascending: true });
     if (error) { console.warn('housing followups', error); this.data.housingFollowUps = []; }
     else this.data.housingFollowUps = data || [];
@@ -6595,7 +6643,7 @@ const App = {
     await previousLoadAllForCaseNotes.call(this);
     if(!this.data) this.data={};
     const pid=this.program?.id;
-    if(!pid){ this.data.caseNotes=[]; return; }
+    if(!pid || this.isAgencyFiscal?.()){ this.data.caseNotes=[]; return; }
     const {data,error}=await this.sb.from('holloway_case_notes')
       .select('*')
       .eq('program_id',pid)
@@ -6887,7 +6935,7 @@ const App = {
     await previousLoadAllForIncidents.call(this);
     if(!this.data) this.data={};
     const pid=this.program?.id;
-    if(!pid){ this.data.clientIncidents=[]; return; }
+    if(!pid || this.isAgencyFiscal?.()){ this.data.clientIncidents=[]; return; }
     const {data,error}=await this.sb.from('holloway_client_incidents')
       .select('*')
       .eq('program_id',pid)
@@ -7249,21 +7297,21 @@ const App = {
       email: u=>u.email||'',
       name: u=>u.full_name||'',
       org: u=>u.organization||'',
-      access: u=>(u.access_type==='city_admin'||u.role==='city_admin') ? 'City Admin' : (u.agency_group==='management' ? 'Agency Management' : 'Agency Support Staff'),
+      access: u=>(u.access_type==='city_admin'||u.role==='city_admin') ? 'City Admin' : (u.agency_group==='fiscal' ? 'Agency-Fiscal' : (u.agency_group==='management' ? 'Agency Management' : 'Agency Support Staff')),
       status: u=>u.active ? 'Active' : 'Inactive'
     };
     const users = this.applySort(this.data.approvedUsers||[], this._accessSort, accessors);
     el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Access Management</h1><div class="page-subtitle">Manage approved ${this.escape(this.programName())} portal users.</div></div></div>
-      <div class="card" style="margin-bottom:18px;"><div class="card-header"><div><h2 class="card-title">Add or Update User</h2><div class="field-hint">Agency Support Staff keep their existing program access but cannot see fiscal information. Agency Management receives the same program access plus fiscal reporting and invoice submission.</div></div></div><div class="card-body">
+      <div class="card" style="margin-bottom:18px;"><div class="card-header"><div><h2 class="card-title">Add or Update User</h2><div class="field-hint">Agency Support Staff keep program access without fiscal information. Agency Management receives program access plus fiscal reporting. Agency-Fiscal can view the Program Dashboard and fully prepare/submit fiscal invoices, but cannot access program management or quarterly reporting.</div></div></div><div class="card-body">
         <div class="form-row"><div class="field-group"><label class="field-label required">Email</label><input class="field-input" id="au-email" type="email"></div><div class="field-group"><label class="field-label required">Full Name</label><input class="field-input" id="au-name"></div></div>
         <div class="form-row three"><div class="field-group"><label class="field-label">Organization</label><input class="field-input" id="au-org" value="${this.escape(this.agencyName())}"></div>
-        <div class="field-group"><label class="field-label">Role</label><select class="field-select" id="au-access"><option value="agency_support">Agency Support Staff</option><option value="agency_management">Agency Management</option><option value="city_admin">City Admin</option></select></div>
+        <div class="field-group"><label class="field-label">Role</label><select class="field-select" id="au-access"><option value="agency_support">Agency Support Staff</option><option value="agency_management">Agency Management</option><option value="agency_fiscal">Agency-Fiscal</option><option value="city_admin">City Admin</option></select></div>
         <div class="field-group"><label class="field-label">Status</label><select class="field-select" id="au-active"><option value="true">Active</option><option value="false">Inactive</option></select></div></div>
         <button class="btn btn-gold" id="btn-save-user">Save User</button><span id="au-msg" style="font-size:12px;margin-left:10px;color:var(--gray-600);"></span>
       </div></div>
       <div class="card"><div class="card-header"><h2 class="card-title">Approved Users</h2><button class="btn btn-ghost btn-sm" id="btn-refresh-users">Refresh</button></div><div class="card-body" style="overflow-x:auto;">
       <table class="svc-table"><thead><tr>${this.sortableHeader(this._accessSort,'email','Email')}${this.sortableHeader(this._accessSort,'name','Name')}${this.sortableHeader(this._accessSort,'org','Organization')}${this.sortableHeader(this._accessSort,'access','Role')}${this.sortableHeader(this._accessSort,'status','Status')}<th>Action</th></tr></thead><tbody>
-        ${users.map(u => `<tr><td>${this.escape(u.email)}</td><td>${this.escape(u.full_name)}</td><td>${this.escape(u.organization)}</td><td>${this.escape((u.access_type==='city_admin'||u.role==='city_admin') ? 'City Admin' : (u.agency_group==='management' ? 'Agency Management' : 'Agency Support Staff'))}</td><td>${u.active ? 'Active' : 'Inactive'}</td>
+        ${users.map(u => `<tr><td>${this.escape(u.email)}</td><td>${this.escape(u.full_name)}</td><td>${this.escape(u.organization)}</td><td>${this.escape((u.access_type==='city_admin'||u.role==='city_admin') ? 'City Admin' : (u.agency_group==='fiscal' ? 'Agency-Fiscal' : (u.agency_group==='management' ? 'Agency Management' : 'Agency Support Staff')))}</td><td>${u.active ? 'Active' : 'Inactive'}</td>
         <td><button class="btn btn-ghost btn-sm" data-edit-user="${this.escape(u.email)}">Edit</button></td></tr>`).join('')}
       </tbody></table></div></div>`;
     el.querySelector('#btn-save-user').addEventListener('click', () => this.saveApprovedUser());
@@ -7421,6 +7469,7 @@ const App = {
   App.loadAll = async function(){
     await previousLoadAllForAttachments.call(this);
     if(!this.data) this.data={};
+    if(this.isAgencyFiscal?.()){ this.data.incidentAttachments=[]; return; }
     const incidentIds = (this.data.clientIncidents||[]).map(i=>i.id).filter(Boolean);
     if (!incidentIds.length) { this.data.incidentAttachments=[]; return; }
     const {data,error} = await this.sb.from('holloway_incident_attachments').select('*').in('incident_id', incidentIds).order('created_at',{ascending:false});
@@ -8926,17 +8975,17 @@ const App = {
   App.loadAgencyGroup = async function(){
     if(this.isAdmin()){ this.agencyGroup='city_admin'; return this.agencyGroup; }
     // Secure default: existing users are Support Staff unless the database
-    // explicitly says Management. The RPC is security-definer and reads the
-    // authoritative approved_users record.
+    // explicitly assigns Management or Fiscal. The RPC is security-definer and
+    // reads the authoritative approved_users record.
     this.agencyGroup='support';
     try {
       const {data,error}=await this.sb.rpc('holloway_my_agency_group',{p_program_id:this.program?.id});
-      if(!error && ['management','support'].includes(String(data||''))) this.agencyGroup=String(data);
+      if(!error && ['management','fiscal','support'].includes(String(data||''))) this.agencyGroup=String(data);
     } catch(_) {}
     if(this.profile) this.profile.agency_group=this.agencyGroup;
     return this.agencyGroup;
   };
-  App.canViewFiscal = function(){ return this.isAdmin() || this.agencyGroup==='management' || this.profile?.agency_group==='management'; };
+  App.canViewFiscal = function(){ return this.isAdmin() || ['management','fiscal'].includes(this.agencyGroup) || ['management','fiscal'].includes(this.profile?.agency_group); };
 
   App.fiscalMoney = function(v){ return Number(v||0).toLocaleString('en-US',{style:'currency',currency:'USD',minimumFractionDigits:0,maximumFractionDigits:2}); };
   App.fiscalPct = function(v){ return Number.isFinite(v) ? `${Math.round(v*100)}%` : '—'; };
@@ -8972,7 +9021,7 @@ const App = {
   App.fiscalMonthRecord = function(key=this.resolveFiscalMonth()){ return this.fiscalMonths().find(m=>m.key===key) || this.fiscalMonths()[0]; };
   App.fiscalMonthIndex = function(key=this.resolveFiscalMonth()){ return Math.max(0,this.fiscalMonths().findIndex(m=>m.key===key)); };
 
-  App.canEditFiscal = function(){ return !this.isAdmin() && this.canViewFiscal() && this.agencyGroup==='management'; };
+  App.canEditFiscal = function(){ return !this.isAdmin() && this.canViewFiscal() && ['management','fiscal'].includes(this.agencyGroup); };
   App.fiscalSubmission = function(month=this.resolveFiscalMonth()){ return (this.fiscal.submissions||[]).find(s=>this.dateOnly(s.invoice_month)===this.dateOnly(month)); };
   App.fiscalStatus = function(month=this.resolveFiscalMonth()){ return this.fiscalSubmission(month)?.status || 'draft'; };
   App.fiscalMonthOpen = function(month=this.resolveFiscalMonth()){ return ['draft','revision_requested','returned'].includes(this.fiscalStatus(month)); };
@@ -9205,7 +9254,7 @@ const App = {
 
   App.renderFiscal = async function(){
     const el=document.getElementById('view-fiscal'); if(!el) return;
-    if(!this.canViewFiscal()){ el.innerHTML='<div class="notice red"><div>!</div><div><strong>Fiscal access is restricted.</strong> Fiscal Reporting is available only to Agency Management and City Admin users.</div></div>'; return; }
+    if(!this.canViewFiscal()){ el.innerHTML='<div class="notice red"><div>!</div><div><strong>Fiscal access is restricted.</strong> Fiscal Reporting is available to Agency Management, Agency-Fiscal, and City Admin users.</div></div>'; return; }
     if(!this.fiscal.years.length){ el.innerHTML='<div class="notice navy"><div>i</div><div>Loading fiscal workspace…</div></div>'; await this.loadFiscalData(); }
     const month=this.resolveFiscalMonth(), m=this.fiscalMonthRecord(month), status=this.fiscalStatus(month), editable=this.fiscalCanEditMonth(month);
     const years=(this.fiscal.years||[]).map(y=>`<option value="${this.escape(y.fiscal_year)}" ${y.fiscal_year===this.fiscalBudgetYear?'selected':''}>${this.escape(y.budget_label||y.fiscal_year)}</option>`).join('');
@@ -9289,7 +9338,7 @@ const App = {
   App.showView=function(view){
     if(view==='fiscal' && !this.canViewFiscal()){
       fiscalBaseShowView.call(this,'dashboard');
-      this.toast('Fiscal Reporting is available only to Agency Management and City Admin users.',{error:true});
+      this.toast('Fiscal Reporting is available to Agency Management, Agency-Fiscal, and City Admin users.',{error:true});
       return;
     }
     fiscalBaseShowView.call(this,view);
@@ -9302,7 +9351,7 @@ const App = {
 
 // ---------- Fiscal live calculations, Excel export, and City payment tracking ----------
 /* ============================================================
-   EXTENSION 21 — Keeps fiscal calculations live while Agency Management
+   EXTENSION 21 — Keeps fiscal calculations live while Agency Management or Agency-Fiscal
    enters a monthly invoice, provides a two-sheet Excel fiscal report, and
    adds a City Admin-only funding/payment workspace.
 
@@ -9555,7 +9604,7 @@ const App = {
   const baseFiscalRender=App.renderFiscal;
   App.renderFiscal = async function(){
     const el=document.getElementById('view-fiscal'); if(!el)return;
-    if(!this.canViewFiscal()){el.innerHTML='<div class="notice red"><div>!</div><div><strong>Fiscal access is restricted.</strong> Fiscal Reporting is available only to Agency Management and City Admin users.</div></div>';return;}
+    if(!this.canViewFiscal()){el.innerHTML='<div class="notice red"><div>!</div><div><strong>Fiscal access is restricted.</strong> Fiscal Reporting is available to Agency Management, Agency-Fiscal, and City Admin users.</div></div>';return;}
     if(!this.fiscal.years.length){el.innerHTML='<div class="notice navy"><div>i</div><div>Loading fiscal workspace…</div></div>';await this.loadFiscalData();}
     const month=this.resolveFiscalMonth(),m=this.fiscalMonthRecord(month),status=this.fiscalStatus(month),editable=this.fiscalCanEditMonth(month);
     const years=(this.fiscal.years||[]).map(y=>`<option value="${this.escape(y.fiscal_year)}" ${y.fiscal_year===this.fiscalBudgetYear?'selected':''}>${this.escape(y.budget_label||y.fiscal_year)}</option>`).join('');
@@ -9803,8 +9852,12 @@ const App = {
     const q=this.currentQuarter;
     const through=DashboardYTD.throughDate(this);
     const p=DashboardYTD.performance(this);
-    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">${this.isAdmin()?'City Admin Dashboard':'Program Dashboard'}</h1><div class="page-subtitle">${this.escape(this.programName())} · ${this.escape(this.fyLabel())} · Year-to-date contract performance</div></div><div style="display:flex;gap:10px;"><button class="btn btn-ghost btn-sm" id="btn-print-current">Print / Save PDF</button><button class="btn btn-gold" data-open="quarterly">${this.bundleStatus(q)==='accepted'?'View Report':'Start / Continue Report'}</button></div></div>
-      <div class="dashboard-ytd-intro"><div><div class="section-label" style="margin:0">Contract Performance — Year to Date</div><div class="dashboard-ytd-period">${this.escape(ContractPeriods.longDate(ContractPeriods.parse(this.fyStart())))} – ${this.escape(this.formatDate(through))}</div></div>${this.renderAttentionChip(q)}</div>
+    const fiscalOnly=this.isAgencyFiscal?.();
+    const headerActions=fiscalOnly
+      ? `<button class="btn btn-gold" data-view-shortcut="fiscal">Open Fiscal Reporting →</button>`
+      : `<button class="btn btn-ghost btn-sm" id="btn-print-current">Print / Save PDF</button><button class="btn btn-gold" data-open="quarterly">${this.bundleStatus(q)==='accepted'?'View Report':'Start / Continue Report'}</button>`;
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">${this.isAdmin()?'City Admin Dashboard':'Program Dashboard'}</h1><div class="page-subtitle">${this.escape(this.programName())} · ${this.escape(this.fyLabel())} · Year-to-date contract performance${fiscalOnly?' · Fiscal access':''}</div></div><div style="display:flex;gap:10px;">${headerActions}</div></div>
+      <div class="dashboard-ytd-intro"><div><div class="section-label" style="margin:0">Contract Performance — Year to Date</div><div class="dashboard-ytd-period">${this.escape(ContractPeriods.longDate(ContractPeriods.parse(this.fyStart())))} – ${this.escape(this.formatDate(through))}</div></div>${fiscalOnly?'':this.renderAttentionChip(q)}</div>
       ${this.renderYtdContractPerformance(q)}
       <div class="dashboard-section-head"><h2>Contract Goals &amp; Progress</h2><div class="hint">YTD measures are cumulative; services and income remain current-quarter measures to match the contract-reporting basis.</div></div>
       ${this.renderYtdContractGoals(q)}
@@ -9812,7 +9865,7 @@ const App = {
       ${this.renderYtdHousingOutcomes(q)}
       <div class="dashboard-section-head"><h2>Participant Demographics — Year to Date</h2><div class="hint">Unduplicated participants served during the contract year.</div></div>
       ${this.renderYtdDemographics(q)}
-      ${this.renderYtdOperationalDetail(q)}`;
+      ${fiscalOnly?'':this.renderYtdOperationalDetail(q)}`;
     this.bindSubmitBundleButton(el);
     el.querySelectorAll('[data-open]').forEach(btn=>btn.addEventListener('click',()=>this.openForm(btn.dataset.open)));
     el.querySelectorAll('[data-attention-open]').forEach(btn=>btn.addEventListener('click',()=>this.openForm(btn.dataset.attentionOpen)));
