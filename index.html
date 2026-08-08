@@ -1128,6 +1128,29 @@ th.sortable:hover { color:var(--navy); }
   .fiscal-print-backup{break-before:page;page-break-before:always;margin-top:0!important}
 }
 
+
+/* ========================================================================
+   FISCAL LIVE CALCULATIONS / EXPORT / CITY PAYMENT TRACKING
+   ======================================================================== */
+.fiscal-live-note{display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:3px 8px;border-radius:999px;background:#EEF7F2;color:var(--green);font-size:10.5px;font-weight:750;vertical-align:middle}
+.fiscal-live-note::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+.fiscal-payment-layout{display:grid;grid-template-columns:.82fr 1.18fr;gap:18px;margin-bottom:18px}
+.fiscal-payment-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:14px;background:#fff;box-shadow:var(--shadow)}
+.fiscal-payment-table{width:100%;border-collapse:collapse;font-size:11.5px;min-width:1450px;font-variant-numeric:tabular-nums}
+.fiscal-payment-table th{position:sticky;top:0;z-index:2;background:#F4F7FA;color:#4D5A6A;text-transform:uppercase;letter-spacing:.04em;font-size:9.5px;font-weight:750;padding:9px 9px;border-bottom:1px solid #DCE3EA;white-space:nowrap}
+.fiscal-payment-table td{padding:8px 9px;border-bottom:1px solid #EDF0F3;vertical-align:middle;white-space:nowrap}
+.fiscal-payment-table input,.fiscal-payment-table select{min-height:33px;border:1px solid var(--border);border-radius:7px;padding:5px 7px;background:#fff;font-size:11.5px}
+.fiscal-payment-table input[type=number]{width:102px;text-align:right}
+.fiscal-payment-table input[type=date]{width:126px}
+.fiscal-payment-table .payment-ref{width:142px}.fiscal-payment-table .payment-note{width:190px}
+.fiscal-payment-table .payment-diff-ok{color:var(--green);font-weight:800}.fiscal-payment-table .payment-diff-warn{color:var(--amber);font-weight:800}.fiscal-payment-table .payment-diff-error{color:var(--red);font-weight:800}
+.fiscal-funding-plan-table td:nth-child(n+2),.fiscal-funding-plan-table th:nth-child(n+2){text-align:right}
+.fiscal-city-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.fiscal-payment-help{font-size:11.5px;line-height:1.5;color:var(--gray-600);margin-top:8px}
+@media(max-width:1100px){.fiscal-payment-layout{grid-template-columns:1fr}.fiscal-city-kpis{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.fiscal-city-kpis{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.fiscal-city-kpis{grid-template-columns:1fr}}
+
 </style>
 </head>
 
@@ -8948,6 +8971,51 @@ const App = {
   App.fiscalLineDetailBudget = function(){ return (this.fiscal.budgetLines||[]).reduce((s,l)=>s+Number(l.approved_budget||0),0); };
   App.fiscalSourceSubtotalSum = function(){ const t=this.fiscalSourceTotals(); return Number(t.personnel||0)+Number(t.facility||0)+Number(t.program||0)+Number(t.administrative||0); };
 
+  // AHTF allocation mirrors the formulas in the agency's existing Holloway
+  // fiscal workbook. ahtf_percent is stored with each protected budget line:
+  // 1 = fully AHTF eligible, 0 = fully not AHTF eligible, .60 = split 60/40,
+  // null = the source workbook does not classify that line. Split shares and
+  // the final eligible/non-eligible totals are rounded to whole dollars, just
+  // as the workbook's ROUND(...,0) formulas do.
+  App.fiscalFundingBreakdown = function(month=this.resolveFiscalMonth(), ytd=false){
+    const months = ytd ? new Set(this.fiscalMonths().slice(0,this.fiscalMonthIndex(month)+1).map(m=>m.key)) : new Set([this.dateOnly(month)]);
+    const lineMap = new Map((this.fiscal.budgetLines||[]).map(l=>[l.line_code,l]));
+    let eligible=0, nonEligible=0, unclassified=0, total=0;
+    (this.fiscal.actuals||[]).forEach(a=>{
+      if(!months.has(this.dateOnly(a.invoice_month))) return;
+      const amount=Number(a.amount||0); if(!amount) return;
+      const line=lineMap.get(a.line_code); if(!line) return;
+      total += amount;
+      const raw=line.ahtf_percent;
+      if(raw===null || raw===undefined || raw===''){ unclassified += amount; return; }
+      const pct=Number(raw);
+      if(pct<=0){ nonEligible += amount; return; }
+      if(pct>=1){ eligible += amount; return; }
+      eligible += Math.round(amount*pct);
+      nonEligible += Math.round(amount*(1-pct));
+    });
+    eligible=Math.round(eligible);
+    nonEligible=Math.round(nonEligible);
+    const classified=eligible+nonEligible;
+    const difference=total-classified-unclassified;
+    return {eligible,nonEligible,unclassified,total,classified,difference};
+  };
+  App.fiscalFundingRuleLabel = function(line){
+    if(line?.ahtf_percent===null || line?.ahtf_percent===undefined || line?.ahtf_percent==='') return 'Not classified in source workbook';
+    const pct=Number(line.ahtf_percent);
+    if(pct>=1) return 'AHTF eligible';
+    if(pct<=0) return 'Not AHTF eligible';
+    return `${Math.round(pct*100)}% AHTF / ${Math.round((1-pct)*100)}% not AHTF`;
+  };
+  App.fiscalFundingBreakdownHtml = function(month=this.resolveFiscalMonth()){
+    const cur=this.fiscalFundingBreakdown(month,false), ytd=this.fiscalFundingBreakdown(month,true);
+    const unclassifiedRow=(Math.abs(cur.unclassified)>0.005 || Math.abs(ytd.unclassified)>0.005)
+      ? `<tr><td>Not classified by source workbook</td><td style=\"text-align:right\">${this.fiscalMoney(cur.unclassified)}</td><td style=\"text-align:right\">${this.fiscalMoney(ytd.unclassified)}</td></tr>` : '';
+    const note=(Math.abs(cur.unclassified)>0.005)
+      ? `<div class=\"notice amber\" style=\"margin-top:12px;margin-bottom:0\"><div>!</div><div>Building M&amp;R and/or Indirect Costs have activity this month. The source workbook does not include those lines in either AHTF eligibility formula, so they are shown separately rather than silently reclassified.</div></div>` : '';
+    return `<div class=\"client-table-wrap\"><table class=\"client-table\"><thead><tr><th>Funding Classification</th><th style=\"text-align:right\">Current Month</th><th style=\"text-align:right\">YTD</th></tr></thead><tbody><tr><td><strong>AHTF Eligible</strong></td><td style=\"text-align:right\"><strong>${this.fiscalMoney(cur.eligible)}</strong></td><td style=\"text-align:right\"><strong>${this.fiscalMoney(ytd.eligible)}</strong></td></tr><tr><td>Not AHTF Eligible</td><td style=\"text-align:right\">${this.fiscalMoney(cur.nonEligible)}</td><td style=\"text-align:right\">${this.fiscalMoney(ytd.nonEligible)}</td></tr>${unclassifiedRow}<tr><td><strong>Total Actuals</strong></td><td style=\"text-align:right\"><strong>${this.fiscalMoney(cur.total)}</strong></td><td style=\"text-align:right\"><strong>${this.fiscalMoney(ytd.total)}</strong></td></tr></tbody></table></div>${note}`;
+  };
+
   App.fiscalStatusBadge = function(status){
     const map={draft:['gray','Draft'],submitted:['navy','Submitted'],resubmitted:['navy','Resubmitted'],revision_requested:['amber','Revisions Requested'],returned:['amber','Returned'],approved:['green','Approved']};
     const [cls,label]=map[status]||['gray',String(status||'Draft').replaceAll('_',' ')]; return `<span class="badge badge-${cls}">${this.escape(label)}</span>`;
@@ -8957,14 +9025,14 @@ const App = {
     const docs=this.fiscalDocsFor(month); const hasGL=docs.some(d=>String(d.doc_type||'').toLowerCase()==='general ledger');
     const total=this.fiscalMonthTotal(month); const ytd=this.fiscalYtdTotal(month); const official=this.fiscalOfficialTotal(); const meta=this.fiscalMetaFor(month);
     const overCats=['Personnel','Facility','Program','Administrative'].filter(c=>this.fiscalCategoryYtd(c,month)>this.fiscalCategoryBudget(c)+0.005);
-    const sourceDiff=this.fiscalSourceSubtotalSum()-official;
+    const funding=this.fiscalFundingBreakdown(month,false);
     const checks=[
-      {label:'Fiscal database setup',severity:this.fiscal.setupReady?'ok':'error',detail:this.fiscal.setupReady?'Fiscal tables and document metadata are available.':'The FY27 budget can be previewed, but fiscal database tables are not available yet.',fix:this.fiscal.setupReady?'No action needed.':'Run the supplied Supabase fiscal migration before entering or submitting data.'},
+      {label:'Fiscal database setup',severity:this.fiscal.setupReady?'ok':'error',detail:this.fiscal.setupReady?'Fiscal tables and document metadata are available.':'The protected fiscal database is not available yet.',fix:this.fiscal.setupReady?'No action needed.':'Run the supplied Supabase fiscal migration before entering or submitting data.'},
       {label:'Monthly expense detail',severity:total>0?'ok':'error',detail:`Current invoice total: ${this.fiscalMoney(total)}`,fix:total>0?'No action needed.':'Enter at least one monthly actual before submission.'},
       {label:'General Ledger backup',severity:hasGL?'ok':'error',detail:hasGL?`${docs.length} supporting file${docs.length===1?'':'s'} uploaded; General Ledger is present.`:`${docs.length} supporting file${docs.length===1?'':'s'} uploaded; no General Ledger found.`,fix:hasGL?'No action needed.':'Upload the monthly General Ledger before submission.'},
       {label:'Invoice metadata',severity:meta.invoice_date&&meta.po_number?'ok':'error',detail:`Invoice #: ${meta.invoice_number||'not entered'} · Invoice date: ${meta.invoice_date||'not entered'} · PO: ${meta.po_number||'not entered'}`,fix:meta.invoice_date&&meta.po_number?'No action needed.':'Enter the invoice date and current FY27 PO number before submission.'},
-      {label:'Budget monitoring',severity:overCats.length?'warning':'ok',detail:overCats.length?`${overCats.join(', ')} ${overCats.length===1?'is':'are'} over the published annual category budget through this month.`:`YTD actuals ${this.fiscalMoney(ytd)} remain within the published annual total ${this.fiscalMoney(official)}.`,fix:overCats.length?'Review and document any approved budget modification or reallocation.':'No action needed.'},
-      {label:'Source-budget reconciliation',severity:'info',detail:`Published category subtotals sum to ${this.fiscalMoney(this.fiscalSourceSubtotalSum())}; the published grand total is ${this.fiscalMoney(official)} (difference ${this.fiscalMoney(sourceDiff)}). Detailed rounded line items sum to ${this.fiscalMoney(this.fiscalLineDetailBudget())}.`,fix:'The portal preserves the contract figures as published; do not silently adjust them.'}
+      {label:'AHTF allocation',severity:Math.abs(funding.unclassified)>0.005?'warning':'ok',detail:`AHTF eligible: ${this.fiscalMoney(funding.eligible)} · Not AHTF eligible: ${this.fiscalMoney(funding.nonEligible)}${Math.abs(funding.unclassified)>0.005?` · Not classified by source workbook: ${this.fiscalMoney(funding.unclassified)}`:''}`,fix:Math.abs(funding.unclassified)>0.005?'Review Building M&R and/or Indirect Cost activity. The source workbook does not classify those lines in either AHTF formula.':'AHTF and non-AHTF amounts follow the source workbook allocation formulas.'},
+      {label:'Budget monitoring',severity:overCats.length?'warning':'ok',detail:overCats.length?`${overCats.join(', ')} ${overCats.length===1?'is':'are'} over the published annual category budget through this month.`:`YTD actuals ${this.fiscalMoney(ytd)} remain within the published annual total ${this.fiscalMoney(official)}.`,fix:overCats.length?'Review and document any approved budget modification or reallocation.':'No action needed.'}
     ];
     return checks;
   };
@@ -9026,8 +9094,8 @@ const App = {
 
   App.fiscalMonthlyReviewHtml = function(){
     const months=this.fiscalMonths();
-    const rows=months.map(m=>{ const total=this.fiscalMonthTotal(m.key), docs=this.fiscalDocsFor(m.key), gl=docs.some(d=>String(d.doc_type||'').toLowerCase()==='general ledger'), st=this.fiscalStatus(m.key), active=m.key===this.resolveFiscalMonth(); return `<tr class="${active?'fiscal-month-row-active':''}"><td><button class="btn btn-ghost btn-sm" data-fiscal-month-link="${m.key}">${this.escape(m.label)}</button></td><td style="text-align:right">${this.fiscalMoney(total)}</td><td>${gl?'<span class="badge badge-green">GL uploaded</span>':'<span class="badge badge-amber">GL missing</span>'}</td><td>${docs.length}</td><td>${this.fiscalStatusBadge(st)}</td></tr>`; }).join('');
-    return `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Month</th><th style="text-align:right">Invoice</th><th>General Ledger</th><th>Backup Files</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    const rows=months.map(m=>{ const total=this.fiscalMonthTotal(m.key), funding=this.fiscalFundingBreakdown(m.key,false), docs=this.fiscalDocsFor(m.key), gl=docs.some(d=>String(d.doc_type||'').toLowerCase()==='general ledger'), st=this.fiscalStatus(m.key), active=m.key===this.resolveFiscalMonth(); return `<tr class="${active?'fiscal-month-row-active':''}"><td><button class="btn btn-ghost btn-sm" data-fiscal-month-link="${m.key}">${this.escape(m.label)}</button></td><td style="text-align:right">${this.fiscalMoney(total)}</td><td style="text-align:right">${this.fiscalMoney(funding.eligible)}</td><td style="text-align:right">${this.fiscalMoney(funding.nonEligible)}</td><td>${gl?'<span class="badge badge-green">GL uploaded</span>':'<span class="badge badge-amber">GL missing</span>'}</td><td>${docs.length}</td><td>${this.fiscalStatusBadge(st)}</td></tr>`; }).join('');
+    return `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Month</th><th style="text-align:right">Invoice</th><th style="text-align:right">AHTF Eligible</th><th style="text-align:right">Not AHTF</th><th>General Ledger</th><th>Backup Files</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   };
 
   App.fiscalSubmissionPanelHtml = function(month=this.resolveFiscalMonth()){
@@ -9044,6 +9112,8 @@ const App = {
     const m=this.fiscalMonthRecord(month), meta=this.fiscalMetaFor(month), sub=this.fiscalSubmission(month), total=this.fiscalMonthTotal(month), cats=['Personnel','Facility','Program','Administrative'];
     const catLabels={Personnel:'Personnel Expenses',Facility:'Facility Expenses',Program:'Program Expenses',Administrative:'Administrative / Indirect Costs'};
     const rows=cats.map(c=>`<tr><td>${this.escape(catLabels[c])}</td><td style="text-align:right">${this.fiscalMoney(this.fiscalCategoryMonth(c,month))}</td></tr>`).join('');
+    const funding=this.fiscalFundingBreakdown(month,false);
+    const fundingUnclassified=Math.abs(funding.unclassified)>0.005?`<tr><td>Not classified by source workbook</td><td style="text-align:right">${this.fiscalMoney(funding.unclassified)}</td></tr>`:'';
     const docs=this.fiscalDocsFor(month);
     const backupRows=docs.map(d=>`<tr><td>${this.escape(d.doc_type||'Backup')}</td><td>${this.escape(d.file_name||'file')}</td><td>${this.escape(this.fiscalFormatBytes(d.file_size))}</td><td>${this.escape(d.uploaded_by||'—')}</td></tr>`).join('')||'<tr><td colspan="4">No backup documentation uploaded.</td></tr>';
     return `<div class="fiscal-invoice" id="fiscal-invoice">
@@ -9051,6 +9121,7 @@ const App = {
       <div class="fiscal-address-grid"><div class="fiscal-address-box"><strong>Customer</strong><br>City of West Hollywood<br>Human Services Division<br>8300 Santa Monica Blvd.<br>West Hollywood, CA 90069</div><div class="fiscal-address-box"><strong>Service Location</strong><br>The Holloway<br>8464 Holloway Dr.<br>West Hollywood, CA 90069<br><br><strong>Agency / Remit To</strong><br>${this.escape(this.agencyName())}<br>1851 Tyburn St.<br>Glendale, CA 91204</div></div>
       <div class="notice navy"><div>i</div><div>${this.escape(m?.label||'Monthly')} billing for management and operation of the Holloway Interim Housing Program.<br><strong>Service period:</strong> ${this.escape(m?`${this.formatDate(m.start)} – ${this.formatDate(m.end)}`:'—')}</div></div>
       <table class="print-table invoice-summary-table"><thead><tr><th>Description</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rows}<tr class="print-total-row"><td><strong>Total Amount Due</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(total)}</strong></td></tr></tbody></table>
+      <div style="margin-top:18px"><h2 style="color:var(--navy);font-size:14px;margin:0 0 7px">AHTF Eligibility Breakdown</h2><table class="print-table invoice-summary-table"><thead><tr><th>Funding Classification</th><th style="text-align:right">Amount</th></tr></thead><tbody><tr><td><strong>AHTF Eligible</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(funding.eligible)}</strong></td></tr><tr><td>Not AHTF Eligible</td><td style="text-align:right">${this.fiscalMoney(funding.nonEligible)}</td></tr>${fundingUnclassified}</tbody></table></div>
       <div class="fiscal-cert"><strong>Certification</strong><br>${this.escape(CERT_TEXT)}${sub?`<div style="margin-top:8px"><strong>Certified/submitted by:</strong> ${this.escape(sub.certified_by||sub.submitted_by||'—')} · ${this.escape(this.formatDateTime(sub.certified_at||sub.submitted_at))}</div>`:'<div style="margin-top:8px">Draft — not yet certified or submitted.</div>'}</div>
       ${meta.notes?`<div style="margin-top:14px;font-size:11.5px"><strong>Fiscal note:</strong> ${this.escape(meta.notes)}</div>`:''}
       <div class="fiscal-print-backup" style="margin-top:28px"><h2 style="color:var(--navy);font-size:17px;border-bottom:2px solid var(--gold);padding-bottom:7px">Supporting Documentation Index</h2><p class="field-hint" style="margin:7px 0 10px">Supporting files are retained in the secure fiscal document repository; this page lists the records associated with the invoice.</p><table class="print-table"><thead><tr><th>Type</th><th>File</th><th>Size</th><th>Uploaded By</th></tr></thead><tbody>${backupRows}</tbody></table></div>
@@ -9075,7 +9146,7 @@ const App = {
       ${this.fiscalKpisHtml()}
       <div class="fiscal-tabs"><button class="fiscal-tab ${this.fiscalTab==='data'?'active':''}" data-fiscal-tab="data">1 · Monthly Actuals & Uploads</button><button class="fiscal-tab ${this.fiscalTab==='review'?'active':''}" data-fiscal-tab="review">2 · Budget & Reconciliation</button><button class="fiscal-tab ${this.fiscalTab==='invoice'?'active':''}" data-fiscal-tab="invoice">3 · Invoice Preview</button></div>
       <div style="display:${this.fiscalTab==='data'?'block':'none'}">${this.fiscalMetaHtml(month)}<div class="section-label">FY27 Budget Lines · ${this.escape(m?.label||'Selected Month')}</div>${this.fiscalBudgetTableHtml(month)}${this.fiscalDocumentsHtml(month)}</div>
-      <div style="display:${this.fiscalTab==='review'?'block':'none'}"><div class="fiscal-summary-grid"><div class="card"><div class="card-header"><div><h2 class="card-title">Reconciliation & Readiness</h2><div class="field-hint">Errors block submission; warnings require review but do not automatically block.</div></div></div><div class="card-body">${this.fiscalChecksHtml(month)}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Budget vs. Actuals</h2><div class="field-hint">YTD through ${this.escape(m?.label||'selected month')}.</div></div></div><div class="card-body">${this.fiscalBudgetSummaryHtml(month)}</div></div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Monthly Fiscal Review</h2><div class="field-hint">Select a month to review invoice amount, GL status, and submission status.</div></div></div><div class="card-body">${this.fiscalMonthlyReviewHtml()}</div></div>${this.fiscalSubmissionPanelHtml(month)}</div>
+      <div style="display:${this.fiscalTab==='review'?'block':'none'}"><div class="fiscal-summary-grid"><div class="card"><div class="card-header"><div><h2 class="card-title">Reconciliation & Readiness</h2><div class="field-hint">Errors block submission; warnings require review but do not automatically block.</div></div></div><div class="card-body">${this.fiscalChecksHtml(month)}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Budget vs. Actuals</h2><div class="field-hint">YTD through ${this.escape(m?.label||'selected month')}.</div></div></div><div class="card-body">${this.fiscalBudgetSummaryHtml(month)}</div></div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">AHTF Eligibility</h2><div class="field-hint">Calculated from the allocation formulas in the existing Holloway fiscal workbook, including the 60% / 40% Security split.</div></div></div><div class="card-body">${this.fiscalFundingBreakdownHtml(month)}</div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Monthly Fiscal Review</h2><div class="field-hint">Select a month to review invoice amount, AHTF allocation, GL status, and submission status.</div></div></div><div class="card-body">${this.fiscalMonthlyReviewHtml()}</div></div>${this.fiscalSubmissionPanelHtml(month)}</div>
       <div style="display:${this.fiscalTab==='invoice'?'block':'none'}">${this.fiscalInvoiceHtml(month)}</div>`;
     this.bindFiscalEvents();
   };
@@ -9153,6 +9224,312 @@ const App = {
   };
 
   window.addEventListener('beforeunload',e=>{ if(App._fiscalDirty){e.preventDefault();e.returnValue='';return '';} });
+})();
+
+
+// ---------- Fiscal live calculations, Excel export, and City payment tracking ----------
+/* ============================================================
+   EXTENSION 21 — Keeps fiscal calculations live while Agency Management
+   enters a monthly invoice, provides a two-sheet Excel fiscal report, and
+   adds a City Admin-only funding/payment workspace.
+
+   The City funding plan is stored in Supabase, never embedded here, so the
+   account numbers and funding amounts remain inaccessible to agency users.
+   ============================================================ */
+(function(){
+  App.fiscal.fundingPlan = App.fiscal.fundingPlan || [];
+  App.fiscal.payments = App.fiscal.payments || [];
+  App.fiscal.paymentAllocations = App.fiscal.paymentAllocations || [];
+  App.fiscal.paymentSetupReady = false;
+  App.fiscal.paymentSetupErrors = [];
+  App._fiscalPaymentDirty = false;
+
+  const baseFiscalLoad = App.loadFiscalData;
+  App.loadFiscalData = async function(preferredYear=null){
+    await baseFiscalLoad.call(this, preferredYear);
+    this.fiscal.fundingPlan=[];
+    this.fiscal.payments=[];
+    this.fiscal.paymentAllocations=[];
+    this.fiscal.paymentSetupErrors=[];
+    this.fiscal.paymentSetupReady=false;
+    if(!this.isAdmin() || !this.fiscal.setupReady || !this.program?.id) return;
+    const pid=this.program.id;
+    const [planRes,payRes,allocRes]=await Promise.all([
+      this.sb.from('holloway_fiscal_funding_plan').select('*').eq('program_id',pid).eq('fiscal_year',this.fiscalBudgetYear).order('sort_order'),
+      this.sb.from('holloway_fiscal_payments').select('*').eq('program_id',pid).eq('fiscal_year',this.fiscalBudgetYear).order('invoice_month'),
+      this.sb.from('holloway_fiscal_payment_allocations').select('*').eq('program_id',pid).eq('fiscal_year',this.fiscalBudgetYear).order('invoice_month')
+    ]);
+    [planRes,payRes,allocRes].forEach(r=>{if(r.error)this.fiscal.paymentSetupErrors.push(r.error);});
+    this.fiscal.fundingPlan=planRes.data||[];
+    this.fiscal.payments=payRes.data||[];
+    this.fiscal.paymentAllocations=allocRes.data||[];
+    if(!planRes.error && !this.fiscal.fundingPlan.length) this.fiscal.paymentSetupErrors.push({message:'No City funding plan is configured for this fiscal year.'});
+    this.fiscal.paymentSetupReady=this.fiscal.paymentSetupErrors.length===0;
+  };
+
+  App.ensureFiscalDraftActual = function(month,lineCode){
+    let row=this.fiscalActualFor(month,lineCode);
+    if(!row){
+      row={program_id:this.program?.id,fiscal_year:this.fiscalBudgetYear,invoice_month:month,line_code:lineCode,amount:0,notes:''};
+      this.fiscal.actuals.push(row);
+    }
+    return row;
+  };
+  App.ensureFiscalDraftMeta = function(month=this.resolveFiscalMonth()){
+    let row=(this.fiscal.monthMeta||[]).find(m=>this.dateOnly(m.invoice_month)===this.dateOnly(month));
+    if(!row){
+      row={program_id:this.program?.id,fiscal_year:this.fiscalBudgetYear,invoice_month:month,invoice_number:'',invoice_date:this.localDate(),po_number:'',vendor_number:'330495',notes:''};
+      this.fiscal.monthMeta.push(row);
+    }
+    return row;
+  };
+  App.syncFiscalDraftFromDom = function(){
+    if(!this.canEditFiscal?.()) return;
+    const month=this.resolveFiscalMonth();
+    document.querySelectorAll('[data-fiscal-amount]').forEach(x=>{ const r=this.ensureFiscalDraftActual(month,x.dataset.fiscalAmount); r.amount=Number(x.value||0); });
+    document.querySelectorAll('[data-fiscal-note]').forEach(x=>{ const r=this.ensureFiscalDraftActual(month,x.dataset.fiscalNote); r.notes=x.value?.trim()||''; });
+    const meta=this.ensureFiscalDraftMeta(month);
+    const ids={
+      'fiscal-invoice-number':'invoice_number','fiscal-invoice-date':'invoice_date','fiscal-po-number':'po_number','fiscal-vendor-number':'vendor_number','fiscal-month-notes':'notes'
+    };
+    Object.entries(ids).forEach(([id,key])=>{const el=document.getElementById(id);if(el)meta[key]=el.value?.trim?.()??el.value??'';});
+  };
+
+  const baseFiscalBudgetTableHtml=App.fiscalBudgetTableHtml;
+  App.fiscalBudgetTableHtml = function(month=this.resolveFiscalMonth()){
+    const editable=this.fiscalCanEditMonth(month), lines=(this.fiscal.budgetLines||[]).slice().sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0));
+    if(!lines.length) return `<div class="notice amber"><div>!</div><div>No budget lines are configured for ${this.escape(this.fiscalBudgetYear)}.</div></div>`;
+    let html='', lastCat='', lastSub='';
+    for(const l of lines){
+      if(l.category!==lastCat){ html+=`<tr class="fiscal-section-row"><td colspan="7">${this.escape(l.category)} Expenses</td></tr>`; lastCat=l.category; lastSub=''; }
+      if(l.subcategory && l.subcategory!==lastSub){ html+=`<tr class="fiscal-subsection-row"><td colspan="7">${this.escape(l.subcategory)}</td></tr>`; lastSub=l.subcategory; }
+      const a=this.fiscalActualFor(month,l.line_code)||{}, current=Number(a.amount||0), ytd=this.fiscalLineYtd(l.line_code,month), budget=Number(l.approved_budget||0), remaining=budget-ytd, ratio=budget?ytd/budget:0;
+      const detail=l.fte_count!=null?`${Number(l.fte_count).toFixed(2)} FTE`:'';
+      const remClass=remaining<0?'fiscal-over':ratio>=.9?'fiscal-near':'';
+      html+=`<tr data-fiscal-line-row="${this.escape(l.line_code)}"><td><strong>${this.escape(l.line_name)}</strong>${detail?`<div class="field-hint">${this.escape(detail)}</div>`:''}</td><td style="text-align:right">${this.fiscalMoney(budget)}</td><td style="text-align:right">${editable?`<input class="fiscal-amount-input" type="number" step="0.01" min="0" data-fiscal-amount="${this.escape(l.line_code)}" value="${current||''}" aria-label="${this.escape(l.line_name)} current month actual">`:this.fiscalMoney(current)}</td><td style="text-align:right" data-fiscal-ytd="${this.escape(l.line_code)}">${this.fiscalMoney(ytd)}</td><td style="text-align:right" data-fiscal-remaining="${this.escape(l.line_code)}" class="${remClass}">${this.fiscalMoney(remaining)}</td><td style="text-align:right" data-fiscal-percent="${this.escape(l.line_code)}" class="${ratio>1?'fiscal-over':ratio>=.9?'fiscal-near':''}">${this.fiscalPct(ratio)}</td><td>${editable?`<input class="fiscal-note-input" data-fiscal-note="${this.escape(l.line_code)}" value="${this.escape(a.notes||'')}" placeholder="Optional note">`:this.escape(a.notes||'—')}</td></tr>`;
+    }
+    const totalBudget=this.fiscalOfficialTotal(), totalMonth=this.fiscalMonthTotal(month), totalYtd=this.fiscalYtdTotal(month), totalRatio=totalBudget?totalYtd/totalBudget:0;
+    html+=`<tr class="fiscal-total-row"><td><strong>Published FY27 Grand Total</strong></td><td style="text-align:right">${this.fiscalMoney(totalBudget)}</td><td style="text-align:right" data-fiscal-total-current>${this.fiscalMoney(totalMonth)}</td><td style="text-align:right" data-fiscal-total-ytd>${this.fiscalMoney(totalYtd)}</td><td style="text-align:right" data-fiscal-total-remaining>${this.fiscalMoney(totalBudget-totalYtd)}</td><td style="text-align:right" data-fiscal-total-percent>${this.fiscalPct(totalRatio)}</td><td></td></tr>`;
+    return `<div class="fiscal-budget-wrap"><table class="fiscal-budget-table"><thead><tr><th>Budget Line</th><th style="text-align:right">FY27 Budget</th><th style="text-align:right">Current Month</th><th style="text-align:right">YTD</th><th style="text-align:right">Remaining</th><th style="text-align:right">% Spent</th><th>Notes</th></tr></thead><tbody>${html}</tbody></table></div>`;
+  };
+
+  App.refreshFiscalLive = function(changedLineCode=null){
+    const month=this.resolveFiscalMonth();
+    const updateLine=(code)=>{
+      const line=(this.fiscal.budgetLines||[]).find(l=>l.line_code===code); if(!line)return;
+      const budget=Number(line.approved_budget||0), ytd=this.fiscalLineYtd(code,month), rem=budget-ytd, ratio=budget?ytd/budget:0;
+      const y=document.querySelector(`[data-fiscal-ytd="${CSS.escape(code)}"]`); if(y)y.textContent=this.fiscalMoney(ytd);
+      const r=document.querySelector(`[data-fiscal-remaining="${CSS.escape(code)}"]`); if(r){r.textContent=this.fiscalMoney(rem);r.className=rem<0?'fiscal-over':ratio>=.9?'fiscal-near':'';}
+      const p=document.querySelector(`[data-fiscal-percent="${CSS.escape(code)}"]`); if(p){p.textContent=this.fiscalPct(ratio);p.className=ratio>1?'fiscal-over':ratio>=.9?'fiscal-near':'';}
+    };
+    if(changedLineCode) updateLine(changedLineCode); else (this.fiscal.budgetLines||[]).forEach(l=>updateLine(l.line_code));
+    const totalBudget=this.fiscalOfficialTotal(), totalYtd=this.fiscalYtdTotal(month), totalMonth=this.fiscalMonthTotal(month), totalRatio=totalBudget?totalYtd/totalBudget:0;
+    const set=(sel,val)=>{const x=document.querySelector(sel);if(x)x.textContent=val;};
+    set('[data-fiscal-total-current]',this.fiscalMoney(totalMonth)); set('[data-fiscal-total-ytd]',this.fiscalMoney(totalYtd)); set('[data-fiscal-total-remaining]',this.fiscalMoney(totalBudget-totalYtd)); set('[data-fiscal-total-percent]',this.fiscalPct(totalRatio));
+    const k=document.getElementById('fiscal-kpis-live'); if(k)k.innerHTML=this.fiscalKpisHtml();
+    const c=document.getElementById('fiscal-checks-live'); if(c)c.innerHTML=this.fiscalChecksHtml(month);
+    const b=document.getElementById('fiscal-budget-summary-live'); if(b)b.innerHTML=this.fiscalBudgetSummaryHtml(month);
+    const f=document.getElementById('fiscal-funding-live'); if(f)f.innerHTML=this.fiscalFundingBreakdownHtml(month);
+    const mr=document.getElementById('fiscal-monthly-review-live'); if(mr)mr.innerHTML=this.fiscalMonthlyReviewHtml();
+    const inv=document.getElementById('fiscal-invoice-live'); if(inv)inv.innerHTML=this.fiscalInvoiceHtml(month);
+    const sub=document.getElementById('fiscal-submission-live'); if(sub)sub.innerHTML=this.fiscalSubmissionPanelHtml(month);
+    this.bindFiscalSecondaryEvents?.();
+  };
+
+  App.fiscalPaymentFor = function(month){
+    return (this.fiscal.payments||[]).find(p=>this.dateOnly(p.invoice_month)===this.dateOnly(month)) || null;
+  };
+  App.ensureFiscalPayment = function(month){
+    let p=this.fiscalPaymentFor(month);
+    if(!p){p={program_id:this.program?.id,fiscal_year:this.fiscalBudgetYear,invoice_month:month,payment_status:'not_paid',payment_date:'',payment_reference:'',notes:''};this.fiscal.payments.push(p);}
+    return p;
+  };
+  App.fiscalPaymentAllocationFor = function(month,code){
+    return (this.fiscal.paymentAllocations||[]).find(a=>this.dateOnly(a.invoice_month)===this.dateOnly(month)&&a.funding_code===code) || null;
+  };
+  App.ensureFiscalPaymentAllocation = function(month,code){
+    let a=this.fiscalPaymentAllocationFor(month,code);
+    if(!a){a={program_id:this.program?.id,fiscal_year:this.fiscalBudgetYear,invoice_month:month,funding_code:code,amount:0};this.fiscal.paymentAllocations.push(a);}
+    return a;
+  };
+  App.fiscalPaymentAllocationTotal = function(month){ return (this.fiscal.paymentAllocations||[]).filter(a=>this.dateOnly(a.invoice_month)===this.dateOnly(month)).reduce((s,a)=>s+Number(a.amount||0),0); };
+  App.fiscalFundingUsed = function(code){ return (this.fiscal.paymentAllocations||[]).filter(a=>a.funding_code===code).reduce((s,a)=>s+Number(a.amount||0),0); };
+  App.fiscalInvoiceForPayment = function(month){ const sub=this.fiscalSubmission(month); return Number(sub?.invoice_total ?? this.fiscalMonthTotal(month) ?? 0); };
+  App.fiscalPaymentStatusLabel = function(st){ return ({not_paid:'Not Paid',processing:'Processing',partial:'Partially Paid',paid:'Paid'})[st]||'Not Paid'; };
+
+  App.fiscalCityPaymentKpisHtml = function(){
+    const plan=(this.fiscal.fundingPlan||[]).reduce((s,r)=>s+Number(r.planned_amount||0),0);
+    const allocated=(this.fiscal.paymentAllocations||[]).reduce((s,r)=>s+Number(r.amount||0),0);
+    const invoices=this.fiscalMonths().reduce((s,m)=>s+this.fiscalInvoiceForPayment(m.key),0);
+    const paid=(this.fiscal.payments||[]).filter(p=>p.payment_status==='paid').length;
+    const approved=(this.fiscal.submissions||[]).filter(s=>s.status==='approved').length;
+    return `<div class="fiscal-city-kpis"><div class="fiscal-kpi"><div class="label">FY27 Funding Plan</div><div class="value">${this.fiscalMoney(plan)}</div><div class="sub">Five City funding sources</div></div><div class="fiscal-kpi"><div class="label">Allocated to Invoices</div><div class="value">${this.fiscalMoney(allocated)}</div><div class="sub">Payment tracker allocations</div></div><div class="fiscal-kpi"><div class="label">Funding Remaining</div><div class="value ${plan-allocated<0?'fiscal-over':''}">${this.fiscalMoney(plan-allocated)}</div><div class="sub">Against FY27 funding plan</div></div><div class="fiscal-kpi"><div class="label">Invoices Entered</div><div class="value">${this.fiscalMoney(invoices)}</div><div class="sub">Across all FY27 months</div></div><div class="fiscal-kpi"><div class="label">Payment Status</div><div class="value">${paid} / 12</div><div class="sub">Paid · ${approved} City-approved invoices</div></div></div>`;
+  };
+  App.fiscalProgramCostPlanHtml = function(){
+    const cats=['Personnel','Facility','Program','Administrative'];
+    const label={Personnel:'Personnel',Facility:'Facility',Program:'Program',Administrative:'Administrative / Indirect'};
+    const rows=cats.map(c=>`<tr><td>${label[c]}</td><td style="text-align:right">${this.fiscalMoney(Math.round(this.fiscalCategoryBudget(c)))}</td></tr>`).join('');
+    return `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Program Costs</th><th style="text-align:right">FY27 Amount</th></tr></thead><tbody>${rows}<tr><td><strong>Total Costs</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(this.fiscalOfficialTotal())}</strong></td></tr></tbody></table></div>`;
+  };
+  App.fiscalFundingPlanHtml = function(){
+    const rows=(this.fiscal.fundingPlan||[]).map(r=>{const used=this.fiscalFundingUsed(r.funding_code),plan=Number(r.planned_amount||0),rem=plan-used;return `<tr><td><strong>${this.escape(r.funding_name)}</strong><div class="field-hint">${this.escape(r.account_number||'—')}</div></td><td style="text-align:right">${this.fiscalMoney(plan)}</td><td style="text-align:right" data-funding-used="${this.escape(r.funding_code)}">${this.fiscalMoney(used)}</td><td style="text-align:right" data-funding-remaining="${this.escape(r.funding_code)}" class="${rem<0?'fiscal-over':''}">${this.fiscalMoney(rem)}</td></tr>`;}).join('');
+    const plan=(this.fiscal.fundingPlan||[]).reduce((s,r)=>s+Number(r.planned_amount||0),0), used=(this.fiscal.paymentAllocations||[]).reduce((s,r)=>s+Number(r.amount||0),0);
+    return `<div class="client-table-wrap"><table class="client-table fiscal-funding-plan-table"><thead><tr><th>Funding Plan</th><th>FY27 Plan</th><th>Allocated</th><th>Remaining</th></tr></thead><tbody>${rows}<tr><td><strong>Total Funding</strong></td><td><strong>${this.fiscalMoney(plan)}</strong></td><td data-funding-used-total><strong>${this.fiscalMoney(used)}</strong></td><td data-funding-remaining-total class="${plan-used<0?'fiscal-over':''}"><strong>${this.fiscalMoney(plan-used)}</strong></td></tr></tbody></table></div>`;
+  };
+  App.fiscalPaymentTrackerHtml = function(){
+    const plans=this.fiscal.fundingPlan||[];
+    const head=plans.map(p=>`<th>${this.escape(p.funding_name)}</th>`).join('');
+    const rows=this.fiscalMonths().map(m=>{
+      const pay=this.fiscalPaymentFor(m.key)||{}, invoice=this.fiscalInvoiceForPayment(m.key), alloc=this.fiscalPaymentAllocationTotal(m.key), diff=invoice-alloc, funding=this.fiscalFundingBreakdown(m.key,false), sub=this.fiscalSubmission(m.key);
+      const status=pay.payment_status||'not_paid';
+      const allocInputs=plans.map(p=>{const a=Number(this.fiscalPaymentAllocationFor(m.key,p.funding_code)?.amount||0);const ahtfWarn=p.funding_code==='ahtf'&&a>funding.eligible+0.005;return `<td><input type="number" min="0" step="0.01" data-payment-allocation data-payment-month="${m.key}" data-funding-code="${this.escape(p.funding_code)}" value="${a||''}" class="${ahtfWarn?'fiscal-over':''}" title="${ahtfWarn?'AHTF allocation exceeds AHTF-eligible costs for this invoice.':''}"></td>`;}).join('');
+      const diffCls=Math.abs(diff)<0.01?'payment-diff-ok':alloc>invoice+0.005?'payment-diff-error':'payment-diff-warn';
+      return `<tr data-payment-row="${m.key}"><td><strong>${this.escape(m.short)}</strong><div class="field-hint">${this.escape(m.label)}</div></td><td style="text-align:right">${this.fiscalMoney(invoice)}<div class="field-hint">${this.escape(sub?.status?.replaceAll('_',' ')||'draft')}</div></td><td><select data-payment-status="${m.key}">${['not_paid','processing','partial','paid'].map(s=>`<option value="${s}" ${status===s?'selected':''}>${this.fiscalPaymentStatusLabel(s)}</option>`).join('')}</select></td><td><input type="date" data-payment-date="${m.key}" value="${this.escape(pay.payment_date||'')}"></td>${allocInputs}<td style="text-align:right" data-payment-total="${m.key}"><strong>${this.fiscalMoney(alloc)}</strong></td><td style="text-align:right" data-payment-difference="${m.key}" class="${diffCls}">${this.fiscalMoney(diff)}</td><td><input class="payment-ref" data-payment-ref="${m.key}" value="${this.escape(pay.payment_reference||'')}" placeholder="AP / payment ref"></td><td><input class="payment-note" data-payment-note="${m.key}" value="${this.escape(pay.notes||'')}" placeholder="Optional note"></td></tr>`;
+    }).join('');
+    return `<div class="fiscal-payment-table-wrap"><table class="fiscal-payment-table"><thead><tr><th>Month</th><th>Invoice</th><th>Payment Status</th><th>Payment Date</th>${head}<th>Allocated Total</th><th>Unallocated</th><th>AP / Payment Ref.</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  };
+  App.fiscalCityPaymentHtml = function(){
+    if(!this.isAdmin()) return '';
+    if(!this.fiscal.paymentSetupReady) return `<div class="notice amber"><div>!</div><div><strong>City payment tracking setup is incomplete.</strong> Run the updated fiscal migration to create the protected FY27 funding-plan and payment tables.</div></div>`;
+    return `<div id="fiscal-city-payment-kpis-live">${this.fiscalCityPaymentKpisHtml()}</div><div class="fiscal-payment-layout"><div class="card"><div class="card-header"><div><h2 class="card-title">FY27 Program Cost Plan</h2><div class="field-hint">Rounded program-cost plan used for City payment tracking.</div></div></div><div class="card-body">${this.fiscalProgramCostPlanHtml()}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">FY27 Funding Plan</h2><div class="field-hint">Annual funding sources, account numbers, invoice allocations, and remaining balances.</div></div></div><div class="card-body" id="fiscal-funding-plan-live">${this.fiscalFundingPlanHtml()}</div></div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Invoice Payment Tracker</h2><div class="field-hint">City Admin only · record how each monthly invoice is paid across the FY27 funding plan.</div></div><button class="btn btn-primary" id="btn-save-fiscal-payments">Save Payment Tracking</button></div><div class="card-body">${this.fiscalPaymentTrackerHtml()}<div class="fiscal-payment-help">The <strong>Unallocated</strong> column should reach $0 when an invoice has been fully assigned to funding sources. AHTF entries are flagged if they exceed the invoice's calculated AHTF-eligible amount. Funding-plan balances update immediately as allocations are entered.</div></div></div>`;
+  };
+  App.refreshFiscalPaymentLive = function(){
+    if(!this.isAdmin())return;
+    const k=document.getElementById('fiscal-city-payment-kpis-live');if(k)k.innerHTML=this.fiscalCityPaymentKpisHtml();
+    (this.fiscal.fundingPlan||[]).forEach(r=>{const used=this.fiscalFundingUsed(r.funding_code),plan=Number(r.planned_amount||0),rem=plan-used;const u=document.querySelector(`[data-funding-used="${CSS.escape(r.funding_code)}"]`);if(u)u.textContent=this.fiscalMoney(used);const rr=document.querySelector(`[data-funding-remaining="${CSS.escape(r.funding_code)}"]`);if(rr){rr.textContent=this.fiscalMoney(rem);rr.className=rem<0?'fiscal-over':'';}});
+    const plan=(this.fiscal.fundingPlan||[]).reduce((s,r)=>s+Number(r.planned_amount||0),0),used=(this.fiscal.paymentAllocations||[]).reduce((s,r)=>s+Number(r.amount||0),0);const ut=document.querySelector('[data-funding-used-total]');if(ut)ut.innerHTML=`<strong>${this.fiscalMoney(used)}</strong>`;const rt=document.querySelector('[data-funding-remaining-total]');if(rt){rt.innerHTML=`<strong>${this.fiscalMoney(plan-used)}</strong>`;rt.className=plan-used<0?'fiscal-over':'';}
+    this.fiscalMonths().forEach(m=>{const invoice=this.fiscalInvoiceForPayment(m.key),alloc=this.fiscalPaymentAllocationTotal(m.key),diff=invoice-alloc;const t=document.querySelector(`[data-payment-total="${m.key}"]`);if(t)t.innerHTML=`<strong>${this.fiscalMoney(alloc)}</strong>`;const d=document.querySelector(`[data-payment-difference="${m.key}"]`);if(d){d.textContent=this.fiscalMoney(diff);d.className=Math.abs(diff)<0.01?'payment-diff-ok':alloc>invoice+0.005?'payment-diff-error':'payment-diff-warn';}});
+  };
+  App.saveFiscalPaymentTracking = async function(){
+    if(!this.isAdmin()||!this.fiscal.paymentSetupReady){this.toast('City payment tracking is not available.',{error:true});return;}
+    const now=new Date().toISOString(),email=this.user?.email||'';
+    const payments=this.fiscalMonths().map(m=>{const p=this.ensureFiscalPayment(m.key);return {program_id:this.program.id,fiscal_year:this.fiscalBudgetYear,invoice_month:m.key,payment_status:p.payment_status||'not_paid',payment_date:p.payment_date||null,payment_reference:p.payment_reference||'',notes:p.notes||'',updated_by:email,updated_at:now};});
+    const pRes=await this.sb.from('holloway_fiscal_payments').upsert(payments,{onConflict:'program_id,fiscal_year,invoice_month'});if(pRes.error){this.toast('Payment tracking save failed: '+pRes.error.message,{error:true});return;}
+    const allocations=[];this.fiscalMonths().forEach(m=>(this.fiscal.fundingPlan||[]).forEach(f=>{const a=this.ensureFiscalPaymentAllocation(m.key,f.funding_code);allocations.push({program_id:this.program.id,fiscal_year:this.fiscalBudgetYear,invoice_month:m.key,funding_code:f.funding_code,amount:Number(a.amount||0),updated_by:email,updated_at:now});}));
+    const aRes=await this.sb.from('holloway_fiscal_payment_allocations').upsert(allocations,{onConflict:'program_id,fiscal_year,invoice_month,funding_code'});if(aRes.error){this.toast('Funding allocation save failed: '+aRes.error.message,{error:true});return;}
+    this._fiscalPaymentDirty=false;await this.loadFiscalData(this.fiscalBudgetYear);this.toast('City payment tracking saved.');this.renderFiscal();
+  };
+
+  App.exportFiscalReport = function(){
+    if(typeof XLSX==='undefined'){this.toast('Excel export library failed to load.',{error:true});return;}
+    if(!this.canViewFiscal()){this.toast('Fiscal access is restricted.',{error:true});return;}
+    this.syncFiscalDraftFromDom();
+    const month=this.resolveFiscalMonth(), m=this.fiscalMonthRecord(month), wb=XLSX.utils.book_new();
+    const summary=[];
+    summary.push(['Holloway Interim Housing Program — Fiscal Report']);
+    summary.push(['Fiscal Year',this.fiscalYearLabel()]);
+    summary.push(['Reporting Through',m?.label||'']);
+    summary.push(['Generated',new Date().toLocaleString()]);
+    summary.push([]);
+    summary.push(['Summary','Amount']);
+    summary.push(['FY Approved Budget',this.fiscalOfficialTotal()]);
+    summary.push(['YTD Actuals',this.fiscalYtdTotal(month)]);
+    summary.push(['Remaining',this.fiscalOfficialTotal()-this.fiscalYtdTotal(month)]);
+    summary.push(['Budget Spent',this.fiscalOfficialTotal()?this.fiscalYtdTotal(month)/this.fiscalOfficialTotal():0]);
+    summary.push(['Current Invoice',this.fiscalMonthTotal(month)]);
+    summary.push([]);
+    summary.push(['Category','FY Budget','YTD Actuals','Remaining','% Spent']);
+    ['Personnel','Facility','Program','Administrative'].forEach(c=>{const b=this.fiscalCategoryBudget(c),y=this.fiscalCategoryYtd(c,month);summary.push([c,b,y,b-y,b?y/b:0]);});
+    summary.push(['TOTAL',this.fiscalOfficialTotal(),this.fiscalYtdTotal(month),this.fiscalOfficialTotal()-this.fiscalYtdTotal(month),this.fiscalOfficialTotal()?this.fiscalYtdTotal(month)/this.fiscalOfficialTotal():0]);
+    summary.push([]);
+    const curA=this.fiscalFundingBreakdown(month,false),ytdA=this.fiscalFundingBreakdown(month,true);
+    summary.push(['AHTF Eligibility','Current Month','YTD']);
+    summary.push(['AHTF Eligible',curA.eligible,ytdA.eligible]);
+    summary.push(['Not AHTF Eligible',curA.nonEligible,ytdA.nonEligible]);
+    if(Math.abs(curA.unclassified)>0.005||Math.abs(ytdA.unclassified)>0.005)summary.push(['Not Classified by Source Workbook',curA.unclassified,ytdA.unclassified]);
+    summary.push(['Total Actuals',curA.total,ytdA.total]);
+    summary.push([]);
+    summary.push(['Monthly Invoice Summary','Invoice Total','AHTF Eligible','Not AHTF','Submission Status']);
+    this.fiscalMonths().forEach(mm=>{const ff=this.fiscalFundingBreakdown(mm.key,false);summary.push([mm.label,this.fiscalMonthTotal(mm.key),ff.eligible,ff.nonEligible,this.fiscalStatus(mm.key).replaceAll('_',' ')]);});
+    if(this.isAdmin()&&this.fiscal.paymentSetupReady){
+      summary.push([]);summary.push(['CITY ADMIN — FY27 Funding Plan','Account','Plan','Allocated','Remaining']);
+      (this.fiscal.fundingPlan||[]).forEach(p=>{const used=this.fiscalFundingUsed(p.funding_code),plan=Number(p.planned_amount||0);summary.push([p.funding_name,p.account_number||'',plan,used,plan-used]);});
+      const plan=(this.fiscal.fundingPlan||[]).reduce((s,p)=>s+Number(p.planned_amount||0),0),used=(this.fiscal.paymentAllocations||[]).reduce((s,a)=>s+Number(a.amount||0),0);summary.push(['TOTAL FUNDING','',plan,used,plan-used]);
+      summary.push([]);summary.push(['CITY ADMIN — Invoice Payment Status','Invoice','Status','Payment Date','Allocated','Unallocated','Payment Reference']);
+      this.fiscalMonths().forEach(mm=>{const p=this.fiscalPaymentFor(mm.key)||{},inv=this.fiscalInvoiceForPayment(mm.key),al=this.fiscalPaymentAllocationTotal(mm.key);summary.push([mm.label,inv,this.fiscalPaymentStatusLabel(p.payment_status||'not_paid'),p.payment_date||'',al,inv-al,p.payment_reference||'']);});
+    }
+    const wsS=XLSX.utils.aoa_to_sheet(summary);
+    wsS['!cols']=[{wch:34},{wch:22},{wch:18},{wch:18},{wch:18},{wch:18},{wch:24}];
+    Object.keys(wsS).filter(a=>/^[A-Z]+\d+$/.test(a)).forEach(a=>{const c=wsS[a];if(c.t==='n'){const col=a.match(/^[A-Z]+/)[0];c.z=(col==='E'&&a.match(/\d+/)[0]>=13&&a.match(/\d+/)[0]<=18)||a==='B10'?'0.0%':'$#,##0.00;[Red]($#,##0.00);-';}});
+    XLSX.utils.book_append_sheet(wb,wsS,'Summary');
+
+    const months=this.fiscalMonths();
+    const detail=[['Category','Subcategory','Budget Line','FY Budget ($)',...months.map(mm=>mm.label),'FY Actuals Entered ($)','Remaining ($)','% Spent','AHTF Classification']];
+    const lines=(this.fiscal.budgetLines||[]).slice().sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0));
+    lines.forEach(l=>{const monthVals=months.map(mm=>Number(this.fiscalActualFor(mm.key,l.line_code)?.amount||0));const actual=monthVals.reduce((s,v)=>s+v,0),budget=Number(l.approved_budget||0);detail.push([l.category,l.subcategory||'',l.line_name,budget,...monthVals,actual,budget-actual,budget?actual/budget:0,this.fiscalFundingRuleLabel(l)]);});
+    const wsD=XLSX.utils.aoa_to_sheet(detail);
+    const firstDataRow=2,lastDataRow=detail.length;
+    const monthStartCol=5,monthEndCol=4+months.length,actualCol=monthEndCol+1,remainingCol=actualCol+1,pctCol=remainingCol+1;
+    const colLetter=(n)=>{let s='';while(n){n--;s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26);}return s;};
+    for(let r=firstDataRow;r<=lastDataRow;r++){
+      const q=colLetter(actualCol)+r, rem=colLetter(remainingCol)+r,pct=colLetter(pctCol)+r,bud='D'+r,ms=colLetter(monthStartCol)+r,me=colLetter(monthEndCol)+r;
+      const vals=detail[r-1]; wsD[q]={t:'n',f:`SUM(${ms}:${me})`,v:Number(vals[actualCol-1]||0),z:'$#,##0.00;[Red]($#,##0.00);-'}; wsD[rem]={t:'n',f:`${bud}-${q}`,v:Number(vals[remainingCol-1]||0),z:'$#,##0.00;[Red]($#,##0.00);-'}; wsD[pct]={t:'n',f:`IF(${bud}=0,0,${q}/${bud})`,v:Number(vals[pctCol-1]||0),z:'0.0%'};
+    }
+    const totalRow=lastDataRow+2;wsD['A'+totalRow]={t:'s',v:'PUBLISHED GRAND TOTAL'};
+    wsD['D'+totalRow]={t:'n',v:this.fiscalOfficialTotal(),z:'$#,##0.00;[Red]($#,##0.00);-'};
+    for(let c=monthStartCol;c<=monthEndCol;c++){const L=colLetter(c),monthIdx=c-monthStartCol,mm=months[monthIdx],cached=this.fiscalMonthTotal(mm.key);wsD[L+totalRow]={t:'n',f:`SUM(${L}${firstDataRow}:${L}${lastDataRow})`,v:cached,z:'$#,##0.00;[Red]($#,##0.00);-'};}
+    const totalActual=this.fiscal.actuals.reduce((s,a)=>s+Number(a.amount||0),0);
+    wsD[colLetter(actualCol)+totalRow]={t:'n',f:`SUM(${colLetter(actualCol)}${firstDataRow}:${colLetter(actualCol)}${lastDataRow})`,v:totalActual,z:'$#,##0.00;[Red]($#,##0.00);-'};
+    wsD[colLetter(remainingCol)+totalRow]={t:'n',f:`D${totalRow}-${colLetter(actualCol)}${totalRow}`,v:this.fiscalOfficialTotal()-totalActual,z:'$#,##0.00;[Red]($#,##0.00);-'};
+    wsD[colLetter(pctCol)+totalRow]={t:'n',f:`IF(D${totalRow}=0,0,${colLetter(actualCol)}${totalRow}/D${totalRow})`,v:this.fiscalOfficialTotal()?totalActual/this.fiscalOfficialTotal():0,z:'0.0%'};
+    wsD['!cols']=[{wch:17},{wch:20},{wch:42},{wch:16},...months.map(()=>({wch:15})),{wch:20},{wch:17},{wch:12},{wch:28}];
+    wsD['!autofilter']={ref:`A1:${colLetter(pctCol+1)}${lastDataRow}`};
+    XLSX.utils.book_append_sheet(wb,wsD,'Monthly Detail');
+    XLSX.writeFile(wb,`Holloway ${this.fiscalBudgetYear.replace(/[^A-Za-z0-9-]/g,'')} Fiscal Report ${this.localDate()}.xlsx`,{cellDates:true});
+    this.toast('Fiscal Excel report exported.');
+  };
+
+  const baseFiscalRender=App.renderFiscal;
+  App.renderFiscal = async function(){
+    const el=document.getElementById('view-fiscal'); if(!el)return;
+    if(!this.canViewFiscal()){el.innerHTML='<div class="notice red"><div>!</div><div><strong>Fiscal access is restricted.</strong> Fiscal Reporting is available only to Agency Management and City Admin users.</div></div>';return;}
+    if(!this.fiscal.years.length){el.innerHTML='<div class="notice navy"><div>i</div><div>Loading fiscal workspace…</div></div>';await this.loadFiscalData();}
+    const month=this.resolveFiscalMonth(),m=this.fiscalMonthRecord(month),status=this.fiscalStatus(month),editable=this.fiscalCanEditMonth(month);
+    const years=(this.fiscal.years||[]).map(y=>`<option value="${this.escape(y.fiscal_year)}" ${y.fiscal_year===this.fiscalBudgetYear?'selected':''}>${this.escape(y.budget_label||y.fiscal_year)}</option>`).join('');
+    const months=this.fiscalMonths().map(x=>`<option value="${x.key}" ${x.key===month?'selected':''}>${this.escape(x.label)}</option>`).join('');
+    const setupNotice=this.fiscal.setupReady?'':`<div class="notice amber"><div>!</div><div><strong>Fiscal database setup is incomplete.</strong> Budget amounts are intentionally not embedded in the portal. Run the updated Supabase fiscal migration to load the protected FY27 budget and enable fiscal reporting.</div></div>`;
+    const source=this.fiscalYearRecord().source_name||'Protected fiscal budget record';
+    if(!this.isAdmin()&&this.fiscalTab==='payments')this.fiscalTab='data';
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Fiscal Reporting</h1><div class="page-subtitle">Monthly actuals, supporting documentation, budget monitoring, invoice generation, and City fiscal review.</div></div>${this.fiscalStatusBadge(status)}</div>${setupNotice}<div class="fiscal-toolbar"><div class="fiscal-controls"><label class="fiscal-control">Fiscal Year<select id="fiscal-year-select">${years}</select></label><label class="fiscal-control">Invoice Month<select id="fiscal-month-select">${months}</select></label></div><div class="client-actions">${editable?'<button class="btn btn-primary" id="btn-fiscal-save">Save Fiscal Draft</button>':''}<button class="btn btn-ghost" id="btn-fiscal-export">Export Fiscal Report</button><button class="btn btn-ghost" id="btn-fiscal-print">Print / Save Invoice PDF</button></div></div><div class="report-summary-strip"><strong>Fiscal calendar:</strong> ${this.escape(this.formatDate(this.fiscalYearStart()))} – ${this.escape(this.formatDate(this.fiscalYearEnd()))} · <strong>Budget source:</strong> ${this.escape(source)} · Fiscal reporting is independent from the program-reporting contract year.</div><div id="fiscal-kpis-live">${this.fiscalKpisHtml()}</div><div class="fiscal-tabs"><button class="fiscal-tab ${this.fiscalTab==='data'?'active':''}" data-fiscal-tab="data">1 · Monthly Actuals & Uploads</button><button class="fiscal-tab ${this.fiscalTab==='review'?'active':''}" data-fiscal-tab="review">2 · Budget & Reconciliation</button><button class="fiscal-tab ${this.fiscalTab==='invoice'?'active':''}" data-fiscal-tab="invoice">3 · Invoice Preview</button>${this.isAdmin()?`<button class="fiscal-tab ${this.fiscalTab==='payments'?'active':''}" data-fiscal-tab="payments">4 · City Payment Tracking</button>`:''}</div><div style="display:${this.fiscalTab==='data'?'block':'none'}">${this.fiscalMetaHtml(month)}<div class="section-label">FY27 Budget Lines · ${this.escape(m?.label||'Selected Month')}<span class="fiscal-live-note">Calculations update live</span></div>${this.fiscalBudgetTableHtml(month)}${this.fiscalDocumentsHtml(month)}</div><div style="display:${this.fiscalTab==='review'?'block':'none'}"><div class="fiscal-summary-grid"><div class="card"><div class="card-header"><div><h2 class="card-title">Reconciliation & Readiness</h2><div class="field-hint">Errors block submission; warnings require review but do not automatically block.</div></div></div><div class="card-body" id="fiscal-checks-live">${this.fiscalChecksHtml(month)}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Budget vs. Actuals</h2><div class="field-hint">YTD through ${this.escape(m?.label||'selected month')}.</div></div></div><div class="card-body" id="fiscal-budget-summary-live">${this.fiscalBudgetSummaryHtml(month)}</div></div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">AHTF Eligibility</h2><div class="field-hint">Calculated from the allocation formulas in the existing Holloway fiscal workbook, including the 60% / 40% Security split.</div></div></div><div class="card-body" id="fiscal-funding-live">${this.fiscalFundingBreakdownHtml(month)}</div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Monthly Fiscal Review</h2><div class="field-hint">Select a month to review invoice amount, AHTF allocation, GL status, and submission status.</div></div></div><div class="card-body" id="fiscal-monthly-review-live">${this.fiscalMonthlyReviewHtml()}</div></div><div id="fiscal-submission-live">${this.fiscalSubmissionPanelHtml(month)}</div></div><div id="fiscal-invoice-live" style="display:${this.fiscalTab==='invoice'?'block':'none'}">${this.fiscalInvoiceHtml(month)}</div>${this.isAdmin()?`<div style="display:${this.fiscalTab==='payments'?'block':'none'}">${this.fiscalCityPaymentHtml()}</div>`:''}`;
+    this.bindFiscalEvents();
+  };
+
+  App.bindFiscalSecondaryEvents = function(){
+    const el=document.getElementById('view-fiscal');if(!el)return;
+    el.querySelector('#fiscal-cert-check')?.addEventListener('change',e=>{const btn=el.querySelector('#btn-fiscal-submit');if(btn)btn.disabled=!e.target.checked||this.fiscalBlockingIssues().length>0;});
+    el.querySelector('#btn-fiscal-submit')?.addEventListener('click',()=>this.submitFiscalInvoice());
+    el.querySelector('#btn-fiscal-approve')?.addEventListener('click',()=>this.reviewFiscalInvoice('approved'));
+    el.querySelector('#btn-fiscal-revisions')?.addEventListener('click',()=>this.reviewFiscalInvoice('revision_requested'));
+    el.querySelectorAll('[data-fiscal-month-link]').forEach(b=>b.addEventListener('click',async()=>{const target=b.dataset.fiscalMonthLink;if(this._fiscalDirty){if(!window.confirm('Discard unsaved fiscal changes and switch months?'))return;this._fiscalDirty=false;await this.loadFiscalData(this.fiscalBudgetYear);}this.fiscalMonth=target;this.renderFiscal();}));
+  };
+
+  App.bindFiscalEvents = function(){
+    const el=document.getElementById('view-fiscal');if(!el)return;
+    el.querySelector('#fiscal-year-select')?.addEventListener('change',async e=>{const target=e.target.value;if((this._fiscalDirty||this._fiscalPaymentDirty)&&!window.confirm('Discard unsaved fiscal/payment changes and switch fiscal years?')){e.target.value=this.fiscalBudgetYear;return;}this._fiscalDirty=false;this._fiscalPaymentDirty=false;await this.loadFiscalData(target);this.renderFiscal();});
+    el.querySelector('#fiscal-month-select')?.addEventListener('change',async e=>{const target=e.target.value;if(this._fiscalDirty){if(!window.confirm('Discard unsaved fiscal changes and switch months?')){e.target.value=this.fiscalMonth;return;}this._fiscalDirty=false;await this.loadFiscalData(this.fiscalBudgetYear);}this.fiscalMonth=target;this.renderFiscal();});
+    el.querySelectorAll('[data-fiscal-tab]').forEach(b=>b.addEventListener('click',()=>{this.syncFiscalDraftFromDom();this.fiscalTab=b.dataset.fiscalTab;this.renderFiscal();}));
+    el.querySelectorAll('[data-fiscal-amount]').forEach(x=>x.addEventListener('input',()=>{const row=this.ensureFiscalDraftActual(this.resolveFiscalMonth(),x.dataset.fiscalAmount);row.amount=Number(x.value||0);this._fiscalDirty=true;this.refreshFiscalLive(x.dataset.fiscalAmount);}));
+    el.querySelectorAll('[data-fiscal-note]').forEach(x=>x.addEventListener('input',()=>{const row=this.ensureFiscalDraftActual(this.resolveFiscalMonth(),x.dataset.fiscalNote);row.notes=x.value?.trim()||'';this._fiscalDirty=true;}));
+    const metaMap={'fiscal-invoice-number':'invoice_number','fiscal-invoice-date':'invoice_date','fiscal-po-number':'po_number','fiscal-vendor-number':'vendor_number','fiscal-month-notes':'notes'};
+    Object.entries(metaMap).forEach(([id,key])=>el.querySelector('#'+id)?.addEventListener('input',e=>{const meta=this.ensureFiscalDraftMeta();meta[key]=e.target.value;this._fiscalDirty=true;this.refreshFiscalLive();}));
+    el.querySelector('#btn-fiscal-save')?.addEventListener('click',()=>this.saveFiscalDraft());
+    el.querySelector('#btn-fiscal-export')?.addEventListener('click',()=>this.exportFiscalReport());
+    el.querySelector('#btn-fiscal-upload')?.addEventListener('click',()=>this.uploadFiscalDocument());
+    el.querySelectorAll('[data-fiscal-open-doc]').forEach(b=>b.addEventListener('click',()=>this.openFiscalDocument(b.dataset.fiscalOpenDoc)));
+    el.querySelectorAll('[data-fiscal-delete-doc]').forEach(b=>b.addEventListener('click',()=>this.deleteFiscalDocument(b.dataset.fiscalDeleteDoc)));
+    el.querySelector('#btn-fiscal-print')?.addEventListener('click',()=>this.printFiscalInvoice());
+    this.bindFiscalSecondaryEvents();
+    if(this.isAdmin()){
+      el.querySelectorAll('[data-payment-status]').forEach(x=>x.addEventListener('change',()=>{const p=this.ensureFiscalPayment(x.dataset.paymentStatus);p.payment_status=x.value;this._fiscalPaymentDirty=true;this.refreshFiscalPaymentLive();}));
+      el.querySelectorAll('[data-payment-date]').forEach(x=>x.addEventListener('input',()=>{const p=this.ensureFiscalPayment(x.dataset.paymentDate);p.payment_date=x.value;this._fiscalPaymentDirty=true;}));
+      el.querySelectorAll('[data-payment-ref]').forEach(x=>x.addEventListener('input',()=>{const p=this.ensureFiscalPayment(x.dataset.paymentRef);p.payment_reference=x.value;this._fiscalPaymentDirty=true;}));
+      el.querySelectorAll('[data-payment-note]').forEach(x=>x.addEventListener('input',()=>{const p=this.ensureFiscalPayment(x.dataset.paymentNote);p.notes=x.value;this._fiscalPaymentDirty=true;}));
+      el.querySelectorAll('[data-payment-allocation]').forEach(x=>x.addEventListener('input',()=>{const a=this.ensureFiscalPaymentAllocation(x.dataset.paymentMonth,x.dataset.fundingCode);a.amount=Number(x.value||0);this._fiscalPaymentDirty=true;const fund=this.fiscalFundingBreakdown(x.dataset.paymentMonth,false);if(x.dataset.fundingCode==='ahtf'){x.classList.toggle('fiscal-over',Number(x.value||0)>fund.eligible+0.005);x.title=Number(x.value||0)>fund.eligible+0.005?'AHTF allocation exceeds AHTF-eligible costs for this invoice.':'';}this.refreshFiscalPaymentLive();}));
+      el.querySelector('#btn-save-fiscal-payments')?.addEventListener('click',()=>this.saveFiscalPaymentTracking());
+    }
+  };
+
+  window.addEventListener('beforeunload',e=>{if(App._fiscalPaymentDirty){e.preventDefault();e.returnValue='';return '';}});
 })();
 
 document.addEventListener('DOMContentLoaded', () => App.init());
