@@ -9657,7 +9657,11 @@ const App = {
       const counted=exits.filter(c=>!app.isDeceasedExit(c));
       const permanent=counted.filter(c=>app.isPermanentExit(c));
       const nonPermanent=counted.filter(c=>!app.isPermanentExit(c));
-      const psh=permanent.filter(c=>String(c.exit_destination_type||'')==='Permanent Supportive Housing');
+      // LOS to permanent housing should use the same set of permanent-housing
+      // placements counted by the contract outcome logic. Restricting this to the
+      // literal "Permanent Supportive Housing" destination caused valid permanent
+      // placements recorded under other permanent destination labels to be excluded.
+      const permanentPlacements=permanent;
       const unknown=counted.filter(c=>app.exitOutcomeBand(c)==='Unstable / Unknown');
       const los=c=>{
         const s=app.dateOnly(c.entry_date), e=app.dateOnly(c.exit_date);
@@ -9671,10 +9675,12 @@ const App = {
         ['Other Non-Permanent',counted.filter(c=>app.exitOutcomeBand(c)==='Other Non-Permanent').length,'']
       ];
       return {
-        exits, counted, permanent, nonPermanent, psh, unknown,
+        exits, counted, permanent, nonPermanent, permanentPlacements, unknown,
         phRate:this.pct(permanent.length,counted.length),
         unknownRate:this.pct(unknown.length,counted.length),
-        avgPshLos:this.avg(psh.map(los)),
+        avgPermanentLos:this.avg(permanentPlacements.map(los)),
+        // Backward-compatible alias for any code that still references avgPshLos.
+        avgPshLos:this.avg(permanentPlacements.map(los)),
         avgNonPermanentLos:this.avg(nonPermanent.map(los)),
         bands
       };
@@ -9761,7 +9767,7 @@ const App = {
       ['Total Exits',h.exits.length,'All YTD exits'],
       ['Permanent Housing',h.permanent.length,h.counted.length?`${h.phRate}% of counted exits`:'No counted exits'],
       ['Non-Permanent',h.nonPermanent.length,'Excludes deceased exits'],
-      ['Avg LOS → PSH',h.avgPshLos==null?'—':h.avgPshLos+' d',h.psh.length?`${h.psh.length} PSH exit${h.psh.length===1?'':'s'}`:'No PSH exits YTD'],
+      ['Avg LOS → Permanent Housing',h.avgPermanentLos==null?'—':h.avgPermanentLos+' d',h.permanentPlacements.length?`${h.permanentPlacements.length} permanent housing placement${h.permanentPlacements.length===1?'':'s'}`:'No permanent housing exits YTD'],
       ['Avg LOS → Non-Permanent',h.avgNonPermanentLos==null?'—':h.avgNonPermanentLos+' d',h.nonPermanent.length?`${h.nonPermanent.length} non-permanent exit${h.nonPermanent.length===1?'':'s'}`:'No non-permanent exits'],
       ['Homelessness / Unknown',h.unknownRate==null?'—':h.unknownRate+'%',h.counted.length?`${h.unknown.length} of ${h.counted.length} counted exits`:'No counted exits']
     ];
