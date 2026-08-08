@@ -1152,6 +1152,79 @@ th.sortable:hover { color:var(--navy); }
 @media(max-width:480px){.fiscal-city-kpis{grid-template-columns:1fr}}
 
 </style>
+
+<style id="ytd-contract-dashboard-styles">
+/* YTD contract-performance dashboard */
+.dashboard-ytd-intro{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.dashboard-ytd-period{font-size:12px;color:var(--gray-500);margin-top:4px}
+.ytd-kpi-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:20px}
+.ytd-kpi{background:#fff;border:1px solid var(--border);border-radius:14px;padding:15px;box-shadow:var(--shadow);min-width:0}
+.ytd-kpi.primary{border-top:4px solid var(--navy)}
+.ytd-kpi.good{border-top:4px solid var(--green)}
+.ytd-kpi.warn{border-top:4px solid var(--amber)}
+.ytd-kpi.bad{border-top:4px solid var(--red)}
+.ytd-kpi .label{font-size:10.5px;font-weight:800;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em}
+.ytd-kpi .value{font-size:29px;line-height:1.05;font-weight:800;color:var(--navy);margin-top:7px;font-variant-numeric:tabular-nums}
+.ytd-kpi .sub{font-size:11.5px;color:var(--gray-500);margin-top:5px;line-height:1.35}
+.ytd-kpi .micro{font-size:10.5px;color:var(--gray-400);margin-top:4px}
+.dashboard-section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:24px 0 10px}
+.dashboard-section-head h2{font-size:15px;color:var(--navy);margin:0;font-weight:800}
+.dashboard-section-head .hint{font-size:11.5px;color:var(--gray-400);text-align:right}
+.contract-goal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.contract-goal{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;box-shadow:var(--shadow)}
+.contract-goal-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.contract-goal-name{font-weight:800;color:var(--navy);font-size:12.5px}
+.contract-goal-basis{font-size:10.5px;color:var(--gray-400);margin-top:2px}
+.contract-goal-actual{font-weight:850;color:var(--navy);white-space:nowrap;font-variant-numeric:tabular-nums}
+.contract-goal-track{height:8px;border-radius:999px;background:var(--gray-100);margin-top:10px;overflow:hidden;position:relative}
+.contract-goal-fill{height:100%;background:var(--navy);border-radius:999px}
+.contract-goal-fill.met{background:var(--green)}
+.contract-goal-foot{display:flex;justify-content:space-between;gap:10px;margin-top:7px;font-size:10.5px;color:var(--gray-500)}
+.housing-outcome-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.outcome-stat{background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px;box-shadow:var(--shadow)}
+.outcome-stat .label{font-size:10px;font-weight:800;color:var(--gray-400);text-transform:uppercase;letter-spacing:.04em}
+.outcome-stat .value{font-size:25px;font-weight:850;color:var(--navy);margin-top:5px;font-variant-numeric:tabular-nums}
+.outcome-stat .sub{font-size:10.5px;color:var(--gray-500);margin-top:3px;line-height:1.3}
+.outcome-distribution{background:#fff;border:1px solid var(--border);border-radius:12px;padding:15px;box-shadow:var(--shadow)}
+.outcome-dist-row{display:grid;grid-template-columns:minmax(165px,1.5fr) 3fr 70px;gap:10px;align-items:center;margin:9px 0}
+.outcome-dist-label{font-size:11.5px;color:var(--gray-600)}
+.outcome-dist-track{height:9px;background:var(--gray-100);border-radius:999px;overflow:hidden}
+.outcome-dist-fill{height:100%;background:var(--navy);border-radius:999px}
+.outcome-dist-fill.positive{background:var(--green)}
+.outcome-dist-fill.unstable{background:var(--red)}
+.outcome-dist-fill.temporary{background:var(--amber)}
+.outcome-dist-value{text-align:right;font-size:11.5px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums}
+.demographics-dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.demo-dashboard-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:15px;box-shadow:var(--shadow);min-width:0}
+.demo-dashboard-card.full{grid-column:1/-1}
+.demo-dashboard-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:11px}
+.demo-dashboard-title{font-weight:800;color:var(--navy);font-size:12.5px}
+.demo-dashboard-meta{font-size:10.5px;color:var(--gray-400);text-align:right}
+.demo-dashboard-hero{display:flex;align-items:baseline;gap:7px;margin:5px 0 12px}
+.demo-dashboard-hero .big{font-size:28px;font-weight:850;color:var(--navy)}
+.demo-dashboard-hero .small{font-size:11px;color:var(--gray-500)}
+.demo-dashboard-row{display:grid;grid-template-columns:minmax(120px,1.4fr) 2.4fr 74px;gap:9px;align-items:center;margin:7px 0}
+.demo-dashboard-label{font-size:11px;color:var(--gray-600);overflow:hidden;text-overflow:ellipsis}
+.demo-dashboard-track{height:8px;border-radius:999px;background:var(--gray-100);overflow:hidden}
+.demo-dashboard-fill{height:100%;border-radius:999px;background:var(--navy)}
+.demo-dashboard-value{text-align:right;font-size:10.5px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums}
+.demo-mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.demo-mini{border:1px solid var(--gray-100);background:var(--off-white);border-radius:10px;padding:10px}
+.demo-mini .name{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--gray-400);font-weight:800}
+.demo-mini .number{font-size:23px;color:var(--navy);font-weight:850;margin-top:3px}
+.demo-mini .note{font-size:10.5px;color:var(--gray-500);margin-top:2px}
+.ops-detail-dashboard{margin-top:24px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.ops-detail-dashboard>summary{cursor:pointer;padding:14px 16px;font-size:12.5px;font-weight:800;color:var(--navy);list-style:none;display:flex;justify-content:space-between;align-items:center}
+.ops-detail-dashboard>summary::-webkit-details-marker{display:none}
+.ops-detail-dashboard>summary:after{content:'+';font-size:18px;color:var(--gray-400)}
+.ops-detail-dashboard[open]>summary:after{content:'−'}
+.ops-detail-dashboard-body{padding:0 16px 16px;border-top:1px solid var(--gray-100)}
+.ops-detail-dashboard-body>.section-label{margin-top:18px}
+@media(max-width:1120px){.ytd-kpi-grid,.housing-outcome-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:800px){.ytd-kpi-grid,.housing-outcome-grid,.contract-goal-grid,.demographics-dashboard-grid{grid-template-columns:1fr 1fr}.demo-dashboard-card.full{grid-column:1/-1}}
+@media(max-width:560px){.ytd-kpi-grid,.housing-outcome-grid,.contract-goal-grid,.demographics-dashboard-grid,.demo-mini-grid{grid-template-columns:1fr}.demo-dashboard-card.full{grid-column:auto}.outcome-dist-row,.demo-dashboard-row{grid-template-columns:1fr}.outcome-dist-value,.demo-dashboard-value{text-align:left}.dashboard-section-head .hint{text-align:left}}
+</style>
+
 </head>
 
 <body>
@@ -9531,6 +9604,217 @@ const App = {
 
   window.addEventListener('beforeunload',e=>{if(App._fiscalPaymentDirty){e.preventDefault();e.returnValue='';return '';}});
 })();
+
+
+
+// ---------- YTD contract-performance dashboard redesign ----------
+/* Dashboard module: uses existing client/report data and does not add database fields. */
+(function(){
+  const DashboardYTD = {
+    throughDate(app){
+      const today=app.localDate();
+      if(today < app.fyStart()) return app.fyStart();
+      if(today > app.fyEnd()) return app.fyEnd();
+      return today;
+    },
+    pct(n,d){ return d ? Math.round((Number(n||0)/Number(d))*100) : null; },
+    avg(vals){ const a=vals.filter(v=>Number.isFinite(v)&&v>0); return a.length ? Math.round(a.reduce((s,v)=>s+v,0)/a.length) : null; },
+    ytdClients(app){
+      const start=app.fyStart(), end=this.throughDate(app);
+      return (app.data.clients||[]).filter(c=>{
+        const entry=app.dateOnly(c.entry_date), exit=app.dateOnly(c.exit_date);
+        return entry && entry<=end && (!exit || exit>=start);
+      });
+    },
+    ytdExits(app){
+      const start=app.fyStart(), end=this.throughDate(app);
+      return (app.data.clients||[]).filter(c=>{
+        const d=app.dateOnly(c.exit_date);
+        return d && d>=start && d<=end;
+      });
+    },
+    occupancy(app){
+      const start=app.fyStart(), end=this.throughDate(app);
+      if(!start||!end||end<start) return {occupied:0,available:0,rate:null};
+      const occupied=(app.data.clients||[]).reduce((sum,c)=>sum+Number(app.clientBedNights(c,start,end)||0),0);
+      const available=Number(app.bedCapacity()||0)*Number(app.daysInclusive(start,end)||0);
+      return {occupied,available,rate:this.pct(occupied,available)};
+    },
+    retention(app){
+      const start=app.fyStart(), end=this.throughDate(app);
+      const rows=(app.expectedFollowUps?app.expectedFollowUps():[]).filter(f=>{
+        const c=f.client||{};
+        const exit=app.dateOnly(c.exit_date);
+        return f.followup_type==='6-month' && exit && exit>=start && exit<=end && app.dateOnly(f.due_date)<=end;
+      });
+      const eligible=rows.length;
+      const completed=rows.filter(f=>(f.status||'').toLowerCase()==='completed' && f.housing_status);
+      const stable=completed.filter(f=>['Still in permanent housing','Moved but still housed'].includes(f.housing_status)).length;
+      return {eligible,completed:completed.length,stable,rate:completed.length?this.pct(stable,completed.length):null};
+    },
+    housing(app){
+      const exits=this.ytdExits(app);
+      const counted=exits.filter(c=>!app.isDeceasedExit(c));
+      const permanent=counted.filter(c=>app.isPermanentExit(c));
+      const nonPermanent=counted.filter(c=>!app.isPermanentExit(c));
+      const psh=permanent.filter(c=>String(c.exit_destination_type||'')==='Permanent Supportive Housing');
+      const unknown=counted.filter(c=>app.exitOutcomeBand(c)==='Unstable / Unknown');
+      const los=c=>{
+        const s=app.dateOnly(c.entry_date), e=app.dateOnly(c.exit_date);
+        return s&&e ? app.daysInclusive(s,e) : null;
+      };
+      const bands=[
+        ['Permanent Housing',counted.filter(c=>app.exitOutcomeBand(c)==='Permanent Housing').length,'positive'],
+        ['Positive Non-Permanent',counted.filter(c=>app.exitOutcomeBand(c)==='Positive Non-Permanent').length,'positive'],
+        ['Temporary / Institutional',counted.filter(c=>app.exitOutcomeBand(c)==='Temporary / Institutional').length,'temporary'],
+        ['Homelessness / Unknown',unknown.length,'unstable'],
+        ['Other Non-Permanent',counted.filter(c=>app.exitOutcomeBand(c)==='Other Non-Permanent').length,'']
+      ];
+      return {
+        exits, counted, permanent, nonPermanent, psh, unknown,
+        phRate:this.pct(permanent.length,counted.length),
+        unknownRate:this.pct(unknown.length,counted.length),
+        avgPshLos:this.avg(psh.map(los)),
+        avgNonPermanentLos:this.avg(nonPermanent.map(los)),
+        bands
+      };
+    },
+    demographics(app){
+      const clients=this.ytdClients(app), total=clients.length;
+      const countBy=(fn)=>{
+        const m=new Map();
+        clients.forEach(c=>{const k=fn(c); if(!k)return; m.set(k,(m.get(k)||0)+1);});
+        return [...m.entries()].map(([label,count])=>({label,count}));
+      };
+      const age=app.ageBands.map(label=>({label,count:clients.filter(c=>app.ageBandForClient(c)===label).length}));
+      const race=countBy(c=>app.ethnicityKeyForClient(c)||'Unknown');
+      const gender=countBy(c=>{
+        const g=String(c.gender||'').trim();
+        if(!g) return 'Not recorded';
+        if(g==='Woman (Girl, if child)') return 'Woman';
+        if(g==='Man (Boy, if child)') return 'Man';
+        if(g==='Client doesn’t know'||g==='Client prefers not to answer'||g==='Data not collected') return 'Unknown / not reported';
+        return g;
+      });
+      const trans=countBy(c=>String(c.transgender_status||'').trim()||'Not recorded');
+      const lang=countBy(c=>app.languageKeyForClient(c)||'Other / not recorded');
+      const yesCount=(field)=>clients.filter(c=>String(c[field]||'').toLowerCase()==='yes').length;
+      const recordedCount=(field)=>clients.filter(c=>String(c[field]||'').trim()).length;
+      const transYes=clients.filter(c=>String(c.transgender_status||'').toLowerCase()==='yes').length;
+      const transRecorded=clients.filter(c=>String(c.transgender_status||'').trim()).length;
+      return {clients,total,age,race,gender,trans,lang,transYes,transRecorded,disabilityYes:yesCount('disability'),disabilityRecorded:recordedCount('disability'),veteranYes:yesCount('veteran'),veteranRecorded:recordedCount('veteran')};
+    },
+    performance(app){
+      const through=this.throughDate(app), served=this.ytdClients(app).length, housing=this.housing(app), occ=this.occupancy(app), ret=this.retention(app);
+      const phTarget=Math.min(12,Math.max(1,Math.round(served*.30)));
+      const current=(app.data.clients||[]).filter(c=>app.clientStatus(c,through)==='Active').length;
+      return {through,served,housing,occ,ret,phTarget,current,capacity:app.bedCapacity()};
+    }
+  };
+  window.DashboardYTD=DashboardYTD;
+
+  App.dashboardBarRows = function(rows,total,opts={}){
+    let list=(rows||[]).filter(r=>Number(r.count||0)>0);
+    if(opts.sort!==false) list=list.sort((a,b)=>b.count-a.count);
+    if(opts.limit) list=list.slice(0,opts.limit);
+    if(!list.length) return '<div class="field-hint">No data recorded yet.</div>';
+    const denom=Number(total||0);
+    return list.map(r=>{
+      const pct=denom?Math.round((Number(r.count||0)/denom)*100):0;
+      return `<div class="demo-dashboard-row"><div class="demo-dashboard-label" title="${this.escape(r.label)}">${this.escape(r.label)}</div><div class="demo-dashboard-track"><div class="demo-dashboard-fill" style="width:${Math.min(100,pct)}%"></div></div><div class="demo-dashboard-value">${Number(r.count||0)} · ${pct}%</div></div>`;
+    }).join('');
+  };
+
+  App.renderYtdContractPerformance = function(q=this.currentQuarter){
+    const p=DashboardYTD.performance(this), h=p.housing;
+    const phProgress=p.phTarget?Math.round((h.permanent.length/p.phTarget)*100):null;
+    const cards=[
+      {label:'People Served YTD',value:p.served,sub:'Unduplicated participants',cls:'primary'},
+      {label:'Permanent Housing Exits',value:`${h.permanent.length} / ${p.phTarget}`,sub:`${Math.min(100,phProgress||0)}% of current contract-year placement benchmark`,cls:phProgress>=100?'good':phProgress>=70?'warn':'primary'},
+      {label:'Permanent Housing Share',value:h.phRate==null?'—':h.phRate+'%',sub:h.counted.length?`${h.permanent.length} of ${h.counted.length} counted exits`:'No counted exits yet',cls:'primary'},
+      {label:'Occupancy YTD',value:p.occ.rate==null?'—':p.occ.rate+'%',sub:`${Number(p.occ.occupied||0).toLocaleString()} of ${Number(p.occ.available||0).toLocaleString()} bed nights`,cls:p.occ.rate>=90?'good':p.occ.rate>=80?'warn':'primary'},
+      {label:'6-Month Retention',value:p.ret.rate==null?'—':p.ret.rate+'%',sub:p.ret.completed?`${p.ret.stable} of ${p.ret.completed} completed checks still housed`:p.ret.eligible?`${p.ret.eligible} eligible check${p.ret.eligible===1?'':'s'} · none completed`:'No placements have reached 6 months',cls:p.ret.rate==null?'primary':p.ret.rate>=80?'good':p.ret.rate>=60?'warn':'bad'},
+      {label:'Current Census',value:`${p.current} / ${p.capacity}`,sub:`${Math.max(0,p.capacity-p.current)} open bed${Math.max(0,p.capacity-p.current)===1?'':'s'}`,cls:'primary'}
+    ];
+    return `<div class="ytd-kpi-grid">${cards.map(c=>`<div class="ytd-kpi ${c.cls}"><div class="label">${this.escape(c.label)}</div><div class="value">${c.value}</div><div class="sub">${c.sub}</div></div>`).join('')}</div>`;
+  };
+
+  App.renderYtdContractGoals = function(q=this.currentQuarter){
+    const p=DashboardYTD.performance(this), s=this.reportScope(q), r=this.data.reports[q]||{};
+    const servicesActual=Number(s.suppServicesEngaged||0), servicesTarget=Math.max(1,Number(s.residentsServed||s.activeResidents||0));
+    const incomeActual=Number(s.incomeIncrease||0)+Number(s.incomeMaintained||0), incomeTarget=Math.max(1,Number(s.residentsServed||s.activeResidents||0));
+    const goals=[
+      {name:'Permanent Housing Placements',basis:'Year to date · 30% of people served, capped at 12',actual:p.housing.permanent.length,target:p.phTarget,display:`${p.housing.permanent.length} of ${p.phTarget}`},
+      {name:'Occupancy / Utilization',basis:'Year to date · bed nights occupied of available',actual:p.occ.occupied,target:p.occ.available,display:p.occ.rate==null?'—':p.occ.rate+'%'},
+      {name:'Supportive Services Engagement',basis:`Current reporting quarter · ${q}`,actual:servicesActual,target:servicesTarget,display:`${servicesActual} of ${servicesTarget}`},
+      {name:'Income / Benefits Stability',basis:`Current reporting quarter · ${q}`,actual:incomeActual,target:incomeTarget,display:`${incomeActual} of ${incomeTarget}`}
+    ];
+    if(p.ret.eligible>0 || p.ret.completed>0){
+      goals.push({name:'Housing Retention at 6 Months',basis:'Year to date · completed 6-month checks',actual:p.ret.stable,target:Math.max(1,p.ret.completed),display:p.ret.completed?`${p.ret.stable} of ${p.ret.completed}`:`0 of ${p.ret.eligible} eligible`});
+    }
+    return `<div class="contract-goal-grid">${goals.map(g=>{const pct=g.target?Math.round((Number(g.actual||0)/Number(g.target))*100):null;const capped=Math.min(100,Math.max(0,pct||0));return `<div class="contract-goal"><div class="contract-goal-top"><div><div class="contract-goal-name">${this.escape(g.name)}</div><div class="contract-goal-basis">${this.escape(g.basis)}</div></div><div class="contract-goal-actual">${this.escape(g.display)}</div></div><div class="contract-goal-track"><div class="contract-goal-fill ${pct>=100?'met':''}" style="width:${capped}%"></div></div><div class="contract-goal-foot"><span>${pct==null?'No denominator yet':pct+'% of benchmark'}</span><span>${pct>=100?'Met / exceeded':'In progress'}</span></div></div>`;}).join('')}</div>`;
+  };
+
+  App.renderYtdHousingOutcomes = function(q=this.currentQuarter){
+    const h=DashboardYTD.housing(this);
+    const stats=[
+      ['Total Exits',h.exits.length,'All YTD exits'],
+      ['Permanent Housing',h.permanent.length,h.counted.length?`${h.phRate}% of counted exits`:'No counted exits'],
+      ['Non-Permanent',h.nonPermanent.length,'Excludes deceased exits'],
+      ['Avg LOS → PSH',h.avgPshLos==null?'—':h.avgPshLos+' d',h.psh.length?`${h.psh.length} PSH exit${h.psh.length===1?'':'s'}`:'No PSH exits YTD'],
+      ['Avg LOS → Non-Permanent',h.avgNonPermanentLos==null?'—':h.avgNonPermanentLos+' d',h.nonPermanent.length?`${h.nonPermanent.length} non-permanent exit${h.nonPermanent.length===1?'':'s'}`:'No non-permanent exits'],
+      ['Homelessness / Unknown',h.unknownRate==null?'—':h.unknownRate+'%',h.counted.length?`${h.unknown.length} of ${h.counted.length} counted exits`:'No counted exits']
+    ];
+    const denom=h.counted.length||1;
+    const dist=h.bands.filter(x=>x[1]>0).map(([label,count,cls])=>{const pct=Math.round((count/denom)*100);return `<div class="outcome-dist-row"><div class="outcome-dist-label">${this.escape(label)}</div><div class="outcome-dist-track"><div class="outcome-dist-fill ${cls}" style="width:${Math.min(100,pct)}%"></div></div><div class="outcome-dist-value">${count} · ${pct}%</div></div>`;}).join('') || '<div class="field-hint">No YTD exits recorded yet.</div>';
+    return `<div class="housing-outcome-grid">${stats.map(([label,value,sub])=>`<div class="outcome-stat"><div class="label">${this.escape(label)}</div><div class="value">${value}</div><div class="sub">${this.escape(sub)}</div></div>`).join('')}</div><div class="outcome-distribution"><div class="demo-dashboard-title">Exit Destination Distribution</div><div class="field-hint" style="margin:3px 0 10px">Percentages use counted exits and exclude deceased exits.</div>${dist}</div>`;
+  };
+
+  App.renderYtdDemographics = function(q=this.currentQuarter){
+    const d=DashboardYTD.demographics(this), total=d.total||0;
+    const yesPct=n=>total?Math.round((n/total)*100):0;
+    const ageRows=this.dashboardBarRows(d.age,total,{sort:false});
+    const raceRows=this.dashboardBarRows(d.race,total);
+    const genderRows=this.dashboardBarRows(d.gender,total);
+    const transRows=this.dashboardBarRows(d.trans,total,{sort:false});
+    const langRows=this.dashboardBarRows(d.lang,total);
+    return `<div class="demographics-dashboard-grid">
+      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Age</div><div class="field-hint">Year-to-date participants</div></div><div class="demo-dashboard-meta">n=${total}</div></div>${ageRows}</div>
+      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Race / Ethnicity</div><div class="field-hint">Count and share of people served YTD</div></div><div class="demo-dashboard-meta">n=${total}</div></div>${raceRows}</div>
+      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Gender Identity</div><div class="field-hint">Uses the identity recorded on the client intake record</div></div><div class="demo-dashboard-meta">n=${total}</div></div>${genderRows}</div>
+      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Transgender Experience</div><div class="field-hint">Tracked separately from gender identity</div></div><div class="demo-dashboard-meta">${d.transRecorded} of ${total} recorded</div></div><div class="demo-dashboard-hero"><span class="big">${d.transYes}</span><span class="small">trans-identifying / transgender-experience “Yes” · ${yesPct(d.transYes)}% of people served YTD</span></div>${transRows}</div>
+      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Primary Language</div><div class="field-hint">Year-to-date participants</div></div><div class="demo-dashboard-meta">n=${total}</div></div>${langRows}</div>
+      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Additional Participant Characteristics</div><div class="field-hint">Based on intake records</div></div></div><div class="demo-mini-grid"><div class="demo-mini"><div class="name">Living with a Disability</div><div class="number">${d.disabilityYes}</div><div class="note">${yesPct(d.disabilityYes)}% of people served · ${d.disabilityRecorded}/${total} recorded</div></div><div class="demo-mini"><div class="name">Veterans</div><div class="number">${d.veteranYes}</div><div class="note">${yesPct(d.veteranYes)}% of people served · ${d.veteranRecorded}/${total} recorded</div></div></div></div>
+    </div>`;
+  };
+
+  App.renderYtdOperationalDetail = function(q=this.currentQuarter){
+    return `<details class="ops-detail-dashboard"><summary>Operational &amp; Reporting Detail</summary><div class="ops-detail-dashboard-body"><h2 class="section-label">Early Warning Indicators — YTD</h2>${this.renderRiskIndicators(q,'ytd')}<h2 class="section-label">Daily Work</h2>${this.renderTodayPanel(q)}<h2 class="section-label">Submission &amp; Data Quality</h2><div class="content-grid"><div>${this.renderReadinessPanel(q)}</div><div>${this.renderDataCheckPanel(q)}${this.renderActivityLog(q)}</div></div></div></details>`;
+  };
+
+  App.renderDashboard = function(){
+    const el=document.getElementById('view-dashboard');
+    const q=this.currentQuarter;
+    const through=DashboardYTD.throughDate(this);
+    const p=DashboardYTD.performance(this);
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">${this.isAdmin()?'City Admin Dashboard':'Program Dashboard'}</h1><div class="page-subtitle">${this.escape(this.programName())} · ${this.escape(this.fyLabel())} · Year-to-date contract performance</div></div><div style="display:flex;gap:10px;"><button class="btn btn-ghost btn-sm" id="btn-print-current">Print / Save PDF</button><button class="btn btn-gold" data-open="quarterly">${this.bundleStatus(q)==='accepted'?'View Report':'Start / Continue Report'}</button></div></div>
+      <div class="dashboard-ytd-intro"><div><div class="section-label" style="margin:0">Contract Performance — Year to Date</div><div class="dashboard-ytd-period">${this.escape(ContractPeriods.longDate(ContractPeriods.parse(this.fyStart())))} – ${this.escape(this.formatDate(through))}</div></div>${this.renderAttentionChip(q)}</div>
+      ${this.renderYtdContractPerformance(q)}
+      <div class="dashboard-section-head"><h2>Contract Goals &amp; Progress</h2><div class="hint">YTD measures are cumulative; services and income remain current-quarter measures to match the contract-reporting basis.</div></div>
+      ${this.renderYtdContractGoals(q)}
+      <div class="dashboard-section-head"><h2>Housing Outcomes — Year to Date</h2><div class="hint">Length of stay is calculated from client entry through recorded exit.</div></div>
+      ${this.renderYtdHousingOutcomes(q)}
+      <div class="dashboard-section-head"><h2>Participant Demographics — Year to Date</h2><div class="hint">Unduplicated participants served during the contract year.</div></div>
+      ${this.renderYtdDemographics(q)}
+      ${this.renderYtdOperationalDetail(q)}`;
+    this.bindSubmitBundleButton(el);
+    el.querySelectorAll('[data-open]').forEach(btn=>btn.addEventListener('click',()=>this.openForm(btn.dataset.open)));
+    el.querySelectorAll('[data-attention-open]').forEach(btn=>btn.addEventListener('click',()=>this.openForm(btn.dataset.attentionOpen)));
+    el.querySelectorAll('[data-view-shortcut]').forEach(btn=>btn.addEventListener('click',()=>this.showView(btn.dataset.viewShortcut)));
+    el.querySelector('#btn-print-current')?.addEventListener('click',()=>this.printReport(q));
+  };
+})();
+
 
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
