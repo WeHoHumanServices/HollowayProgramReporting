@@ -1228,7 +1228,7 @@ th.sortable:hover { color:var(--navy); }
         </div>
         <div class="sidebar-section">
           <div class="sidebar-label">Fiscal</div>
-          <div class="sidebar-item" data-view="fiscal"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h3M14 12h3M7 16h3M14 16h3"/></svg>Fiscal Reporting</div>
+          <div class="sidebar-item" id="nav-fiscal" data-view="fiscal" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h3M14 12h3M7 16h3M14 16h3"/></svg>Fiscal Reporting</div>
         </div>
       </nav>
     </aside>
@@ -2174,6 +2174,10 @@ const App = {
     if (pErr) throw pErr;
     this.program = programs?.[0] || null;
     if (!this.program) throw new Error((CONFIG.PROGRAM_NAME || 'Program') + ' not found.');
+    // Fiscal visibility is deliberately separate from the existing program role.
+    // Existing agency users default to Support Staff; only users explicitly
+    // designated Agency Management can see fiscal data. City admins always can.
+    await this.loadAgencyGroup?.();
     // Must happen before loadAll(): every query filters on this.fiscalYear,
     // and the quarter map has to exist before any view renders.
     await this.loadContractPeriods();
@@ -2197,7 +2201,7 @@ const App = {
     // Agency reporters, editors, and signers can edit incomplete/draft/returned quarters.
     // City admins review rather than edit report content.
     if (this.isAdmin()) return false;
-    if (this.hasRole('agency_reporter','reporter','agency_editor','agency_signer','agency_admin')) return true;
+    if (this.hasRole('agency_reporter','reporter','agency_editor','agency_signer','agency_admin','agency_support','agency_management')) return true;
     // Fallback: authenticated agency user with a program association but no explicit access_type.
     const hasNoRole = !this.profile?.access_type && !this.profile?.role;
     const isAgencyUser = !!this.profile?.program_id || !!this.profile?.organization;
@@ -2205,7 +2209,7 @@ const App = {
   },
   canSign() {
     // Allow agency reporters/signers/admins to submit in this single-program workflow.
-    return this.hasRole('agency_reporter','reporter','agency_signer','agency_admin','city_admin');
+    return this.hasRole('agency_reporter','reporter','agency_signer','agency_admin','agency_support','agency_management','city_admin');
   },
   canCityReview() {
     return this.isAdmin();
@@ -2458,9 +2462,11 @@ const App = {
   },
 
   renderSidebarForRole() {
-    document.getElementById('role-nav-label').textContent = this.isAdmin() ? 'City Admin' : 'Agency Workspace';
+    document.getElementById('role-nav-label').textContent = this.isAdmin() ? 'City Admin' : (this.agencyGroup === 'management' ? 'Agency Management' : 'Agency Support Staff');
     document.getElementById('nav-review').style.display = this.isAdmin() ? 'flex' : 'none';
     document.getElementById('nav-access').style.display = this.isAdmin() ? 'flex' : 'none';
+    const fiscalNav = document.getElementById('nav-fiscal');
+    if (fiscalNav) fiscalNav.style.display = this.canViewFiscal?.() ? 'flex' : 'none';
     // Hide form actions in the sidebar from non-editors so unauthorized users
     // don't see UI they can't use (rather than rendering then no-op'ing).
     const showForms = this.canEditQuarter();
@@ -4225,7 +4231,8 @@ const App = {
     document.getElementById('au-email').value = u.email || '';
     document.getElementById('au-name').value = u.full_name || '';
     document.getElementById('au-org').value = u.organization || '';
-    document.getElementById('au-access').value = u.access_type || u.role || 'agency_reporter';
+    const isCity = u.access_type === 'city_admin' || u.role === 'city_admin';
+    document.getElementById('au-access').value = isCity ? 'city_admin' : (u.agency_group === 'management' ? 'agency_management' : 'agency_support');
     document.getElementById('au-active').value = String(u.active !== false);
   },
 
@@ -4233,13 +4240,22 @@ const App = {
     const email = document.getElementById('au-email').value.trim().toLowerCase();
     const full_name = document.getElementById('au-name').value.trim();
     const organization = document.getElementById('au-org').value.trim() || this.agencyName();
-    const access_type = document.getElementById('au-access').value;
+    const selectedGroup = document.getElementById('au-access').value;
     const active = document.getElementById('au-active').value === 'true';
     if (!email || !full_name) { document.getElementById('au-msg').textContent = 'Email and name are required.'; return; }
-    const role = access_type === 'city_admin' ? 'city_admin' : 'reporter';
-    const program_id = access_type === 'city_admin' ? null : this.program.id;
-    const { error } = await this.sb.from('approved_users').upsert({ email, full_name, organization, access_type, role, active, program_id });
-    if (error) document.getElementById('au-msg').textContent = error.message;
+
+    const existing = this.data.approvedUsers.find(x => String(x.email||'').toLowerCase() === email);
+    const isCity = selectedGroup === 'city_admin';
+    // For agency users, preserve the existing underlying programmatic access
+    // role so changing Management/Support never changes their current program
+    // permissions. New agency users use the portal's standard reporter role.
+    const isManagement = selectedGroup === 'agency_management';
+    const access_type = isCity ? 'city_admin' : (isManagement ? 'agency_reporter' : ((existing?.access_type && existing.access_type !== 'city_admin') ? existing.access_type : 'agency_reporter'));
+    const role = isCity ? 'city_admin' : (isManagement ? 'reporter' : ((existing?.role && existing.role !== 'city_admin') ? existing.role : 'reporter'));
+    const program_id = isCity ? null : this.program.id;
+    const agency_group = isCity ? null : (isManagement ? 'management' : 'support');
+    const { error } = await this.sb.from('approved_users').upsert({ email, full_name, organization, access_type, role, active, program_id, agency_group });
+    if (error) document.getElementById('au-msg').textContent = /agency_group/i.test(error.message||'') ? 'Run the updated fiscal access migration first, then save this user again.' : error.message;
     else { document.getElementById('au-msg').textContent = 'Saved.'; await this.loadAll(); this.renderAccessManagement(); }
   },
 
@@ -7137,21 +7153,21 @@ const App = {
       email: u=>u.email||'',
       name: u=>u.full_name||'',
       org: u=>u.organization||'',
-      access: u=>u.access_type||u.role||'',
+      access: u=>(u.access_type==='city_admin'||u.role==='city_admin') ? 'City Admin' : (u.agency_group==='management' ? 'Agency Management' : 'Agency Support Staff'),
       status: u=>u.active ? 'Active' : 'Inactive'
     };
     const users = this.applySort(this.data.approvedUsers||[], this._accessSort, accessors);
     el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Access Management</h1><div class="page-subtitle">Manage approved ${this.escape(this.programName())} portal users.</div></div></div>
-      <div class="card" style="margin-bottom:18px;"><div class="card-header"><h2 class="card-title">Add or Update User</h2></div><div class="card-body">
+      <div class="card" style="margin-bottom:18px;"><div class="card-header"><div><h2 class="card-title">Add or Update User</h2><div class="field-hint">Agency Support Staff keep their existing program access but cannot see fiscal information. Agency Management receives the same program access plus fiscal reporting and invoice submission.</div></div></div><div class="card-body">
         <div class="form-row"><div class="field-group"><label class="field-label required">Email</label><input class="field-input" id="au-email" type="email"></div><div class="field-group"><label class="field-label required">Full Name</label><input class="field-input" id="au-name"></div></div>
         <div class="form-row three"><div class="field-group"><label class="field-label">Organization</label><input class="field-input" id="au-org" value="${this.escape(this.agencyName())}"></div>
-        <div class="field-group"><label class="field-label">Access Type</label><select class="field-select" id="au-access"><option value="agency_reporter">Agency Reporter</option><option value="agency_editor">Agency Editor</option><option value="agency_signer">Agency Signer</option><option value="viewer">Viewer</option><option value="city_admin">City Admin</option></select></div>
+        <div class="field-group"><label class="field-label">Role</label><select class="field-select" id="au-access"><option value="agency_support">Agency Support Staff</option><option value="agency_management">Agency Management</option><option value="city_admin">City Admin</option></select></div>
         <div class="field-group"><label class="field-label">Status</label><select class="field-select" id="au-active"><option value="true">Active</option><option value="false">Inactive</option></select></div></div>
         <button class="btn btn-gold" id="btn-save-user">Save User</button><span id="au-msg" style="font-size:12px;margin-left:10px;color:var(--gray-600);"></span>
       </div></div>
       <div class="card"><div class="card-header"><h2 class="card-title">Approved Users</h2><button class="btn btn-ghost btn-sm" id="btn-refresh-users">Refresh</button></div><div class="card-body" style="overflow-x:auto;">
-      <table class="svc-table"><thead><tr>${this.sortableHeader(this._accessSort,'email','Email')}${this.sortableHeader(this._accessSort,'name','Name')}${this.sortableHeader(this._accessSort,'org','Organization')}${this.sortableHeader(this._accessSort,'access','Access')}${this.sortableHeader(this._accessSort,'status','Status')}<th>Action</th></tr></thead><tbody>
-        ${users.map(u => `<tr><td>${this.escape(u.email)}</td><td>${this.escape(u.full_name)}</td><td>${this.escape(u.organization)}</td><td>${this.escape(u.access_type || u.role)}</td><td>${u.active ? 'Active' : 'Inactive'}</td>
+      <table class="svc-table"><thead><tr>${this.sortableHeader(this._accessSort,'email','Email')}${this.sortableHeader(this._accessSort,'name','Name')}${this.sortableHeader(this._accessSort,'org','Organization')}${this.sortableHeader(this._accessSort,'access','Role')}${this.sortableHeader(this._accessSort,'status','Status')}<th>Action</th></tr></thead><tbody>
+        ${users.map(u => `<tr><td>${this.escape(u.email)}</td><td>${this.escape(u.full_name)}</td><td>${this.escape(u.organization)}</td><td>${this.escape((u.access_type==='city_admin'||u.role==='city_admin') ? 'City Admin' : (u.agency_group==='management' ? 'Agency Management' : 'Agency Support Staff'))}</td><td>${u.active ? 'Active' : 'Inactive'}</td>
         <td><button class="btn btn-ghost btn-sm" data-edit-user="${this.escape(u.email)}">Edit</button></td></tr>`).join('')}
       </tbody></table></div></div>`;
     el.querySelector('#btn-save-user').addEventListener('click', () => this.saveApprovedUser());
@@ -8787,68 +8803,19 @@ const App = {
 
    Important calendar rule: fiscal invoicing is JULY-JUNE and is
    intentionally independent from the Oct-Sep program-reporting contract year.
-   The FY 2027 fallback below reproduces Exhibit F of Amendment No. 1.
-   Database tables (when installed) are the durable source of truth; the
-   fallback lets the screen render before the migration is run.
+   FY27 budget amounts are NOT embedded in this HTML. They live only in
+   Supabase behind fiscal RLS so Agency Support Staff cannot retrieve them by
+   inspecting page source. Only non-financial fiscal-calendar metadata remains.
    ============================================================ */
 (function(){
   const FY27 = {
+    // Non-financial calendar metadata only. Budget amounts and line-item values
+    // intentionally live only in Supabase so Agency Support Staff cannot obtain
+    // them by inspecting the public HTML source.
     fiscalYear: 'FY2026-27',
     budgetLabel: 'FY 2027',
     start: '2026-07-01',
-    end: '2027-06-30',
-    officialTotal: 1620284,
-    sourceName: 'Exhibit F: Holloway Interim Housing Program Budget--FY 2027, Amendment No. 1',
-    sourceTotals: {
-      salaries: 646717.72,
-      benefits: 191574,
-      personnel: 838292.09,
-      facility: 432505,
-      program: 324339,
-      administrative: 25149,
-      grand_total: 1620284
-    },
-    lines: [
-      {line_code:'SAL_RA_SUP',category:'Personnel',subcategory:'Salaries',line_name:'RA Supervisor',approved_budget:61306,fte_count:1.00,hourly_wage:31.93,sort_order:10},
-      {line_code:'SAL_DIR_PROG',category:'Personnel',subcategory:'Salaries',line_name:'Director of Programs',approved_budget:9508,fte_count:0.10,hourly_wage:49.52,sort_order:20},
-      {line_code:'SAL_DIR_OPS',category:'Personnel',subcategory:'Salaries',line_name:'Director of Operations',approved_budget:19015,fte_count:0.20,hourly_wage:49.52,sort_order:30},
-      {line_code:'SAL_PM',category:'Personnel',subcategory:'Salaries',line_name:'Program Manager',approved_budget:87842,fte_count:1.00,hourly_wage:45.75,sort_order:40},
-      {line_code:'SAL_RA_01',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 1',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:50},
-      {line_code:'SAL_RA_02',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 2',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:60},
-      {line_code:'SAL_RA_03',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 3',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:70},
-      {line_code:'SAL_RA_04',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 4',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:80},
-      {line_code:'SAL_RA_05',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 5',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:90},
-      {line_code:'SAL_RA_06',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 6',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:100},
-      {line_code:'SAL_RA_07',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 7',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:110},
-      {line_code:'SAL_RA_08',category:'Personnel',subcategory:'Salaries',line_name:'Resident Advisor 8',approved_budget:43507,fte_count:1.00,hourly_wage:22.66,sort_order:120},
-      {line_code:'SAL_FAC_MGR',category:'Personnel',subcategory:'Salaries',line_name:'Facilities Manager',approved_budget:11470,fte_count:0.20,hourly_wage:29.87,sort_order:130},
-      {line_code:'SAL_GCM',category:'Personnel',subcategory:'Salaries',line_name:'General Case Manager',approved_budget:51418,fte_count:1.00,hourly_wage:26.78,sort_order:140},
-      {line_code:'SAL_HNAV',category:'Personnel',subcategory:'Salaries',line_name:'Housing Navigation Case Manager',approved_budget:58102,fte_count:1.00,hourly_wage:30.26,sort_order:150},
-      {line_code:'BEN_FICA',category:'Personnel',subcategory:'Fringe Benefits',line_name:'FICA',approved_budget:49474,sort_order:210},
-      {line_code:'BEN_SUI',category:'Personnel',subcategory:'Fringe Benefits',line_name:'SUI',approved_budget:719,sort_order:220},
-      {line_code:'BEN_WC',category:'Personnel',subcategory:'Fringe Benefits',line_name:"Worker's Comp",approved_budget:22086,sort_order:230},
-      {line_code:'BEN_MED',category:'Personnel',subcategory:'Fringe Benefits',line_name:'Medical Insurance',approved_budget:86960,sort_order:240},
-      {line_code:'BEN_OTHER',category:'Personnel',subcategory:'Fringe Benefits',line_name:'Other (Detail)',approved_budget:32336,sort_order:250},
-      {line_code:'FAC_EQUIP',category:'Facility',subcategory:'Facility Expenses',line_name:'Equipment (Laptops, software, etc.)',approved_budget:7657,sort_order:310},
-      {line_code:'FAC_IT',category:'Facility',subcategory:'Facility Expenses',line_name:'Computer & IT',approved_budget:9307,sort_order:320},
-      {line_code:'FAC_SECURITY',category:'Facility',subcategory:'Facility Expenses',line_name:'Security',approved_budget:198252,sort_order:330},
-      {line_code:'FAC_UTIL',category:'Facility',subcategory:'Facility Expenses',line_name:'Utilities (Water, Electric, Internet, Sanitation)',approved_budget:78795,sort_order:340},
-      {line_code:'FAC_MR',category:'Facility',subcategory:'Facility Expenses',line_name:'Building M&R',approved_budget:16408,sort_order:350},
-      {line_code:'FAC_JAN',category:'Facility',subcategory:'Facility Expenses',line_name:'Janitorial Services',approved_budget:60255,sort_order:360},
-      {line_code:'FAC_PEST',category:'Facility',subcategory:'Facility Expenses',line_name:'Pest Control Services',approved_budget:6489,sort_order:370},
-      {line_code:'FAC_LAND',category:'Facility',subcategory:'Facility Expenses',line_name:'Landscaping',approved_budget:9734,sort_order:380},
-      {line_code:'FAC_INS',category:'Facility',subcategory:'Facility Expenses',line_name:'Insurance',approved_budget:32630,sort_order:390},
-      {line_code:'FAC_PRINT',category:'Facility',subcategory:'Facility Expenses',line_name:'Printer / Copier',approved_budget:12978,sort_order:400},
-      {line_code:'PROG_EMERG',category:'Program',subcategory:'Program Expenses',line_name:'Emergency Housing Supplies',approved_budget:28811,sort_order:510},
-      {line_code:'PROG_OFFICE',category:'Program',subcategory:'Program Expenses',line_name:'Office Supplies',approved_budget:8158,sort_order:520},
-      {line_code:'PROG_TRANS',category:'Program',subcategory:'Program Expenses',line_name:'Transportation',approved_budget:18540,sort_order:530},
-      {line_code:'PROG_FOOD',category:'Program',subcategory:'Program Expenses',line_name:'Food Costs',approved_budget:139050,sort_order:540},
-      {line_code:'PROG_SUPPORT',category:'Program',subcategory:'Program Expenses',line_name:'Contracted Supportive Services (outside of City provider network)',approved_budget:41715,sort_order:550},
-      {line_code:'PROG_CLINICAL',category:'Program',subcategory:'Program Expenses',line_name:'Clinical Services--contracted',approved_budget:69525,sort_order:560},
-      {line_code:'PROG_HR',category:'Program',subcategory:'Program Expenses',line_name:'Harm-reduction supplies & trainings (NARCAN, sharps containers, overdose ed.)',approved_budget:9270,sort_order:570},
-      {line_code:'PROG_INCENT',category:'Program',subcategory:'Program Expenses',line_name:'Incentives for Participation in Services (for clients)',approved_budget:9270,sort_order:580},
-      {line_code:'ADMIN_INDIRECT',category:'Administrative',subcategory:'Administrative',line_name:'Indirect Costs',approved_budget:25149,sort_order:610}
-    ]
+    end: '2027-06-30'
   };
   const DOC_TYPES = ['General Ledger','Payroll Register','Check Register','Receipt / Invoice','Allocation Worksheet','Other Backup'];
   const STORAGE_BUCKET = 'holloway-fiscal-documents';
@@ -8860,14 +8827,29 @@ const App = {
   App.fiscalTab = 'data';
   App._fiscalDirty = false;
 
+  App.loadAgencyGroup = async function(){
+    if(this.isAdmin()){ this.agencyGroup='city_admin'; return this.agencyGroup; }
+    // Secure default: existing users are Support Staff unless the database
+    // explicitly says Management. The RPC is security-definer and reads the
+    // authoritative approved_users record.
+    this.agencyGroup='support';
+    try {
+      const {data,error}=await this.sb.rpc('holloway_my_agency_group',{p_program_id:this.program?.id});
+      if(!error && ['management','support'].includes(String(data||''))) this.agencyGroup=String(data);
+    } catch(_) {}
+    if(this.profile) this.profile.agency_group=this.agencyGroup;
+    return this.agencyGroup;
+  };
+  App.canViewFiscal = function(){ return this.isAdmin() || this.agencyGroup==='management' || this.profile?.agency_group==='management'; };
+
   App.fiscalMoney = function(v){ return Number(v||0).toLocaleString('en-US',{style:'currency',currency:'USD',minimumFractionDigits:0,maximumFractionDigits:2}); };
   App.fiscalPct = function(v){ return Number.isFinite(v) ? `${Math.round(v*100)}%` : '—'; };
-  App.fiscalYearRecord = function(){ return (this.fiscal.years||[]).find(y=>y.fiscal_year===this.fiscalBudgetYear) || {...FY27, fiscal_year:FY27.fiscalYear, budget_label:FY27.budgetLabel, start_date:FY27.start, end_date:FY27.end, official_total:FY27.officialTotal, source_name:FY27.sourceName, source_totals:FY27.sourceTotals}; };
+  App.fiscalYearRecord = function(){ return (this.fiscal.years||[]).find(y=>y.fiscal_year===this.fiscalBudgetYear) || {fiscal_year:FY27.fiscalYear,budget_label:FY27.budgetLabel,start_date:FY27.start,end_date:FY27.end}; };
   App.fiscalYearStart = function(){ return this.dateOnly(this.fiscalYearRecord().start_date || FY27.start); };
   App.fiscalYearEnd = function(){ return this.dateOnly(this.fiscalYearRecord().end_date || FY27.end); };
   App.fiscalYearLabel = function(){ const y=this.fiscalYearRecord(); return y.budget_label || y.budgetLabel || this.fiscalBudgetYear; };
-  App.fiscalSourceTotals = function(){ const y=this.fiscalYearRecord(); return y.source_totals || y.sourceTotals || FY27.sourceTotals; };
-  App.fiscalOfficialTotal = function(){ const y=this.fiscalYearRecord(); return Number(y.official_total ?? y.officialTotal ?? this.fiscalSourceTotals().grand_total ?? 0); };
+  App.fiscalSourceTotals = function(){ const y=this.fiscalYearRecord(); return y.source_totals || {}; };
+  App.fiscalOfficialTotal = function(){ const y=this.fiscalYearRecord(); return Number(y.official_total ?? this.fiscalSourceTotals().grand_total ?? 0); };
 
   App.fiscalMonths = function(){
     const start = ContractPeriods.parse(this.fiscalYearStart());
@@ -8894,7 +8876,7 @@ const App = {
   App.fiscalMonthRecord = function(key=this.resolveFiscalMonth()){ return this.fiscalMonths().find(m=>m.key===key) || this.fiscalMonths()[0]; };
   App.fiscalMonthIndex = function(key=this.resolveFiscalMonth()){ return Math.max(0,this.fiscalMonths().findIndex(m=>m.key===key)); };
 
-  App.canEditFiscal = function(){ if(this.isAdmin()) return false; if(this.hasRole('agency_reporter','reporter','agency_editor','agency_signer','agency_admin')) return true; const hasNoRole=!this.profile?.access_type&&!this.profile?.role; return hasNoRole && (!!this.profile?.program_id || !!this.profile?.organization); };
+  App.canEditFiscal = function(){ return !this.isAdmin() && this.canViewFiscal() && this.agencyGroup==='management'; };
   App.fiscalSubmission = function(month=this.resolveFiscalMonth()){ return (this.fiscal.submissions||[]).find(s=>this.dateOnly(s.invoice_month)===this.dateOnly(month)); };
   App.fiscalStatus = function(month=this.resolveFiscalMonth()){ return this.fiscalSubmission(month)?.status || 'draft'; };
   App.fiscalMonthOpen = function(month=this.resolveFiscalMonth()){ return ['draft','revision_requested','returned'].includes(this.fiscalStatus(month)); };
@@ -8902,14 +8884,18 @@ const App = {
 
   App.loadFiscalData = async function(preferredYear=null){
     if(!this.program?.id) return;
+    if(!this.canViewFiscal()){
+      this.fiscal={years:[],budgetLines:[],actuals:[],monthMeta:[],documents:[],submissions:[],statusLog:[],setupReady:false,setupErrors:[]};
+      return;
+    }
     const pid=this.program.id;
     const priorFiscalYear=this.fiscalBudgetYear;
     const priorFiscalMonth=this.fiscalMonth;
     const yearsRes=await this.sb.from('holloway_fiscal_years').select('*').eq('program_id',pid).order('start_date',{ascending:true});
     const setupErrors=[];
     let years=[];
-    if(yearsRes.error){ setupErrors.push(yearsRes.error); years=[{fiscal_year:FY27.fiscalYear,budget_label:FY27.budgetLabel,start_date:FY27.start,end_date:FY27.end,official_total:FY27.officialTotal,source_name:FY27.sourceName,source_totals:FY27.sourceTotals,_fallback:true}]; }
-    else years=yearsRes.data?.length?yearsRes.data:[{fiscal_year:FY27.fiscalYear,budget_label:FY27.budgetLabel,start_date:FY27.start,end_date:FY27.end,official_total:FY27.officialTotal,source_name:FY27.sourceName,source_totals:FY27.sourceTotals,_fallback:true}];
+    if(yearsRes.error){ setupErrors.push(yearsRes.error); years=[{fiscal_year:FY27.fiscalYear,budget_label:FY27.budgetLabel,start_date:FY27.start,end_date:FY27.end,_calendarOnly:true}]; }
+    else years=yearsRes.data?.length?yearsRes.data:[{fiscal_year:FY27.fiscalYear,budget_label:FY27.budgetLabel,start_date:FY27.start,end_date:FY27.end,_calendarOnly:true}];
     this.fiscal.years=years;
     const fy=preferredYear || this.fiscalBudgetYear;
     const today=this.localDate();
@@ -8927,7 +8913,8 @@ const App = {
       this.sb.from('holloway_fiscal_status_log').select('*').eq('program_id',pid).eq('fiscal_year',this.fiscalBudgetYear).order('created_at',{ascending:false})
     ]);
     [budgetRes,actualRes,metaRes,docRes,subRes,logRes].forEach(r=>{ if(r.error) setupErrors.push(r.error); });
-    this.fiscal.budgetLines=budgetRes.data?.length ? budgetRes.data : (this.fiscalBudgetYear===FY27.fiscalYear ? FY27.lines.map(x=>({...x, fiscal_year:FY27.fiscalYear, program_id:pid, _fallback:true})) : []);
+    this.fiscal.budgetLines=budgetRes.data||[];
+    if(!budgetRes.error && !this.fiscal.budgetLines.length) setupErrors.push({message:'No protected fiscal budget is configured for this fiscal year.'});
     this.fiscal.actuals=actualRes.data||[];
     this.fiscal.monthMeta=metaRes.data||[];
     this.fiscal.documents=docRes.data||[];
@@ -9002,7 +8989,7 @@ const App = {
       if(l.category!==lastCat){ html+=`<tr class="fiscal-section-row"><td colspan="7">${this.escape(l.category)} Expenses</td></tr>`; lastCat=l.category; lastSub=''; }
       if(l.subcategory && l.subcategory!==lastSub){ html+=`<tr class="fiscal-subsection-row"><td colspan="7">${this.escape(l.subcategory)}</td></tr>`; lastSub=l.subcategory; }
       const a=this.fiscalActualFor(month,l.line_code)||{}, current=Number(a.amount||0), ytd=this.fiscalLineYtd(l.line_code,month), budget=Number(l.approved_budget||0), remaining=budget-ytd, ratio=budget?ytd/budget:0;
-      const fte=l.fte_count!=null?`${Number(l.fte_count).toFixed(2)} FTE`:''; const wage=l.hourly_wage!=null?`${this.fiscalMoney(l.hourly_wage)}/hr`:''; const detail=[fte,wage].filter(Boolean).join(' · ');
+      const detail=l.fte_count!=null?`${Number(l.fte_count).toFixed(2)} FTE`:'';
       const remClass=remaining<0?'fiscal-over':ratio>=.9?'fiscal-near':'';
       html+=`<tr><td><strong>${this.escape(l.line_name)}</strong>${detail?`<div class="field-hint">${this.escape(detail)}</div>`:''}</td><td style="text-align:right">${this.fiscalMoney(budget)}</td><td style="text-align:right">${editable?`<input class="fiscal-amount-input" type="number" step="0.01" min="0" data-fiscal-amount="${this.escape(l.line_code)}" value="${current||''}" aria-label="${this.escape(l.line_name)} current month actual">`:this.fiscalMoney(current)}</td><td style="text-align:right">${this.fiscalMoney(ytd)}</td><td style="text-align:right" class="${remClass}">${this.fiscalMoney(remaining)}</td><td style="text-align:right" class="${ratio>1?'fiscal-over':ratio>=.9?'fiscal-near':''}">${this.fiscalPct(ratio)}</td><td>${editable?`<input class="fiscal-note-input" data-fiscal-note="${this.escape(l.line_code)}" value="${this.escape(a.notes||'')}" placeholder="Optional note">`:this.escape(a.notes||'—')}</td></tr>`;
     }
@@ -9074,12 +9061,13 @@ const App = {
 
   App.renderFiscal = async function(){
     const el=document.getElementById('view-fiscal'); if(!el) return;
+    if(!this.canViewFiscal()){ el.innerHTML='<div class="notice red"><div>!</div><div><strong>Fiscal access is restricted.</strong> Fiscal Reporting is available only to Agency Management and City Admin users.</div></div>'; return; }
     if(!this.fiscal.years.length){ el.innerHTML='<div class="notice navy"><div>i</div><div>Loading fiscal workspace…</div></div>'; await this.loadFiscalData(); }
     const month=this.resolveFiscalMonth(), m=this.fiscalMonthRecord(month), status=this.fiscalStatus(month), editable=this.fiscalCanEditMonth(month);
     const years=(this.fiscal.years||[]).map(y=>`<option value="${this.escape(y.fiscal_year)}" ${y.fiscal_year===this.fiscalBudgetYear?'selected':''}>${this.escape(y.budget_label||y.fiscal_year)}</option>`).join('');
     const months=this.fiscalMonths().map(x=>`<option value="${x.key}" ${x.key===month?'selected':''}>${this.escape(x.label)}</option>`).join('');
-    const setupNotice=this.fiscal.setupReady?'':`<div class="notice amber"><div>!</div><div><strong>Fiscal database setup is not installed yet.</strong> The FY27 contract budget is shown from the built-in source fallback, but saving actuals, uploading backup, and submitting invoices are disabled until the supplied Supabase migration is run.</div></div>`;
-    const source=this.fiscalYearRecord().source_name||this.fiscalYearRecord().sourceName||FY27.sourceName;
+    const setupNotice=this.fiscal.setupReady?'':`<div class="notice amber"><div>!</div><div><strong>Fiscal database setup is incomplete.</strong> Budget amounts are intentionally not embedded in the portal. Run the updated Supabase fiscal migration to load the protected FY27 budget and enable fiscal reporting.</div></div>`;
+    const source=this.fiscalYearRecord().source_name||'Protected fiscal budget record';
     el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Fiscal Reporting</h1><div class="page-subtitle">Monthly actuals, supporting documentation, budget monitoring, invoice generation, and City fiscal review.</div></div>${this.fiscalStatusBadge(status)}</div>
       ${setupNotice}
       <div class="fiscal-toolbar"><div class="fiscal-controls"><label class="fiscal-control">Fiscal Year<select id="fiscal-year-select">${years}</select></label><label class="fiscal-control">Invoice Month<select id="fiscal-month-select">${months}</select></label></div><div class="client-actions">${editable?'<button class="btn btn-primary" id="btn-fiscal-save">Save Fiscal Draft</button>':''}<button class="btn btn-ghost" id="btn-fiscal-print">Print / Save Invoice PDF</button></div></div>
@@ -9087,7 +9075,7 @@ const App = {
       ${this.fiscalKpisHtml()}
       <div class="fiscal-tabs"><button class="fiscal-tab ${this.fiscalTab==='data'?'active':''}" data-fiscal-tab="data">1 · Monthly Actuals & Uploads</button><button class="fiscal-tab ${this.fiscalTab==='review'?'active':''}" data-fiscal-tab="review">2 · Budget & Reconciliation</button><button class="fiscal-tab ${this.fiscalTab==='invoice'?'active':''}" data-fiscal-tab="invoice">3 · Invoice Preview</button></div>
       <div style="display:${this.fiscalTab==='data'?'block':'none'}">${this.fiscalMetaHtml(month)}<div class="section-label">FY27 Budget Lines · ${this.escape(m?.label||'Selected Month')}</div>${this.fiscalBudgetTableHtml(month)}${this.fiscalDocumentsHtml(month)}</div>
-      <div style="display:${this.fiscalTab==='review'?'block':'none'}"><div class="fiscal-summary-grid"><div class="card"><div class="card-header"><div><h2 class="card-title">Reconciliation & Readiness</h2><div class="field-hint">Errors block submission; warnings require review but do not automatically block.</div></div></div><div class="card-body">${this.fiscalChecksHtml(month)}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Budget vs. Actuals</h2><div class="field-hint">YTD through ${this.escape(m?.label||'selected month')}.</div></div></div><div class="card-body">${this.fiscalBudgetSummaryHtml(month)}<details class="fiscal-source-note" style="margin-top:12px"><summary>Source budget reconciliation note</summary><div style="margin-top:8px">The FY27 contract page contains small rounding/subtotal differences. Published category subtotals sum to <strong>${this.fiscalMoney(this.fiscalSourceSubtotalSum())}</strong>, while the published grand total is <strong>${this.fiscalMoney(this.fiscalOfficialTotal())}</strong>. Rounded detail lines sum to <strong>${this.fiscalMoney(this.fiscalLineDetailBudget())}</strong>. The portal preserves the published figures rather than silently changing the contract source.</div></details></div></div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Monthly Fiscal Review</h2><div class="field-hint">Select a month to review invoice amount, GL status, and submission status.</div></div></div><div class="card-body">${this.fiscalMonthlyReviewHtml()}</div></div>${this.fiscalSubmissionPanelHtml(month)}</div>
+      <div style="display:${this.fiscalTab==='review'?'block':'none'}"><div class="fiscal-summary-grid"><div class="card"><div class="card-header"><div><h2 class="card-title">Reconciliation & Readiness</h2><div class="field-hint">Errors block submission; warnings require review but do not automatically block.</div></div></div><div class="card-body">${this.fiscalChecksHtml(month)}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Budget vs. Actuals</h2><div class="field-hint">YTD through ${this.escape(m?.label||'selected month')}.</div></div></div><div class="card-body">${this.fiscalBudgetSummaryHtml(month)}</div></div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Monthly Fiscal Review</h2><div class="field-hint">Select a month to review invoice amount, GL status, and submission status.</div></div></div><div class="card-body">${this.fiscalMonthlyReviewHtml()}</div></div>${this.fiscalSubmissionPanelHtml(month)}</div>
       <div style="display:${this.fiscalTab==='invoice'?'block':'none'}">${this.fiscalInvoiceHtml(month)}</div>`;
     this.bindFiscalEvents();
   };
@@ -9151,10 +9139,18 @@ const App = {
     if(error){this.toast('Fiscal review failed: '+error.message,{error:true});return;} await this.loadFiscalData(this.fiscalBudgetYear);this.toast(action==='approved'?'Fiscal invoice approved.':'Revisions requested.');this.renderFiscal();
   };
 
-  App.printFiscalInvoice = function(){ if(this._fiscalDirty){this.toast('Save the fiscal draft before printing the invoice.',{error:true});return;} const target=document.getElementById('print-report'); if(!target)return; target.innerHTML=`<div class="print-page-header"><strong>${this.escape(this.programName())}</strong> · ${this.escape(this.fiscalYearLabel())} Fiscal Invoice · Generated ${new Date().toLocaleDateString()}</div>${this.fiscalInvoiceHtml(this.resolveFiscalMonth(),true)}<div class="print-footer"><img class="print-footer-logo" src="${WEHO_LOGO_URL}" alt="City of West Hollywood logo">Prepared through the ${this.escape(this.programName())} Reporting Portal · City of West Hollywood Human Services Division</div>`; window.print(); };
+  App.printFiscalInvoice = function(){ if(!this.canViewFiscal()){this.toast('Fiscal access is restricted.',{error:true});return;} if(this._fiscalDirty){this.toast('Save the fiscal draft before printing the invoice.',{error:true});return;} const target=document.getElementById('print-report'); if(!target)return; target.innerHTML=`<div class="print-page-header"><strong>${this.escape(this.programName())}</strong> · ${this.escape(this.fiscalYearLabel())} Fiscal Invoice · Generated ${new Date().toLocaleDateString()}</div>${this.fiscalInvoiceHtml(this.resolveFiscalMonth(),true)}<div class="print-footer"><img class="print-footer-logo" src="${WEHO_LOGO_URL}" alt="City of West Hollywood logo">Prepared through the ${this.escape(this.programName())} Reporting Portal · City of West Hollywood Human Services Division</div>`; window.print(); };
 
   const fiscalBaseShowView=App.showView;
-  App.showView=function(view){ fiscalBaseShowView.call(this,view); if(view==='fiscal'){ const el=document.getElementById('view-fiscal'); if(el)el.innerHTML='<div class="notice navy"><div>i</div><div>Loading fiscal workspace…</div></div>'; this.loadFiscalData(this.fiscalBudgetYear).then(()=>this.renderFiscal()).catch(e=>{console.error(e);if(el)el.innerHTML=`<div class="notice red"><div>!</div><div>Fiscal workspace could not load: ${this.escape(e?.message||String(e))}</div></div>`;}); } };
+  App.showView=function(view){
+    if(view==='fiscal' && !this.canViewFiscal()){
+      fiscalBaseShowView.call(this,'dashboard');
+      this.toast('Fiscal Reporting is available only to Agency Management and City Admin users.',{error:true});
+      return;
+    }
+    fiscalBaseShowView.call(this,view);
+    if(view==='fiscal'){ const el=document.getElementById('view-fiscal'); if(el)el.innerHTML='<div class="notice navy"><div>i</div><div>Loading fiscal workspace…</div></div>'; this.loadFiscalData(this.fiscalBudgetYear).then(()=>this.renderFiscal()).catch(e=>{console.error(e);if(el)el.innerHTML=`<div class="notice red"><div>!</div><div>Fiscal workspace could not load: ${this.escape(e?.message||String(e))}</div></div>`;}); }
+  };
 
   window.addEventListener('beforeunload',e=>{ if(App._fiscalDirty){e.preventDefault();e.returnValue='';return '';} });
 })();
