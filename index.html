@@ -1574,6 +1574,11 @@ th.sortable:hover { color:var(--navy); }
 const CONFIG = {
   PROGRAM_NAME: 'Holloway Interim Housing Program',
   PROGRAM_ID: null,
+  /* Allow Agency-Fiscal users to VIEW (never edit) Program Reports.
+   * Editing stays blocked by canEditQuarter()/canSign() in the UI and by the
+   * holloway_block_agency_fiscal_program_write() trigger in the database.
+   * Set to false to restore the previous Dashboard + Fiscal-only workspace. */
+  FISCAL_VIEW_PROGRAM_REPORTS: true,
   /* Reporting calendar fallback.
    *
    * Quarters, fiscal-year tags and due dates are DERIVED from contract period
@@ -2476,10 +2481,14 @@ const App = {
     const empty = () => Promise.resolve({data:[], count:0});
 
     // Agency-Fiscal receives only the minimum program fields needed to render
-    // aggregate dashboard measures. Names, narratives, roster backup, detailed
-    // exit rows, activity logs, case-management updates and other operational
-    // data are deliberately not loaded into the browser for this role.
-    const reportsQ = fiscalOnly
+    // aggregate dashboard measures. Names, case-management updates and other
+    // client-level operational data are deliberately not loaded for this role.
+    // When FISCAL_VIEW_PROGRAM_REPORTS is on, the quarterly reporting data
+    // (reports, rosters, bundles, exits, status log) IS loaded so the
+    // read-only Program Reports view can render. Client identity/names are
+    // still withheld.
+    const reportsVisible = !fiscalOnly || CONFIG.FISCAL_VIEW_PROGRAM_REPORTS === true;
+    const reportsQ = !reportsVisible
       ? this.sb.from('quarterly_reports').select('program_id,fiscal_year,quarter,income_increase,income_maintained,satisfaction_satisfied,satisfaction_total').eq('program_id', pid).eq('fiscal_year', this.fiscalYear)
       : this.sb.from('quarterly_reports').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear);
     const clientsQ = fiscalOnly
@@ -2491,11 +2500,11 @@ const App = {
 
     const [reports, rosters, bundles, exits, approved, activity, clients, clientServices, clientUpdates] = await Promise.all([
       reportsQ,
-      fiscalOnly ? empty() : this.sb.from('client_rosters').select('*', { count: 'exact' }).eq('program_id', pid).eq('fiscal_year', this.fiscalYear).range(this.rosterPage * CONFIG.ROSTER_PAGE_SIZE, (this.rosterPage + 1) * CONFIG.ROSTER_PAGE_SIZE - 1),
-      fiscalOnly ? empty() : this.sb.from('submission_bundles').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('quarter'),
-      fiscalOnly ? empty() : this.sb.from('non_permanent_exits').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('quarter').order('exit_number'),
+      !reportsVisible ? empty() : this.sb.from('client_rosters').select('*', { count: 'exact' }).eq('program_id', pid).eq('fiscal_year', this.fiscalYear).range(this.rosterPage * CONFIG.ROSTER_PAGE_SIZE, (this.rosterPage + 1) * CONFIG.ROSTER_PAGE_SIZE - 1),
+      !reportsVisible ? empty() : this.sb.from('submission_bundles').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('quarter'),
+      !reportsVisible ? empty() : this.sb.from('non_permanent_exits').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('quarter').order('exit_number'),
       this.isAdmin() ? this.sb.from('approved_users').select('*').order('email') : empty(),
-      fiscalOnly ? empty() : this.sb.from('bundle_status_log').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('created_at', { ascending: false }).then(r => r).catch(() => ({data:[]})),
+      !reportsVisible ? empty() : this.sb.from('bundle_status_log').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('created_at', { ascending: false }).then(r => r).catch(() => ({data:[]})),
       clientsQ.then(r => r).catch(err => ({data:[], error:err})),
       servicesQ.then(r => r).catch(err => ({data:[], error:err})),
       fiscalOnly ? empty() : this.sb.from('holloway_client_quarterly_updates').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).then(r => r).catch(err => ({data:[], error:err}))
@@ -2588,11 +2597,14 @@ const App = {
     if (fiscalNav) fiscalNav.style.display = this.canViewFiscal?.() ? 'flex' : 'none';
 
     // Agency-Fiscal has a deliberately narrow workspace: aggregate Program
-    // Dashboard plus Fiscal Reporting only. Hide every other program view.
+    // Dashboard plus Fiscal Reporting, and — when FISCAL_VIEW_PROGRAM_REPORTS
+    // is enabled — read-only Program Reports. Hide every other program view.
     if (fiscalOnly) {
+      const allowed = CONFIG.FISCAL_VIEW_PROGRAM_REPORTS
+        ? ['dashboard', 'fiscal', 'quarter']
+        : ['dashboard', 'fiscal'];
       document.querySelectorAll('.sidebar-item[data-view]').forEach(el => {
-        const v = el.dataset.view;
-        el.style.display = (v === 'dashboard' || v === 'fiscal') ? 'flex' : 'none';
+        el.style.display = allowed.includes(el.dataset.view) ? 'flex' : 'none';
       });
       document.querySelectorAll('.sidebar-section').forEach(section => {
         const visible = [...section.querySelectorAll('.sidebar-item')].some(el => getComputedStyle(el).display !== 'none');
@@ -2614,9 +2626,14 @@ const App = {
   },
 
   showView(view) {
-    if (this.isAgencyFiscal?.() && !['dashboard','fiscal'].includes(view)) {
+    const fiscalViews = CONFIG.FISCAL_VIEW_PROGRAM_REPORTS
+      ? ['dashboard','fiscal','quarter']
+      : ['dashboard','fiscal'];
+    if (this.isAgencyFiscal?.() && !fiscalViews.includes(view)) {
       view = 'dashboard';
-      this.toast?.('Agency-Fiscal access is limited to the Program Dashboard and Fiscal Reporting.', {error:true});
+      this.toast?.(CONFIG.FISCAL_VIEW_PROGRAM_REPORTS
+        ? 'Agency-Fiscal access is limited to the Program Dashboard, Program Reports (view only) and Fiscal Reporting.'
+        : 'Agency-Fiscal access is limited to the Program Dashboard and Fiscal Reporting.', {error:true});
     }
     this.view = view;
     document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
