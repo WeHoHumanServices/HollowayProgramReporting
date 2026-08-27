@@ -1151,6 +1151,37 @@ th.sortable:hover { color:var(--navy); }
 @media(max-width:700px){.fiscal-city-kpis{grid-template-columns:1fr 1fr}}
 @media(max-width:480px){.fiscal-city-kpis{grid-template-columns:1fr}}
 
+
+    /* Collapsible Clients group in the sidebar */
+    .sidebar-parent { position:relative; padding-right:32px; }
+    .sidebar-caret { position:absolute; right:4px; top:50%; transform:translateY(-50%); background:none; border:0; margin:0; padding:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:5px; color:var(--gray-400); line-height:0; }
+    .sidebar-caret:hover { background:var(--gray-100); color:var(--navy); }
+    .sidebar-caret:focus-visible { outline:2px solid var(--navy); outline-offset:1px; }
+    .sidebar-caret .caret-icon { width:13px; height:13px; display:block; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; transition:transform .18s ease; }
+    .sidebar-caret[aria-expanded="true"] .caret-icon { transform:rotate(90deg); }
+    .sidebar-subgroup.is-collapsed { display:none; }
+    .sidebar-subgroup .sidebar-item { padding-left:33px; font-size:12.5px; }
+    .sidebar-subgroup .sidebar-item .si-icon { width:14px; height:14px; }
+    .sidebar-parent.has-active-child { color:var(--navy); }
+    .sidebar-parent.has-active-child .sidebar-caret { color:var(--gold); }
+
+    /* Partner referral portal */
+    .referral-card { max-width: 780px; }
+    .referral-step-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:6px; }
+    .referral-step-head h3 { font-size:15px; color:var(--navy); margin:0; font-weight:800; }
+    .referral-progress { font-size:11.5px; color:var(--gray-400); }
+    .referral-criteria { display:flex; flex-direction:column; gap:10px; }
+    .referral-crit { border:1px solid var(--border); border-radius:8px; padding:12px 14px; }
+    .referral-crit.is-missing { border-color:#C0392B; background:#fdf6f5; }
+    .referral-crit-top { display:flex; gap:10px; align-items:flex-start; }
+    .referral-crit-top span { flex:1; font-size:12.5px; line-height:1.45; }
+    .referral-file { margin-top:10px; padding-left:26px; }
+    .referral-file input[type=file] { font-size:12px; }
+    .referral-doc-note { font-size:11.5px; color:var(--gray-400); margin-top:4px; }
+    .referral-error { color:#C0392B; font-size:12.5px; margin-top:12px; }
+    .referral-code-input { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:2px; text-transform:uppercase; font-size:16px; text-align:center; }
+    .referral-done { text-align:center; padding:14px 0; }
+    .referral-done .tick { font-size:34px; color:#1E8449; }
 </style>
 
 <style id="ytd-contract-dashboard-styles">
@@ -1283,7 +1314,22 @@ th.sortable:hover { color:var(--navy); }
         <div class="login-footer">This reset link can only be used once.</div>
       </div>
       <p id="login-error" style="color:#C0392B;font-size:12px;margin:12px 0 0;"></p>
+      <div class="login-footer" id="login-referral-cta" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+        Referring someone to Holloway?
+        <button type="button" class="login-link-btn" id="btn-open-referral">Submit a referral &rarr;</button>
+      </div>
     </div>
+  </div>
+</div>
+
+<div id="referral-screen" style="display:none;">
+  <div class="login-card referral-card">
+    <div class="login-header">
+      <img class="login-logo-img" src="https://www.governmentjobs.com/AgencyPages/weho/agencyImages/download/weho_white_on_blue.jpg" alt="City of West Hollywood logo" />
+      <div class="login-title">Holloway Interim Housing Program</div>
+      <div class="login-sub">Partner Agency Referral</div>
+    </div>
+    <div class="login-body" id="referral-body"></div>
   </div>
 </div>
 
@@ -1310,11 +1356,15 @@ th.sortable:hover { color:var(--navy); }
         <div class="sidebar-section">
           <div class="sidebar-label" id="role-nav-label">Workspace</div>
           <div class="sidebar-item active" data-view="dashboard"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Dashboard</div>
-          <div class="sidebar-item" data-view="clients"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clients</div>
-          <div class="sidebar-item" data-view="services"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V7a2 2 0 0 1 4 0v4"/><path d="M11 10V6a2 2 0 0 1 4 0v5"/><path d="M15 10V8a2 2 0 0 1 4 0v6c0 4.42-3.58 8-8 8h-1a7 7 0 0 1-7-7v-3a2 2 0 0 1 4 0v2"/></svg>Services</div>
-          <div class="sidebar-item" data-view="client-exits"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg>Exits</div>
-          <div class="sidebar-item" data-view="housing-followups"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg>Housing Follow-Ups</div>
-          <div class="sidebar-item" data-view="incident-log"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Incident Log</div>
+          <div class="sidebar-item sidebar-parent" data-view="clients"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clients<button type="button" class="sidebar-caret" id="clients-subnav-toggle" aria-expanded="false" aria-controls="clients-subnav" aria-label="Show client panels" title="Show client panels"><svg class="caret-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button></div>
+          <div class="sidebar-subgroup is-collapsed" id="clients-subnav" role="group" aria-label="Client panels">
+            <div class="sidebar-item" data-view="services"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V7a2 2 0 0 1 4 0v4"/><path d="M11 10V6a2 2 0 0 1 4 0v5"/><path d="M15 10V8a2 2 0 0 1 4 0v6c0 4.42-3.58 8-8 8h-1a7 7 0 0 1-7-7v-3a2 2 0 0 1 4 0v2"/></svg>Services</div>
+            <div class="sidebar-item" data-view="client-exits"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg>Exits</div>
+            <div class="sidebar-item" data-view="housing-followups"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg>Housing Follow-Ups</div>
+            <div class="sidebar-item" data-view="incident-log"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Incident Log</div>
+            <div class="sidebar-item" data-view="income"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Income Tracking</div>
+            <div class="sidebar-item" data-view="referrals"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>Referrals</div>
+          </div>
           <div class="sidebar-item" id="nav-review" data-view="admin-review" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review Queue</div>
           <div class="sidebar-item" id="nav-access" data-view="access" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1"/></svg>Access Management</div>
         </div>
@@ -1336,6 +1386,8 @@ th.sortable:hover { color:var(--navy); }
       <section id="view-client-exits" class="view-section"></section>
       <section id="view-housing-followups" class="view-section"></section>
       <section id="view-incident-log" class="view-section"></section>
+      <section id="view-income" class="view-section"></section>
+      <section id="view-referrals" class="view-section"></section>
       <section id="view-quarter" class="view-section"></section>
       <section id="view-fiscal" class="view-section"></section>
       <section id="view-admin-review" class="view-section"></section>
@@ -4155,7 +4207,8 @@ const App = {
   p.q { background:#EEF2FA; border-left:3pt solid #1B2F5B; padding:7pt 10pt; margin:0 0 8pt; font-weight:bold; }
   p.a { padding:2pt 10pt 0; margin:0 0 18pt; }
   .note { font-size:8.5pt; color:#666; border-top:1px solid #d9d9d9; padding-top:8pt; margin-top:20pt; }
-</style></head>
+
+  </style></head>
 <body>
   <h1>Engagement Notes — Chat Transcript</h1>
   <p class="sub">AI-assisted review · City Admin</p>
@@ -6279,7 +6332,7 @@ const App = {
     document.getElementById('client-body').innerHTML=`<div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>Complete intake and demographics first. Housing progress, case management milestones, services, and exit details can be added as the case progresses.</div></div><div class="wizard-steps"><div class="wizard-step"><div class="num">Step 1</div><div class="name">Intake & Demographics</div></div><div class="wizard-step"><div class="num">Step 2</div><div class="name">Housing & Case Management</div></div><div class="wizard-step"><div class="num">Step 3</div><div class="name">Services / Exit if applicable</div></div></div><div class="client-entry-layout"><div>
       <div class="form-section"><div class="form-section-title">Intake & Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label required">HMIS ID</label><input id="cf-hmis-id" class="field-input" value="${this.escape(c.id||c.hmis_unique_identifier||c.agency_client_id||'')}" placeholder="HMIS Unique Identifier"></div><div class="field-group"><label class="field-label required">Entry Date</label><input id="cf-entry-date" type="date" class="field-input" value="${this.dateOnly(c.entry_date)}"></div><div class="field-group"><label class="field-label">Current Status</label><div class="segmented-row" data-status-group>${['Active','Scheduled Exit','Exited'].map(v=>`<button type="button" class="segment-btn ${status===v?'active':''}" data-status="${v}">${v}</button>`).join('')}</div><input type="hidden" id="cf-status" value="${this.escape(status)}"></div><div class="field-group"><label class="field-label">Room / Bed Assignment</label><input id="cf-room-number" class="field-input" value="${this.escape(c.room_assignment||'')}" placeholder="e.g., Room 7, 102, Bed A, Unassigned"></div></div></div>
       <div class="form-section"><div class="form-section-title">Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Client Name <span class="field-hint">Agency use only</span></label><input id="cf-client-name" class="field-input" value="${this.escape(c.client_name||'')}"></div><div class="field-group"><label class="field-label">Age</label><input id="cf-age" type="number" class="field-input" value="${c.age||''}"></div><div class="field-group"><label class="field-label">Gender Identity</label><select id="cf-gender" class="field-select"><option></option>${opt(this.hmisGenderOptions(), c.gender)}</select><div id="cf-gender-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify gender identity</label><input id="cf-gender-other" class="field-input" value="${this.escape(c.gender_other||'')}"></div><div class="field-hint">Transgender experience is captured separately below and is not treated as a gender.</div></div><div class="field-group"><label class="field-label">Transgender Experience</label><select id="cf-transgender-status" class="field-select"><option></option>${opt(['Yes','No','Questioning','Client doesn’t know','Client prefers not to answer','Data not collected'], c.transgender_status)}</select></div><div class="field-group"><label class="field-label">Race / Ethnicity</label><select id="cf-race" class="field-select"><option></option>${opt(this.hmisRaceEthnicityOptions(), c.race_ethnicity)}</select><div id="cf-race-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify race/ethnicity</label><input id="cf-race-other" class="field-input" value="${this.escape(c.race_ethnicity_other||'')}"></div></div><div class="field-group"><label class="field-label">Primary Language</label><select id="cf-primary-language" class="field-select"><option></option>${opt(['English','Spanish','Russian','Farsi','Other'], c.primary_language||c.household_language||c.language)}</select><div id="cf-primary-language-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify language</label><input id="cf-primary-language-other" class="field-input" value="${this.escape(c.primary_language_other||'')}"></div></div>${this.yesNoSegment('cf-veteran','Veteran Status',c.veteran)}${this.yesNoSegment('cf-disability','Disability Status',c.disability)}</div><details style="margin-top:12px;"><summary class="field-label" style="cursor:pointer;">Additional Information</summary><div class="client-form-grid" style="margin-top:12px;"><div class="field-group"><label class="field-label">Income at Entry</label><input id="cf-income-entry" type="number" class="field-input" value="${c.income_at_entry||''}"></div></div></details></div>
-      <div class="form-section"><div class="form-section-title">Housing & Case Management</div><div class="housing-progress">${this.housingProgressOptions().map(v=>`<button type="button" class="hp-step ${progress===v?'active':''}" data-housing-progress="${this.escape(v)}">○ ${this.escape(v)}</button>`).join('')}</div><input type="hidden" id="cf-housing-plan" value="${this.escape(progress)}"><div class="client-form-grid" style="margin-top:14px;"><div class="field-group"><label class="field-label">Expected Exit Date</label><input id="cf-expected-exit" type="date" class="field-input" value="${this.dateOnly(c.expected_exit_date)}"></div><div class="field-group"><label class="field-label">Housing Assessment Completed</label><input id="cf-housing-assessment" type="date" class="field-input" value="${this.dateOnly(c.housing_assessment_completed)}"></div><div class="field-group"><label class="field-label">Benefits Screening Completed</label><input id="cf-benefits-screening" type="date" class="field-input" value="${this.dateOnly(c.benefits_screening_completed)}"></div><div class="field-group"><label class="field-label">Income Verification Completed</label><input id="cf-income-verification" type="date" class="field-input" value="${this.dateOnly(c.income_verification_completed)}"></div></div></div>
+      <div class="form-section"><div class="form-section-title">Housing & Case Management</div><div class="housing-progress">${this.housingProgressOptions().map(v=>`<button type="button" class="hp-step ${progress===v?'active':''}" data-housing-progress="${this.escape(v)}">○ ${this.escape(v)}</button>`).join('')}</div><input type="hidden" id="cf-housing-plan" value="${this.escape(progress)}"><div class="client-form-grid" style="margin-top:14px;"><div class="field-group"><label class="field-label">Expected Exit Date</label><input id="cf-expected-exit" type="date" class="field-input" value="${this.dateOnly(c.expected_exit_date)}"></div><div class="field-group full"><label class="field-label">Intake Milestones</label><div class="field-hint" style="margin-bottom:8px;">Tick each item once it is complete. The date defaults to the intake date — change it if the item was finished later. Leave unticked if it has not happened yet.</div><div class="reason-list">${this.intakeMilestoneDefs().map(m=>{const val=this.dateOnly(c[m.col]);return `<label class="reason-row" style="display:flex;align-items:center;gap:10px;"><input type="checkbox" class="cf-milestone-check" data-milestone="${m.id}" ${val?'checked':''}><span style="flex:1;">${this.escape(m.label)}</span><input id="${m.id}" type="date" class="field-input cf-milestone-date" style="max-width:172px;" value="${val}" ${val?'':'disabled'}></label>`}).join('')}</div><button type="button" class="btn btn-ghost btn-sm" id="cf-milestones-all" style="margin-top:8px;">Mark all three complete at intake date</button></div></div></div>
       <div id="cf-exit-section" class="form-section exit-section ${status==='Exited'?'':'is-hidden'}"><div class="form-section-title">Exit Information</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Exit Date</label><input id="cf-exit-date" type="date" class="field-input" value="${this.dateOnly(c.exit_date)}"></div><div class="field-group"><label class="field-label">Exit Destination</label><select id="cf-exit-type" class="field-select"><option></option>${opt(this.exitDestinationOptions(), c.exit_destination_type)}</select><div id="cf-exit-type-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please describe exit destination</label><input id="cf-exit-type-other" class="field-input" value="${this.escape(c.exit_destination_other||'')}"></div></div><div class="field-group full"><label class="field-label">Reason for Exit</label><div class="field-hint" style="margin-bottom:7px;">Select every reason that applies.</div><div class="reason-list" id="cf-exit-reason-list">${this.exitReasonOptions().map((r,i)=>`<label class="reason-row"><input type="checkbox" class="cf-exit-reason" id="cf-exit-reason-${i}" value="${this.escape(r)}" ${selectedReasons.includes(r)?'checked':''}><span>${this.escape(r)}</span></label>`).join('')}</div><div id="cf-exit-reason-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required" for="cf-exit-reason-other">Please specify reason for exit</label><input id="cf-exit-reason-other" class="field-input" value="${this.escape(c.exit_reason_other||'')}"></div></div><div class="field-group"><label class="field-label">Specific Destination / Notes</label><input id="cf-exit-destination" class="field-input" value="${this.escape(c.exit_destination||'')}"></div><div class="field-group"><label class="field-label">Income at Exit</label><input id="cf-income-exit" type="number" class="field-input" value="${c.income_at_exit||''}"></div><div class="field-group full"><label class="field-label">Outcome Notes</label><textarea id="cf-exit-notes" class="field-textarea">${this.escape(c.exit_notes||'')}</textarea></div></div></div>
       <div class="form-section"><div class="form-section-title">Recent Services</div>${recent}<button class="btn btn-ghost btn-sm" id="cf-add-service" ${id?'':'disabled'}>+ Add Service</button><div class="field-hint" style="margin-top:6px;">Save the client before adding services.</div></div><div class="form-section"><div class="form-section-title">Income / Benefits Updates</div>${recentUpdates}<button class="btn btn-ghost btn-sm" id="cf-add-update" ${id?'':'disabled'}>+ Add Update</button><div class="field-hint" style="margin-top:6px;">Save the client before adding an update. One update per quarter.</div></div><div id="cf-quality" class="data-quality-list"></div>
     </div>${this.reportingSummaryHtml({...c,housing_plan_status:progress})}</div>`;
@@ -9892,6 +9945,1180 @@ const App = {
     el.querySelectorAll('[data-view-shortcut]').forEach(btn=>btn.addEventListener('click',()=>this.showView(btn.dataset.viewShortcut)));
     el.querySelector('#btn-print-current')?.addEventListener('click',()=>this.printReport(q));
   };
+})();
+
+
+
+/* ============================================================
+   Income Tracking — dated income series
+   ------------------------------------------------------------
+   Adds three things:
+
+   1. Checkbox + date wiring for the three intake milestones
+      (Housing Assessment / Benefits Screening / Income Verification).
+      Unticked writes null, which is how "not yet done" is stored.
+
+   2. A per-client income reading series on the client profile,
+      replacing the old one-per-quarter "Income / Benefits Updates"
+      panel.
+
+   3. An "Income Tracking" view: who is due for a reading, plus the
+      data-entry coverage worklist (in-program first, then the
+      exited backfill).
+
+   Backed by holloway_client_income and holloway_income_source_types,
+   with the holloway_income_due / holloway_income_coverage views.
+   Readings are anchored to measured_on rather than a quarter label,
+   so a bi-monthly cadence still rolls up into quarterly reporting.
+
+   Income Increased / Income Maintained on the Program Scope form
+   stay manually entered (see the note above clientMetrics). This
+   module surfaces a computed figure next to that field so the typed
+   number can be checked against the readings, but never overwrites it.
+   ============================================================ */
+(function(){
+
+  const DUE_INTERVAL_DAYS = 60;   // "bi-monthly" = every two months
+
+  /* ---- intake milestones ------------------------------------------- */
+
+  App.intakeMilestoneDefs = function(){
+    return [
+      { id:'cf-housing-assessment',  col:'housing_assessment_completed',  label:'Housing Assessment'  },
+      { id:'cf-benefits-screening',  col:'benefits_screening_completed',  label:'Benefits Screening'  },
+      { id:'cf-income-verification', col:'income_verification_completed', label:'Income Verification' }
+    ];
+  };
+
+  App.wireIntakeMilestones = function(){
+    const entryDate = () => document.getElementById('cf-entry-date')?.value || this.today();
+    document.querySelectorAll('.cf-milestone-check').forEach(cb => {
+      const input = document.getElementById(cb.dataset.milestone);
+      if (!input) return;
+      cb.addEventListener('change', () => {
+        if (cb.checked){ input.disabled = false; if (!input.value) input.value = entryDate(); }
+        else { input.value = ''; input.disabled = true; }
+      });
+    });
+    document.getElementById('cf-milestones-all')?.addEventListener('click', () => {
+      const d = entryDate();
+      document.querySelectorAll('.cf-milestone-check').forEach(cb => {
+        const input = document.getElementById(cb.dataset.milestone);
+        cb.checked = true;
+        if (input){ input.disabled = false; input.value = d; }
+      });
+    });
+  };
+
+  /* ---- income helpers ---------------------------------------------- */
+
+  App.incomeSourceTypes = function(){ return this.data.incomeSourceTypes || []; };
+
+  App.incomeSourceLabel = function(code){
+    const t = this.incomeSourceTypes().find(x => x.code === code);
+    return t ? t.label : (code || '—');
+  };
+
+  App.incomeSourceIsCash = function(code){
+    const t = this.incomeSourceTypes().find(x => x.code === code);
+    return t ? !!t.is_cash : true;   // unknown codes count as cash
+  };
+
+  // Mirrors holloway_client_income_totals so the UI and the database
+  // agree without a round trip.
+  App.incomeTotals = function(reading){
+    let cash = 0, noncash = 0, earned = false;
+    (reading?.income_sources || []).forEach(s => {
+      const amt = Number(s.amount || 0);
+      if (this.incomeSourceIsCash(s.code)) cash += amt; else noncash += amt;
+      if (s.code === 'EARNED' && amt > 0) earned = true;
+    });
+    return { cash, noncash, earned };
+  };
+
+  App.incomeReadingsForClient = function(clientId){
+    return (this.data.incomeReadings || [])
+      .filter(r => r.client_id === clientId)
+      .sort((a,b) => String(b.measured_on).localeCompare(String(a.measured_on)));
+  };
+
+  App.incomeChangeClass = function(clientId, reading){
+    const series = this.incomeReadingsForClient(clientId)
+      .slice()
+      .sort((a,b) => String(a.measured_on).localeCompare(String(b.measured_on)));
+    const idx = series.findIndex(r => r.id === reading.id);
+    if (idx <= 0) return { cls:'Baseline', delta:null };
+    const cur  = this.incomeTotals(series[idx]).cash;
+    const prev = this.incomeTotals(series[idx-1]).cash;
+    const delta = cur - prev;
+    if (delta > 0) return { cls:'Increased',  delta };
+    if (delta < 0) return { cls:'Decreased',  delta };
+    return { cls:'Maintained', delta:0 };
+  };
+
+  App.incomeIsPlaceholder = function(reading){
+    return (reading?.income_sources || []).some(s => s.code === 'UNSPECIFIED');
+  };
+
+  App.money = function(n){
+    return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits:0, maximumFractionDigits:2 });
+  };
+
+  /* ---- data loading -------------------------------------------------- */
+
+  const previousLoadAllForIncome = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAllForIncome.call(this);
+    if (!this.data) this.data = {};
+    const pid = this.program?.id;
+    if (!pid || this.isAgencyFiscal?.()){
+      this.data.incomeReadings = []; this.data.incomeSourceTypes = []; this.data.incomeCoverage = [];
+      return;
+    }
+    const [readings, types, coverage] = await Promise.all([
+      // Not filtered by fiscal_year: the series is longitudinal by design.
+      this.sb.from('holloway_client_income').select('*').eq('program_id', pid).order('measured_on', { ascending:false }),
+      this.sb.from('holloway_income_source_types').select('*').order('sort_order'),
+      this.sb.from('holloway_income_coverage').select('*')
+    ]);
+    if (readings.error) console.warn('income readings unavailable', readings.error);
+    if (types.error)    console.warn('income source types unavailable', types.error);
+    if (coverage.error) console.warn('income coverage unavailable', coverage.error);
+    this.data.incomeReadings    = readings.data || [];
+    this.data.incomeSourceTypes = types.data    || [];
+    this.data.incomeCoverage    = coverage.data || [];
+  };
+
+  /* ---- client profile panel ------------------------------------------ */
+
+  App.incomePanelHtml = function(clientId){
+    if (!clientId){
+      return `<div class="form-section"><div class="form-section-title">Income Readings</div>
+        <div class="field-hint">Save the client before recording income.</div></div>`;
+    }
+    const readings = this.incomeReadingsForClient(clientId);
+    const rows = readings.slice(0,6).map(r => {
+      const t = this.incomeTotals(r);
+      const ch = this.incomeChangeClass(clientId, r);
+      const placeholder = this.incomeIsPlaceholder(r);
+      const sources = (r.income_sources || [])
+        .map(s => `${this.escape(this.incomeSourceLabel(s.code))} ${this.money(s.amount)}`)
+        .join(' · ') || 'No sources recorded';
+      return `<div class="recent-service-row">
+        <div>
+          <strong>${this.formatDate(r.measured_on)}</strong>
+          <span class="field-hint"> · ${this.escape(r.collection_point || 'Periodic')}</span>
+          ${placeholder ? '<span class="field-hint" style="color:#b45309;"> · placeholder, needs breakdown</span>' : ''}
+          <br><span class="field-hint">${sources}</span>
+        </div>
+        <div style="text-align:right;white-space:nowrap;">
+          <strong>${this.money(t.cash)}</strong> cash
+          ${t.noncash ? `<br><span class="field-hint">+ ${this.money(t.noncash)} non-cash</span>` : ''}
+          <br><span class="field-hint">${this.escape(ch.cls)}${ch.delta ? ` (${ch.delta > 0 ? '+' : ''}${this.money(ch.delta)})` : ''}</span>
+          <br><button type="button" class="btn btn-ghost btn-sm" data-edit-income="${this.escape(r.id)}">Edit</button>
+        </div>
+      </div>`;
+    }).join('') || '<div class="field-hint">No income readings recorded yet.</div>';
+
+    const last = readings[0];
+    let dueNote = '';
+    if (!last){
+      dueNote = '<div class="field-hint" style="margin-top:6px;color:#b45309;">No baseline on file — record an intake reading.</div>';
+    } else {
+      const days = Math.floor((new Date(this.today()) - new Date(last.measured_on)) / 86400000);
+      dueNote = days >= DUE_INTERVAL_DAYS
+        ? `<div class="field-hint" style="margin-top:6px;color:#b45309;">Due — last reading was ${days} days ago.</div>`
+        : `<div class="field-hint" style="margin-top:6px;">Next reading due in ${DUE_INTERVAL_DAYS - days} days.</div>`;
+    }
+
+    return `<div class="form-section"><div class="form-section-title">Income Readings</div>${rows}
+      <button class="btn btn-ghost btn-sm" id="cf-add-income">+ Record Income Reading</button>${dueNote}</div>`;
+  };
+
+  App.renderIncomePanel = function(clientId){
+    const body = document.getElementById('client-body');
+    if (!body) return;
+    const html = this.incomePanelHtml(clientId);
+    // Replace the legacy one-per-quarter panel if it is still present.
+    const legacy = [...body.querySelectorAll('.form-section-title')]
+      .find(el => /income\s*\/\s*benefits updates/i.test(el.textContent || ''))?.closest('.form-section');
+    if (legacy) legacy.outerHTML = html;
+    else body.insertAdjacentHTML('beforeend', html);
+
+    document.getElementById('cf-add-income')?.addEventListener('click', () => {
+      this.closeForm('client'); this.openIncomeForm(clientId, null);
+    });
+    body.querySelectorAll('[data-edit-income]').forEach(b => b.addEventListener('click', () => {
+      this.closeForm('client'); this.openIncomeForm(clientId, b.dataset.editIncome);
+    }));
+  };
+
+  const previousOpenClientFormForIncome = App.openClientForm;
+  App.openClientForm = function(id=null){
+    previousOpenClientFormForIncome.call(this, id);
+    this.wireIntakeMilestones();
+    this.renderIncomePanel(id);
+  };
+
+  /* ---- income reading form ------------------------------------------- */
+
+  App.ensureIncomeModal = function(){
+    if (document.getElementById('modal-income')) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `<div id="modal-income" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="income-title">
+      <div class="form-modal">
+        <div class="form-modal-header">
+          <div><h2 class="form-modal-title" id="income-title">Income Reading</h2>
+            <div class="form-modal-meta">Cash income and non-cash benefits as of a date</div></div>
+          <button class="form-close-btn" data-close="income">&#10005;</button>
+        </div>
+        <div class="form-gold-bar"></div>
+        <div class="form-body" id="income-body"></div>
+        <div class="form-footer">
+          <div class="save-state" id="income-save-state">Not saved this session</div>
+          <div style="display:flex;gap:10px;">
+            <button class="btn btn-ghost" data-close="income">Close</button>
+            <button class="btn btn-gold" id="btn-save-income">Save Reading</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(wrap.firstElementChild);
+    const modal = document.getElementById('modal-income');
+    modal.querySelectorAll('[data-close="income"]').forEach(el =>
+      el.addEventListener('click', () => this.closeForm('income')));
+    document.getElementById('btn-save-income').addEventListener('click', () => this.saveIncomeReading());
+  };
+
+  App.incomeSourceRowHtml = function(row={}, idx=0){
+    const types = this.incomeSourceTypes().filter(t => t.active !== false);
+    const cash    = types.filter(t => t.is_cash);
+    const noncash = types.filter(t => !t.is_cash);
+    const optionsFor = (list) => list.map(t =>
+      `<option value="${this.escape(t.code)}" ${row.code === t.code ? 'selected' : ''}>${this.escape(t.label)}</option>`).join('');
+    // A placeholder code from the backfill is not in the active list, so keep
+    // it selectable until staff replace it with a real breakdown.
+    const legacy = row.code && !types.some(t => t.code === row.code)
+      ? `<option value="${this.escape(row.code)}" selected>${this.escape(this.incomeSourceLabel(row.code))}</option>` : '';
+    return `<div class="income-source-row" data-income-row="${idx}" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+      <select class="field-select income-source-code" style="flex:1;">
+        <option value="">Select source…</option>
+        ${legacy}
+        <optgroup label="Cash income">${optionsFor(cash)}</optgroup>
+        <optgroup label="Non-cash benefits">${optionsFor(noncash)}</optgroup>
+      </select>
+      <input type="number" step="0.01" min="0" class="field-input income-source-amount" style="max-width:140px;"
+             placeholder="0.00" value="${row.amount ?? ''}">
+      <button type="button" class="btn btn-ghost btn-sm income-source-remove" aria-label="Remove source">&#10005;</button>
+    </div>`;
+  };
+
+  App.openIncomeForm = function(clientId, readingId=null){
+    this.ensureIncomeModal();
+    const c = (this.data.clients || []).find(x => x.id === clientId) || {};
+    const existing = readingId
+      ? (this.data.incomeReadings || []).find(r => r.id === readingId) || {}
+      : {};
+    const isFirst = this.incomeReadingsForClient(clientId).length === 0;
+    const defaultPoint = existing.collection_point || (isFirst ? 'Intake' : 'Periodic');
+    const defaultDate  = this.dateOnly(existing.measured_on)
+      || (isFirst ? this.dateOnly(c.entry_date) : this.today());
+
+    this.currentIncomeReading = { clientId, id: existing.id || null };
+
+    const sources = (existing.income_sources || []);
+    const rowsHtml = (sources.length ? sources : [{}]).map((r,i) => this.incomeSourceRowHtml(r,i)).join('');
+    const pointOpts = ['Intake','Periodic','Exit'].map(v =>
+      `<option value="${v}" ${defaultPoint === v ? 'selected' : ''}>${v}</option>`).join('');
+
+    document.getElementById('income-title').textContent = `Income Reading · ${this.clientDisplayId(c)}`;
+    document.getElementById('income-body').innerHTML = `
+      <div class="form-section">
+        <div class="form-section-title">Reading</div>
+        <div class="client-form-grid">
+          <div class="field-group"><label class="field-label">Client</label>
+            <input class="field-input" readonly value="${this.escape(this.clientDisplayId(c))}"></div>
+          <div class="field-group"><label class="field-label required">Date Measured</label>
+            <input id="inc-date" type="date" class="field-input" value="${defaultDate}"></div>
+          <div class="field-group"><label class="field-label">Collection Point</label>
+            <select id="inc-point" class="field-select">${pointOpts}</select></div>
+          <div class="field-group"><label class="field-label">No income</label>
+            <div class="reason-list"><label class="reason-row">
+              <input type="checkbox" id="inc-none" ${existing.has_no_income ? 'checked' : ''}>
+              <span>Client confirmed no income at this date</span></label></div></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Income Sources</div>
+        <div class="field-hint" style="margin-bottom:10px;">List each source separately. CalFresh and other non-cash
+          benefits are recorded here but excluded from the cash income total, matching HMIS.</div>
+        <div id="inc-sources">${rowsHtml}</div>
+        <button type="button" class="btn btn-ghost btn-sm" id="inc-add-source">+ Add Source</button>
+        <div id="inc-totals" style="margin-top:14px;padding-top:12px;border-top:1px solid #e5e7eb;"></div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Notes</div>
+        <textarea id="inc-notes" class="field-textarea" placeholder="How the amounts were verified, pending applications, anything the next reading should know.">${this.escape(existing.notes || '')}</textarea>
+      </div>`;
+
+    document.getElementById('income-save-state').textContent = existing.id ? 'Editing saved reading' : 'Not saved this session';
+    this.bindIncomeFormEvents();
+    this.updateIncomeFormTotals();
+    this.openOverlay('income');
+  };
+
+  App.bindIncomeFormEvents = function(){
+    const container = document.getElementById('inc-sources');
+    if (!container) return;
+    document.getElementById('inc-add-source')?.addEventListener('click', () => {
+      container.insertAdjacentHTML('beforeend', this.incomeSourceRowHtml({}, container.children.length));
+      this.updateIncomeFormTotals();
+    });
+    container.addEventListener('click', (e) => {
+      const btn = e.target.closest('.income-source-remove');
+      if (!btn) return;
+      if (container.children.length > 1) btn.closest('.income-source-row').remove();
+      else { btn.closest('.income-source-row').querySelectorAll('input,select').forEach(el => el.value = ''); }
+      this.updateIncomeFormTotals();
+    });
+    container.addEventListener('input',  () => this.updateIncomeFormTotals());
+    container.addEventListener('change', () => this.updateIncomeFormTotals());
+    document.getElementById('inc-none')?.addEventListener('change', () => this.updateIncomeFormTotals());
+  };
+
+  App.readIncomeFormSources = function(){
+    return [...document.querySelectorAll('#inc-sources .income-source-row')].map(row => ({
+      code:   row.querySelector('.income-source-code')?.value || '',
+      amount: row.querySelector('.income-source-amount')?.value
+    })).filter(s => s.code).map(s => ({ code: s.code, amount: Number(s.amount || 0) }));
+  };
+
+  App.updateIncomeFormTotals = function(){
+    const el = document.getElementById('inc-totals');
+    if (!el) return;
+    const sources = this.readIncomeFormSources();
+    const t = this.incomeTotals({ income_sources: sources });
+    const none = document.getElementById('inc-none')?.checked;
+    el.innerHTML = `<div style="display:flex;justify-content:space-between;">
+        <strong>Cash income</strong><strong>${this.money(t.cash)}</strong></div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px;">
+        <span class="field-hint">Non-cash benefits (excluded from cash total)</span>
+        <span class="field-hint">${this.money(t.noncash)}</span></div>
+      ${none && t.cash > 0 ? '<div class="field-hint" style="color:#b45309;margin-top:8px;">“No income” is ticked but cash sources are listed — untick one or the other before saving.</div>' : ''}`;
+  };
+
+  App.saveIncomeReading = async function(){
+    const cur   = this.currentIncomeReading || {};
+    const state = document.getElementById('income-save-state');
+    const date  = document.getElementById('inc-date').value;
+    if (!date){ state.textContent = 'Please enter the date the income was measured.'; return; }
+
+    const sources = this.readIncomeFormSources();
+    const none    = document.getElementById('inc-none').checked;
+    const totals  = this.incomeTotals({ income_sources: sources });
+    if (none && totals.cash > 0){
+      state.textContent = '“No income” is ticked but cash sources are listed. Resolve before saving.'; return;
+    }
+    if (!none && !sources.length){
+      state.textContent = 'Add at least one source, or tick “Client confirmed no income”.'; return;
+    }
+
+    const payload = {
+      program_id:       this.program.id,
+      fiscal_year:      this.fiscalYear,
+      client_id:        cur.clientId,
+      measured_on:      date,
+      collection_point: document.getElementById('inc-point').value || 'Periodic',
+      has_no_income:    none,
+      income_sources:   sources,
+      notes:            document.getElementById('inc-notes').value.trim() || null,
+      collected_by:     this.user?.email || null,
+      updated_at:       new Date().toISOString()
+    };
+
+    let error;
+    if (cur.id){
+      payload.id = cur.id;
+      ({ error } = await this.sb.from('holloway_client_income').upsert(payload, { onConflict:'id' }));
+    } else {
+      ({ error } = await this.sb.from('holloway_client_income').insert(payload));
+      // (client_id, measured_on) is unique — point staff at the existing row
+      // rather than letting a second reading for the same date fail opaquely.
+      if (error && String(error.code) === '23505'){
+        state.textContent = 'A reading already exists for that date. Close this and use Edit on that reading.';
+        return;
+      }
+    }
+    if (error){ state.textContent = 'Save failed: ' + error.message; return; }
+
+    state.textContent = 'Saved.';
+    await this.loadAll();
+    this.closeForm('income');
+    if (this.view === 'income') this.renderIncomeView();
+    else this.openClientForm(cur.clientId);
+  };
+
+  /* ---- Income Tracking view ------------------------------------------ */
+
+  const previousShowViewForIncome = App.showView;
+  App.showView = function(view){
+    previousShowViewForIncome.call(this, view);
+    if (view === 'income') this.renderIncomeView();
+  };
+
+  App.renderIncomeView = function(){
+    const el = document.getElementById('view-income');
+    if (!el) return;
+    const coverage  = (this.data.incomeCoverage || []).slice();
+    const inProgram = coverage.filter(r => r.cohort === 'In program');
+    const exited    = coverage.filter(r => r.cohort === 'Exited');
+    const done      = coverage.filter(r => r.work_needed === 'Complete').length;
+    const attention = inProgram.filter(r => r.work_needed !== 'Complete').length;
+
+    const kpis = [
+      ['In Program',        inProgram.length, 'Phase 1 \u2014 capture baselines', 'gold'],
+      ['Needing Attention', attention,        'No reading on file, or overdue',   attention ? 'amber' : 'green'],
+      ['Exited Backfill',   exited.filter(r => r.work_needed !== 'Complete').length, 'Phase 2', 'navy'],
+      ['Complete',          done,             `of ${coverage.length} clients`,    'green']
+    ].map(k => `<div class="kpi-card ${k[3]}"><div class="kpi-label">${this.escape(k[0])}</div><div class="kpi-value">${k[1]}</div><div class="kpi-sub">${this.escape(k[2])}</div></div>`).join('');
+
+    const badgeFor = (work) => work === 'Complete' ? 'badge-green'
+      : (/placeholder/i.test(work || '') ? 'badge-amber' : 'badge-red');
+
+    const table = (rows, emptyMsg) => `<div class="client-table-wrap"><table class="client-table">
+      <thead><tr><th>Client</th><th>Entered</th><th>Readings</th><th>Last Reading</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${rows.length ? rows.map(r => `<tr>
+        <td>${this.escape(r.client_name || r.client_id)}</td>
+        <td>${this.formatDate(this.dateOnly(r.entry_date))}</td>
+        <td>${Number(r.readings || 0)}</td>
+        <td>${r.last_measured_on ? this.formatDate(this.dateOnly(r.last_measured_on)) : '\u2014'}</td>
+        <td><span class="badge ${badgeFor(r.work_needed)}">${this.escape(r.work_needed)}</span></td>
+        <td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-income-client="${this.escape(r.client_id)}">Record Reading</button><button class="btn btn-ghost btn-sm" data-income-open-client="${this.escape(r.client_id)}">Open Client</button></div></td>
+      </tr>`).join('') : `<tr><td colspan="6" class="empty-table-state">${this.escape(emptyMsg)}</td></tr>`}</tbody></table></div>`;
+
+    el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Income Tracking</h1><div class="page-subtitle">Readings are taken every two months. Each one records cash income by source; CalFresh and other non-cash benefits are tracked separately and excluded from the cash total.</div></div></div>
+      <div class="kpi-row">${kpis}</div>
+      <div class="dashboard-section-head"><h2>In Program</h2><div class="hint">Baselines first \u2014 nothing downstream can be computed without them.</div></div>
+      ${table(inProgram, 'No in-program clients on file.')}
+      <div class="dashboard-section-head"><h2>Exited \u2014 Backfill</h2><div class="hint">Placeholder rows already hold a total from the old income fields \u2014 open and replace it rather than adding a second reading.</div></div>
+      ${table(exited, 'No exited clients on file.')}`;
+
+    el.querySelectorAll('[data-income-client]').forEach(b =>
+      b.addEventListener('click', () => this.openIncomeForm(b.dataset.incomeClient, null)));
+    el.querySelectorAll('[data-income-open-client]').forEach(b =>
+      b.addEventListener('click', () => this.openClientForm(b.dataset.incomeOpenClient)));
+  };
+
+  /* ---- computed cross-check for the Program Scope form ---------------- */
+
+  // Counts clients whose latest reading on or before the quarter end moved
+  // against their previous reading. Advisory only — the reported figure stays
+  // whatever staff type into the Scope form.
+  App.computedIncomeCounts = function(q = this.currentQuarter){
+    const { start, end } = this.qRange(q);
+    let increased = 0, maintained = 0, decreased = 0, noData = 0;
+    (this.data.clients || []).forEach(c => {
+      if (!this.clientOverlaps?.(c, start, end)) return;
+      const series = this.incomeReadingsForClient(c.id)
+        .filter(r => this.dateOnly(r.measured_on) <= end)
+        .sort((a,b) => String(a.measured_on).localeCompare(String(b.measured_on)));
+      if (series.length < 2){ noData++; return; }
+      const cur  = this.incomeTotals(series[series.length - 1]).cash;
+      const prev = this.incomeTotals(series[series.length - 2]).cash;
+      if (cur > prev) increased++; else if (cur < prev) decreased++; else maintained++;
+    });
+    return { increased, maintained, decreased, noData };
+  };
+
+})();
+
+
+
+/* ============================================================
+   Collapsible Clients group in the sidebar
+   ------------------------------------------------------------
+   Services / Exits / Housing Follow-Ups / Incident Log / Income
+   nest under Clients. Clicking the Clients label still opens the
+   roster; only the caret toggles the group. Collapsed by default,
+   and each user's choice is remembered.
+   ============================================================ */
+(function(){
+  const KEY = 'holloway.nav.clientsExpanded';
+  const CHILD_VIEWS = ['services','client-exits','housing-followups','incident-log','income'];
+
+  const group  = document.getElementById('clients-subnav');
+  const toggle = document.getElementById('clients-subnav-toggle');
+  const parent = toggle && toggle.closest('.sidebar-item');
+  if (!group || !toggle || !parent) return;
+
+  // Private browsing can throw on both read and write.
+  const read  = () => { try { return localStorage.getItem(KEY) === '1'; } catch(e){ return false; } };
+  const write = v  => { try { localStorage.setItem(KEY, v ? '1' : '0'); } catch(e){} };
+
+  const apply = (expanded) => {
+    group.classList.toggle('is-collapsed', !expanded);
+    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    const label = expanded ? 'Hide client panels' : 'Show client panels';
+    toggle.setAttribute('aria-label', label);
+    toggle.setAttribute('title', label);
+  };
+
+  apply(read());
+
+  // stopPropagation: the caret sits inside the Clients row, which carries its
+  // own navigate handler. Without this, opening the group also changes view.
+  toggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const next = group.classList.contains('is-collapsed');
+    apply(next);
+    write(next);
+  });
+
+  // A collapsed group would otherwise hide which panel you are on.
+  const previousShowViewForNav = App.showView;
+  App.showView = function(view){
+    previousShowViewForNav.call(this, view);
+    parent.classList.toggle('has-active-child', CHILD_VIEWS.includes(this.view));
+  };
+})();
+
+
+
+/* ============================================================
+   Partner Agency Referrals
+   ------------------------------------------------------------
+   Public side (no login): the login card carries a "Submit a
+   referral" link. A partner enters their standing agency code,
+   which is exchanged via holloway_referral_start() for a
+   short-lived token. Files upload straight into that token's
+   folder; holloway_referral_submit() re-validates completeness
+   server-side and writes the referral.
+
+   The anonymous role has no table access — only those two RPCs
+   and INSERT on the referral-attachments bucket. Client-side
+   validation here is for the referrer's benefit; the database
+   enforces the same rules again on submit.
+
+   Staff side: a Referrals panel under Clients — list, detail,
+   notes, status. City admins also manage agency codes.
+   ============================================================ */
+(function(){
+
+  const BUCKET = 'referral-attachments';
+
+  // Wording taken from the Holloway Shelter Referral Form.
+  const CRITERIA = [
+    { key:'crit_id_18_or_older', doc:'identification',
+      label:'At least one form of identification and proof that the applicant is 18 years of age or older is required.',
+      docLabel:'Attach identification / proof of age' },
+    { key:'crit_homeless_verification', doc:'homeless_verification',
+      label:'Homeless verification must confirm chronic homelessness within West Hollywood (WeHo), with Forms 6053 and 2199 completed.',
+      docLabel:'Attach homeless verification (Forms 6053 and 2199)' },
+    { key:'crit_disability_verification', doc:'disability_verification',
+      label:'Signed Verification of Disability or VOD from LAHSA — required for Holloway eligibility; not optional.',
+      docLabel:'Attach the signed VOD' },
+    { key:'crit_adl_independent', doc:null,
+      label:'The applicant must be able to carry out activities of daily living independently.' },
+    { key:'crit_follow_policies', doc:null,
+      label:'The applicant must demonstrate the ability to follow policies and procedures of the interim housing facilities.' },
+    { key:'crit_case_notes_or_accompanied', doc:'case_notes',
+      label:'Case notes or a current housing plan must be provided, or client must be accompanied by referring agency for intake.',
+      docLabel:'Attach case notes or current housing plan', conditional:true }
+  ];
+
+  const TEXT_FIELDS = [
+    { id:'ref-agency',      key:'referring_agency',      label:'Referring Agency' },
+    { id:'ref-cm-name',     key:'case_manager_name',     label:'Case Manager' },
+    { id:'ref-cm-phone',    key:'case_manager_phone',    label:'Phone' },
+    { id:'ref-cm-email',    key:'case_manager_email',    label:'Email', type:'email' },
+    { id:'ref-member',      key:'community_member_name', label:'Name of Community Member' },
+    { id:'ref-dob',         key:'date_of_birth',         label:'Date of Birth', type:'date' },
+    { id:'ref-contact',     key:'member_contact_info',   label:'Contact Information (phone number and email)' },
+    { id:'ref-signature',   key:'case_manager_signature',label:'Case Manager Signature (type your full name)' },
+    { id:'ref-cert-date',   key:'certification_date',    label:'Certification Date', type:'date' },
+    { id:'ref-submitted',   key:'date_submitted',        label:'Date Submitted', type:'date' }
+  ];
+
+  const STATUSES = ['New','In Review','Accepted','Declined','Withdrawn'];
+  const STATUS_BADGE = { 'New':'badge-navy', 'In Review':'badge-amber', 'Accepted':'badge-green',
+                         'Declined':'badge-red', 'Withdrawn':'badge-gray' };
+
+  const esc = s => App.escape(s ?? '');
+  const todayStr = () => App.today ? App.today() : new Date().toISOString().slice(0,10);
+
+  /* ================= public referral flow ================= */
+
+  App.openReferralScreen = function(){
+    this._referral = { step:'code', token:null, agencyName:null, error:'', busy:false, files:{} };
+    document.getElementById('loading-screen')?.style.setProperty('display','none');
+    document.getElementById('login-screen')?.style.setProperty('display','none');
+    document.getElementById('app')?.style.setProperty('display','none');
+    document.getElementById('referral-screen').style.display = 'block';
+    this.renderReferralStep();
+  };
+
+  App.closeReferralScreen = function(){
+    document.getElementById('referral-screen').style.display = 'none';
+    if (this.user) document.getElementById('app')?.style.setProperty('display','block');
+    else document.getElementById('login-screen')?.style.setProperty('display','block');
+    if (location.hash === '#referral') history.replaceState(null, '', location.pathname + location.search);
+  };
+
+  App.renderReferralStep = function(){
+    const st = this._referral || {};
+    const body = document.getElementById('referral-body');
+    if (!body) return;
+    if (st.step === 'code') body.innerHTML = this.referralCodeStepHtml(st);
+    else if (st.step === 'form') body.innerHTML = this.referralFormStepHtml(st);
+    else body.innerHTML = this.referralDoneStepHtml(st);
+    this.bindReferralStep();
+  };
+
+  App.referralCodeStepHtml = function(st){
+    return `<div class="referral-step-head"><h3>Enter your agency code</h3><span class="referral-progress">Step 1 of 2</span></div>
+      <p class="field-hint" style="margin-bottom:16px;">Partner agencies are issued a five-digit code by the Holloway team. If you don't have one, contact the City's Human Services Division.</p>
+      <div class="field-group">
+        <label class="field-label required" for="ref-code">Agency Code</label>
+        <input id="ref-code" class="field-input referral-code-input" autocomplete="off" spellcheck="false" placeholder="00000" inputmode="numeric" maxlength="12" ${st.busy?'disabled':''}>
+      </div>
+      <button class="login-submit" id="ref-code-submit" ${st.busy?'disabled':''}>${st.busy?'Checking…':'Continue &rarr;'}</button>
+      ${st.error?`<p class="referral-error">${esc(st.error)}</p>`:''}
+      <button type="button" class="login-link-btn" id="ref-back-login" style="margin-top:16px;">&larr; Back to staff sign in</button>`;
+  };
+
+  App.referralFormStepHtml = function(st){
+    const field = f => `<div class="field-group">
+      <label class="field-label required" for="${f.id}">${esc(f.label)}</label>
+      <input id="${f.id}" type="${f.type||'text'}" class="field-input" value="${esc(f.value||'')}">
+    </div>`;
+
+    const crit = (c, i) => {
+      const showDoc = c.doc && (!c.conditional || st.caseNotesMethod === 'Documents attached');
+      const chosen = st.files[c.doc];
+      return `<div class="referral-crit" data-crit="${c.key}">
+        <label class="referral-crit-top">
+          <input type="checkbox" class="ref-crit" data-key="${c.key}" id="chk-${c.key}">
+          <span>${esc(c.label)}</span>
+        </label>
+        ${c.conditional ? `<div class="referral-file">
+            <div class="field-label" style="margin-bottom:6px;">How will this be met?</div>
+            <div class="segmented-row" id="ref-casenotes-method">
+              ${['Documents attached','Accompanied at intake'].map(v =>
+                `<button type="button" class="segment-btn ${st.caseNotesMethod===v?'active':''}" data-cn-method="${v}">${v}</button>`).join('')}
+            </div>
+          </div>` : ''}
+        ${showDoc ? `<div class="referral-file">
+            <label class="field-label" for="file-${c.doc}">${esc(c.docLabel)} <span style="color:#C0392B;">*</span></label>
+            <input type="file" id="file-${c.doc}" data-doc="${c.doc}" class="ref-file" accept=".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx">
+            ${chosen ? `<div class="referral-doc-note">Selected: ${esc(chosen.name)}</div>` : ''}
+          </div>` : ''}
+      </div>`;
+    };
+
+    return `<div class="referral-step-head"><h3>Referral for ${esc(st.agencyName||'your agency')}</h3><span class="referral-progress">Step 2 of 2</span></div>
+      <p class="field-hint" style="margin-bottom:18px;">Every field and every criterion below is required. The form cannot be submitted until it is complete.</p>
+
+      <div class="form-section"><div class="form-section-title">Referring Agency and Case Manager Information</div>
+        <div class="client-form-grid">${TEXT_FIELDS.slice(0,4).map(field).join('')}</div></div>
+
+      <div class="form-section"><div class="form-section-title">Information About Community Members</div>
+        <div class="client-form-grid">${TEXT_FIELDS.slice(4,7).map(field).join('')}</div></div>
+
+      <div class="form-section"><div class="form-section-title">Eligibility Criteria Checklist</div>
+        <div class="referral-criteria">${CRITERIA.map(crit).join('')}</div></div>
+
+      <div class="form-section"><div class="form-section-title">Referring Agency Certification</div>
+        <p class="field-hint" style="margin-bottom:12px;">I certify that the eligibility criteria above have been reviewed and verified to the best of my knowledge prior to submitting this referral.</p>
+        <div class="client-form-grid">${TEXT_FIELDS.slice(7).map(f =>
+          field({...f, value: f.key==='certification_date' || f.key==='date_submitted' ? todayStr() : ''})).join('')}</div></div>
+
+      <div class="form-section"><div class="form-section-title">Additional Supporting Information</div>
+        <p class="field-hint" style="margin-bottom:10px;">Optional. Anything that supports housing efforts for your referral — verification of income, subsidies, or other supportive services.</p>
+        <input type="file" id="file-supporting" data-doc="supporting" class="ref-file" multiple accept=".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx">
+        ${st.files.supporting ? `<div class="referral-doc-note">${st.files.supporting.length||1} file(s) selected</div>` : ''}
+      </div>
+
+      <button class="login-submit" id="ref-submit" ${st.busy?'disabled':''}>${st.busy?(st.busyMsg||'Submitting…'):'Submit Referral'}</button>
+      ${st.error?`<p class="referral-error">${esc(st.error)}</p>`:''}
+      <button type="button" class="login-link-btn" id="ref-back-login" style="margin-top:16px;">Cancel and return to sign in</button>`;
+  };
+
+  App.referralDoneStepHtml = function(st){
+    return `<div class="referral-done">
+      <div class="tick">&#10003;</div>
+      <h3 style="margin:8px 0 6px;color:var(--navy);">Referral submitted</h3>
+      <p class="field-hint">${esc(st.doneMessage || 'The Holloway team will be in touch with your agency.')}</p>
+      ${st.referralId?`<p class="field-hint" style="margin-top:10px;">Reference: <strong>${esc(String(st.referralId).slice(0,8).toUpperCase())}</strong></p>`:''}
+      <button class="login-submit" id="ref-another" style="margin-top:20px;">Submit another referral</button>
+      <button type="button" class="login-link-btn" id="ref-back-login" style="margin-top:14px;">Return to staff sign in</button>
+    </div>`;
+  };
+
+  App.bindReferralStep = function(){
+    const st = this._referral;
+    document.getElementById('ref-back-login')?.addEventListener('click', () => this.closeReferralScreen());
+    document.getElementById('ref-another')?.addEventListener('click', () => this.openReferralScreen());
+
+    const codeInput = document.getElementById('ref-code');
+    if (codeInput){
+      codeInput.focus();
+      codeInput.addEventListener('keydown', e => { if (e.key === 'Enter') this.referralValidateCode(); });
+      document.getElementById('ref-code-submit')?.addEventListener('click', () => this.referralValidateCode());
+    }
+
+    document.querySelectorAll('#ref-casenotes-method [data-cn-method]').forEach(b =>
+      b.addEventListener('click', () => {
+        st.caseNotesMethod = b.dataset.cnMethod;
+        this.referralCaptureForm();
+        this.renderReferralStep();
+      }));
+
+    document.querySelectorAll('.ref-file').forEach(inp =>
+      inp.addEventListener('change', () => {
+        const doc = inp.dataset.doc;
+        if (doc === 'supporting') st.files.supporting = [...inp.files];
+        else if (inp.files[0]) st.files[doc] = inp.files[0];
+        else delete st.files[doc];
+        this.referralCaptureForm();
+        this.renderReferralStep();
+      }));
+
+    // Restore anything typed before a re-render.
+    if (st.step === 'form'){
+      TEXT_FIELDS.forEach(f => { const el = document.getElementById(f.id); if (el && st.values?.[f.key] != null) el.value = st.values[f.key]; });
+      CRITERIA.forEach(c => { const el = document.getElementById('chk-'+c.key); if (el) el.checked = !!st.crits?.[c.key]; });
+      document.getElementById('ref-submit')?.addEventListener('click', () => this.referralSubmit());
+    }
+  };
+
+  App.referralCaptureForm = function(){
+    const st = this._referral;
+    st.values = st.values || {}; st.crits = st.crits || {};
+    TEXT_FIELDS.forEach(f => { const el = document.getElementById(f.id); if (el) st.values[f.key] = el.value; });
+    CRITERIA.forEach(c => { const el = document.getElementById('chk-'+c.key); if (el) st.crits[c.key] = el.checked; });
+  };
+
+  App.referralValidateCode = async function(){
+    const st = this._referral;
+    const code = (document.getElementById('ref-code')?.value || '').trim();
+    if (!code){ st.error = 'Enter the code your agency was issued.'; this.renderReferralStep(); return; }
+    st.busy = true; st.error = ''; this.renderReferralStep();
+    const { data, error } = await this.sb.rpc('holloway_referral_start', { p_code: code });
+    st.busy = false;
+    if (error){ st.error = 'Could not reach the referral service. Please try again.'; this.renderReferralStep(); return; }
+    if (!data?.ok){ st.error = data?.message || 'That code was not recognised.'; this.renderReferralStep(); return; }
+    st.token = data.token; st.agencyName = data.agency_name; st.step = 'form';
+    st.values = { referring_agency: data.agency_name, certification_date: todayStr(), date_submitted: todayStr() };
+    st.crits = {}; st.files = {}; st.caseNotesMethod = null;
+    this.renderReferralStep();
+  };
+
+  App.referralValidationErrors = function(){
+    const st = this._referral, missing = [];
+    TEXT_FIELDS.forEach(f => { if (!String(st.values?.[f.key] || '').trim()) missing.push(f.label); });
+    const email = String(st.values?.case_manager_email || '');
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) missing.push('a valid case manager email');
+    CRITERIA.forEach(c => { if (!st.crits?.[c.key]) missing.push('the "' + c.label.slice(0, 42).trim() + '…" criterion'); });
+    if (!st.caseNotesMethod) missing.push('how the case notes criterion will be met');
+    ['identification','homeless_verification','disability_verification'].forEach(d => {
+      if (!st.files?.[d]) missing.push('the ' + d.replace(/_/g,' ') + ' document');
+    });
+    if (st.caseNotesMethod === 'Documents attached' && !st.files?.case_notes) missing.push('the case notes / housing plan document');
+    return missing;
+  };
+
+  App.referralSubmit = async function(){
+    const st = this._referral;
+    this.referralCaptureForm();
+    const missing = this.referralValidationErrors();
+    if (missing.length){
+      st.error = 'Still needed: ' + missing.slice(0,4).join('; ') + (missing.length>4 ? `; and ${missing.length-4} more.` : '.');
+      this.renderReferralStep();
+      document.querySelector('.referral-error')?.scrollIntoView({ behavior:'smooth', block:'center' });
+      return;
+    }
+
+    st.busy = true; st.busyMsg = 'Uploading files…'; st.error = ''; this.renderReferralStep();
+
+    const queue = [];
+    ['identification','homeless_verification','disability_verification','case_notes'].forEach(d => {
+      if (st.files[d]) queue.push({ doc_type:d, file:st.files[d] });
+    });
+    (st.files.supporting || []).forEach(f => queue.push({ doc_type:'supporting', file:f }));
+
+    const attachments = [];
+    for (const item of queue){
+      const safe = item.file.name.replace(/[^\w.\-]+/g, '_').slice(-80);
+      const path = `${st.token}/${(crypto.randomUUID ? crypto.randomUUID() : Date.now()+'-'+Math.random())}-${safe}`;
+      const up = await this.sb.storage.from(BUCKET).upload(path, item.file, {
+        upsert:false, contentType:item.file.type || undefined
+      });
+      if (up.error){
+        st.busy = false;
+        st.error = `Could not upload ${item.file.name}: ${up.error.message}`;
+        this.renderReferralStep();
+        return;
+      }
+      attachments.push({ doc_type:item.doc_type, file_path:path, file_name:item.file.name,
+                         file_size:String(item.file.size||''), mime_type:item.file.type||null });
+    }
+
+    st.busyMsg = 'Submitting…'; this.renderReferralStep();
+
+    const payload = { ...st.values, ...st.crits, case_notes_method: st.caseNotesMethod };
+    const { data, error } = await this.sb.rpc('holloway_referral_submit', {
+      p_token: st.token, p_payload: payload, p_attachments: attachments
+    });
+    st.busy = false;
+
+    if (error){ st.error = 'Submission failed: ' + error.message; this.renderReferralStep(); return; }
+    if (!data?.ok){
+      st.error = data?.message || 'The referral could not be submitted.';
+      if (Array.isArray(data?.missing) && data.missing.length) st.error += ' (' + data.missing.join(', ') + ')';
+      this.renderReferralStep();
+      return;
+    }
+    st.step = 'done'; st.doneMessage = data.message; st.referralId = data.referral_id;
+    this.renderReferralStep();
+  };
+
+  // Entry points: the login-card link, and a #referral deep link agencies can bookmark.
+  document.getElementById('btn-open-referral')?.addEventListener('click', () => App.openReferralScreen());
+  if (location.hash === '#referral'){
+    document.addEventListener('DOMContentLoaded', () => setTimeout(() => App.openReferralScreen(), 350));
+  }
+
+  /* ================= staff side ================= */
+
+  const previousLoadAllForReferrals = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAllForReferrals.call(this);
+    if (!this.data) this.data = {};
+    const pid = this.program?.id;
+    if (!pid || this.isAgencyFiscal?.()){
+      this.data.referrals = []; this.data.referralAttachments = [];
+      this.data.referralNotes = []; this.data.referralAgencies = [];
+      return;
+    }
+    const [refs, agencies] = await Promise.all([
+      this.sb.from('holloway_referrals').select('*').eq('program_id', pid).order('submitted_at', { ascending:false }),
+      this.sb.from('holloway_referral_agencies').select('*').eq('program_id', pid).order('agency_name')
+    ]);
+    if (refs.error) console.warn('referrals unavailable', refs.error);
+    if (agencies.error) console.warn('referral agencies unavailable', agencies.error);
+    this.data.referrals = refs.data || [];
+    this.data.referralAgencies = agencies.data || [];
+
+    const ids = this.data.referrals.map(r => r.id);
+    if (ids.length){
+      const [atts, notes] = await Promise.all([
+        this.sb.from('holloway_referral_attachments').select('*').in('referral_id', ids),
+        this.sb.from('holloway_referral_notes').select('*').in('referral_id', ids).order('created_at', { ascending:false })
+      ]);
+      this.data.referralAttachments = atts.data || [];
+      this.data.referralNotes = notes.data || [];
+    } else {
+      this.data.referralAttachments = []; this.data.referralNotes = [];
+    }
+  };
+
+  const previousShowViewForReferrals = App.showView;
+  App.showView = function(view){
+    previousShowViewForReferrals.call(this, view);
+    if (view === 'referrals') this.renderReferrals();
+  };
+
+  App.referralAttachmentsFor = function(id){ return (this.data.referralAttachments||[]).filter(a => a.referral_id === id); };
+  App.referralNotesFor       = function(id){ return (this.data.referralNotes||[]).filter(n => n.referral_id === id); };
+
+  App.renderReferrals = function(){
+    const el = document.getElementById('view-referrals');
+    if (!el) return;
+    this._referralFilter = this._referralFilter || 'Open';
+    const all = this.data.referrals || [];
+    const counts = STATUSES.reduce((m,s) => (m[s] = all.filter(r => r.status===s).length, m), {});
+    const open = all.filter(r => r.status === 'New' || r.status === 'In Review');
+    const rows = this._referralFilter === 'Open' ? open
+               : this._referralFilter === 'All'  ? all
+               : all.filter(r => r.status === this._referralFilter);
+
+    const chip = (label, n) => `<button type="button" class="btn btn-ghost btn-sm ${this._referralFilter===label?'btn-gold':''}" data-ref-filter="${esc(label)}">${esc(label)}${n!=null?` (${n})`:''}</button>`;
+
+    const table = rows.length ? `<div class="client-table-wrap"><table class="client-table">
+      <thead><tr><th>Submitted</th><th>Community Member</th><th>DOB</th><th>Referring Agency</th><th>Case Manager</th><th>Files</th><th>Notes</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td>${this.formatDate(this.dateOnly(r.submitted_at))}</td>
+        <td><strong>${esc(r.community_member_name)}</strong></td>
+        <td>${this.formatDate(this.dateOnly(r.date_of_birth))}</td>
+        <td>${esc(r.referring_agency)}</td>
+        <td>${esc(r.case_manager_name)}<br><span class="field-hint">${esc(r.case_manager_email)}</span></td>
+        <td>${this.referralAttachmentsFor(r.id).length}</td>
+        <td>${this.referralNotesFor(r.id).length}</td>
+        <td><span class="badge ${STATUS_BADGE[r.status]||'badge-gray'}">${esc(r.status)}</span></td>
+        <td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-open-referral="${esc(r.id)}">Open</button></div></td>
+      </tr>`).join('')}</tbody></table></div>`
+      : `<div class="client-table-wrap"><table class="client-table"><tbody><tr><td class="empty-table-state">No referrals in this view.</td></tr></tbody></table></div>`;
+
+    el.innerHTML = `<div class="page-header">
+        <div><h1 class="page-title">Referrals</h1>
+          <div class="page-subtitle">Referrals submitted by partner agencies through the public referral page.</div></div>
+        ${this.isAdmin?.() ? `<button class="btn btn-gold" id="btn-referral-codes">Manage Agency Codes</button>` : ''}
+      </div>
+      <div class="table-filter-row" style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        ${chip('Open', open.length)}${chip('All', all.length)}${STATUSES.map(s => chip(s, counts[s])).join('')}
+      </div>
+      ${table}`;
+
+    el.querySelectorAll('[data-ref-filter]').forEach(b =>
+      b.addEventListener('click', () => { this._referralFilter = b.dataset.refFilter; this.renderReferrals(); }));
+    el.querySelectorAll('[data-open-referral]').forEach(b =>
+      b.addEventListener('click', () => this.openReferralDetail(b.dataset.openReferral)));
+    el.querySelector('#btn-referral-codes')?.addEventListener('click', () => this.openReferralCodes());
+  };
+
+  App.ensureReferralModal = function(){
+    if (document.getElementById('modal-referral')) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `<div id="modal-referral" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="referral-detail-title">
+      <div class="form-modal">
+        <div class="form-modal-header">
+          <div><h2 class="form-modal-title" id="referral-detail-title">Referral</h2>
+            <div class="form-modal-meta">Submitted by a partner agency</div></div>
+          <button class="form-close-btn" data-close="referral">&#10005;</button>
+        </div>
+        <div class="form-gold-bar"></div>
+        <div class="form-body" id="referral-detail-body"></div>
+        <div class="form-footer">
+          <div class="save-state" id="referral-detail-state"></div>
+          <div style="display:flex;gap:10px;"><button class="btn btn-ghost" data-close="referral">Close</button></div>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(wrap.firstElementChild);
+    document.getElementById('modal-referral').querySelectorAll('[data-close="referral"]')
+      .forEach(el => el.addEventListener('click', () => this.closeForm('referral')));
+  };
+
+  App.openReferralDetail = function(id){
+    this.ensureReferralModal();
+    const r = (this.data.referrals || []).find(x => x.id === id);
+    if (!r) return;
+    this._currentReferral = id;
+    const atts = this.referralAttachmentsFor(id);
+    const notes = this.referralNotesFor(id);
+    const row = (label, value) => `<div class="field-group"><label class="field-label">${esc(label)}</label>
+      <div style="font-size:13px;padding:6px 0;">${esc(value || '—')}</div></div>`;
+
+    const docLabel = { identification:'Identification / proof of age', homeless_verification:'Homeless verification (6053 / 2199)',
+      disability_verification:'Verification of Disability', case_notes:'Case notes / housing plan', supporting:'Supporting information' };
+
+    document.getElementById('referral-detail-title').textContent = `Referral · ${r.community_member_name}`;
+    document.getElementById('referral-detail-body').innerHTML = `
+      <div class="form-section"><div class="form-section-title">Status</div>
+        <div class="segmented-row" id="referral-status-row">
+          ${STATUSES.map(s => `<button type="button" class="segment-btn ${r.status===s?'active':''}" data-ref-status="${s}">${s}</button>`).join('')}
+        </div>
+        <div class="field-hint" style="margin-top:8px;">
+          Submitted ${this.formatDate(this.dateOnly(r.submitted_at))}${r.status_changed_at?` · last changed ${this.formatDate(this.dateOnly(r.status_changed_at))} by ${esc(r.status_changed_by||'—')}`:''}
+        </div>
+      </div>
+
+      <div class="form-section"><div class="form-section-title">Referring Agency and Case Manager</div>
+        <div class="client-form-grid">
+          ${row('Referring Agency', r.referring_agency)}${row('Case Manager', r.case_manager_name)}
+          ${row('Phone', r.case_manager_phone)}${row('Email', r.case_manager_email)}
+        </div></div>
+
+      <div class="form-section"><div class="form-section-title">Community Member</div>
+        <div class="client-form-grid">
+          ${row('Name', r.community_member_name)}${row('Date of Birth', this.formatDate(this.dateOnly(r.date_of_birth)))}
+          ${row('Contact Information', r.member_contact_info)}
+        </div></div>
+
+      <div class="form-section"><div class="form-section-title">Eligibility Criteria</div>
+        ${CRITERIA.map(c => `<div style="display:flex;gap:9px;align-items:flex-start;margin-bottom:8px;font-size:12.5px;">
+          <span style="color:#1E8449;font-weight:700;">&#10003;</span><span>${esc(c.label)}</span></div>`).join('')}
+        <div class="field-hint" style="margin-top:6px;">Case notes criterion met by: <strong>${esc(r.case_notes_method||'—')}</strong></div></div>
+
+      <div class="form-section"><div class="form-section-title">Attachments</div>
+        ${atts.length ? atts.map(a => `<div class="recent-service-row">
+            <div><strong>${esc(docLabel[a.doc_type]||a.doc_type)}</strong><br>
+              <span class="field-hint">${esc(a.file_name)}${a.file_size?` · ${Math.round(a.file_size/1024)} KB`:''}</span></div>
+            <button class="btn btn-ghost btn-sm" data-ref-file="${esc(a.file_path)}">Open</button>
+          </div>`).join('') : '<div class="field-hint">No attachments.</div>'}</div>
+
+      <div class="form-section"><div class="form-section-title">Certification</div>
+        <div class="client-form-grid">
+          ${row('Case Manager Signature', r.case_manager_signature)}
+          ${row('Certification Date', this.formatDate(this.dateOnly(r.certification_date)))}
+          ${row('Date Submitted', this.formatDate(this.dateOnly(r.date_submitted)))}
+        </div></div>
+
+      <div class="form-section"><div class="form-section-title">Staff Notes</div>
+        ${notes.length ? notes.map(n => `<div class="recent-service-row"><div>
+            <span class="field-hint">${this.formatDate(this.dateOnly(n.created_at))} · ${esc(n.author_email||'—')}</span><br>
+            ${esc(n.note).replace(/\n/g,'<br>')}</div></div>`).join('') : '<div class="field-hint">No notes yet.</div>'}
+        <textarea id="referral-new-note" class="field-textarea" style="margin-top:10px;" placeholder="Add a note for the team…"></textarea>
+        <button class="btn btn-gold btn-sm" id="btn-add-referral-note" style="margin-top:8px;">Add Note</button></div>`;
+
+    const body = document.getElementById('referral-detail-body');
+    body.querySelectorAll('[data-ref-status]').forEach(b =>
+      b.addEventListener('click', () => this.setReferralStatus(id, b.dataset.refStatus)));
+    body.querySelectorAll('[data-ref-file]').forEach(b =>
+      b.addEventListener('click', () => this.openReferralFile(b.dataset.refFile)));
+    body.querySelector('#btn-add-referral-note')?.addEventListener('click', () => this.addReferralNote(id));
+    document.getElementById('referral-detail-state').textContent = '';
+    this.openOverlay('referral');
+  };
+
+  App.openReferralFile = async function(path){
+    const { data, error } = await this.sb.storage.from(BUCKET).createSignedUrl(path, 3600);
+    if (error){ this.toast?.('Could not open file: ' + error.message, { error:true }); return; }
+    window.open(data.signedUrl, '_blank');
+  };
+
+  App.setReferralStatus = async function(id, status){
+    const state = document.getElementById('referral-detail-state');
+    const { error } = await this.sb.from('holloway_referrals').update({
+      status, status_changed_at: new Date().toISOString(), status_changed_by: this.user?.email || null
+    }).eq('id', id);
+    if (error){ if (state) state.textContent = 'Could not update status: ' + error.message; return; }
+    if (state) state.textContent = 'Status set to ' + status + '.';
+    await this.loadAll();
+    this.openReferralDetail(id);
+    if (this.view === 'referrals') this.renderReferrals();
+  };
+
+  App.addReferralNote = async function(id){
+    const box = document.getElementById('referral-new-note');
+    const note = (box?.value || '').trim();
+    const state = document.getElementById('referral-detail-state');
+    if (!note){ if (state) state.textContent = 'Enter a note first.'; return; }
+    const { error } = await this.sb.from('holloway_referral_notes')
+      .insert({ referral_id:id, note, author_email:this.user?.email || null });
+    if (error){ if (state) state.textContent = 'Could not save note: ' + error.message; return; }
+    await this.loadAll();
+    this.openReferralDetail(id);
+  };
+
+  /* ---- agency code management (city admin) ---- */
+
+  App.ensureReferralCodesModal = function(){
+    if (document.getElementById('modal-refcodes')) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `<div id="modal-refcodes" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="refcodes-title">
+      <div class="form-modal">
+        <div class="form-modal-header">
+          <div><h2 class="form-modal-title" id="refcodes-title">Partner Agency Codes</h2>
+            <div class="form-modal-meta">Codes partner agencies use to reach the referral form</div></div>
+          <button class="form-close-btn" data-close="refcodes">&#10005;</button>
+        </div>
+        <div class="form-gold-bar"></div>
+        <div class="form-body" id="refcodes-body"></div>
+        <div class="form-footer">
+          <div class="save-state" id="refcodes-state"></div>
+          <div style="display:flex;gap:10px;"><button class="btn btn-ghost" data-close="refcodes">Close</button></div>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(wrap.firstElementChild);
+    document.getElementById('modal-refcodes').querySelectorAll('[data-close="refcodes"]')
+      .forEach(el => el.addEventListener('click', () => this.closeForm('refcodes')));
+  };
+
+  // Five digits, never leading zero (spreadsheets eat those), and never a
+  // code already in use — the unique index would otherwise reject the insert
+  // with a message nobody could act on.
+  App.generateReferralCode = function(){
+    const taken = new Set((this.data?.referralAgencies || []).map(a => String(a.access_code)));
+    for (let i = 0; i < 200; i++){
+      const code = String(Math.floor(10000 + Math.random() * 90000));
+      if (!taken.has(code)) return code;
+    }
+    return String(Math.floor(10000 + Math.random() * 90000));
+  };
+
+  App.openReferralCodes = function(){
+    this.ensureReferralCodesModal();
+    const agencies = this.data.referralAgencies || [];
+    document.getElementById('refcodes-body').innerHTML = `
+      <div class="form-section"><div class="form-section-title">Issue a Code</div>
+        <div class="client-form-grid">
+          <div class="field-group"><label class="field-label required">Agency Name</label>
+            <input id="rc-name" class="field-input" placeholder="e.g. Ascencia"></div>
+          <div class="field-group"><label class="field-label">Contact Name</label>
+            <input id="rc-contact" class="field-input"></div>
+          <div class="field-group"><label class="field-label">Contact Email</label>
+            <input id="rc-email" type="email" class="field-input"></div>
+          <div class="field-group"><label class="field-label">Contact Phone</label>
+            <input id="rc-phone" class="field-input"></div>
+        </div>
+        <button class="btn btn-gold btn-sm" id="btn-issue-code" style="margin-top:10px;">Generate Code</button>
+      </div>
+      <div class="form-section"><div class="form-section-title">Active Codes</div>
+        ${agencies.length ? `<div class="client-table-wrap"><table class="client-table">
+          <thead><tr><th>Agency</th><th>Code</th><th>Contact</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>${agencies.map(a => `<tr>
+            <td>${esc(a.agency_name)}</td>
+            <td style="font-family:ui-monospace,Menlo,monospace;">${esc(a.access_code)}</td>
+            <td>${esc(a.contact_name||'—')}<br><span class="field-hint">${esc(a.contact_email||'')}</span></td>
+            <td><span class="badge ${a.active?'badge-green':'badge-gray'}">${a.active?'Active':'Disabled'}</span></td>
+            <td><div class="client-actions">
+              <button class="btn btn-ghost btn-sm" data-rotate-code="${esc(a.id)}">Rotate</button>
+              <button class="btn btn-ghost btn-sm" data-toggle-code="${esc(a.id)}">${a.active?'Disable':'Enable'}</button>
+            </div></td></tr>`).join('')}</tbody></table></div>`
+          : '<div class="field-hint">No partner agencies yet.</div>'}
+        <div class="field-hint" style="margin-top:12px;">Agencies submit at <strong>${esc(location.origin + location.pathname)}#referral</strong> — or from the "Submit a referral" link on the sign-in page.</div>
+      </div>`;
+
+    const body = document.getElementById('refcodes-body');
+    body.querySelector('#btn-issue-code')?.addEventListener('click', () => this.issueReferralCode());
+    body.querySelectorAll('[data-rotate-code]').forEach(b =>
+      b.addEventListener('click', () => this.rotateReferralCode(b.dataset.rotateCode)));
+    body.querySelectorAll('[data-toggle-code]').forEach(b =>
+      b.addEventListener('click', () => this.toggleReferralCode(b.dataset.toggleCode)));
+    this.openOverlay('refcodes');
+  };
+
+  App.issueReferralCode = async function(){
+    const state = document.getElementById('refcodes-state');
+    const name = (document.getElementById('rc-name')?.value || '').trim();
+    if (!name){ state.textContent = 'Enter the agency name.'; return; }
+    const { error } = await this.sb.from('holloway_referral_agencies').insert({
+      program_id: this.program.id, agency_name: name,
+      contact_name: (document.getElementById('rc-contact')?.value || '').trim() || null,
+      contact_email:(document.getElementById('rc-email')?.value || '').trim() || null,
+      contact_phone:(document.getElementById('rc-phone')?.value || '').trim() || null,
+      access_code: this.generateReferralCode(), created_by: this.user?.email || null
+    });
+    if (error){ state.textContent = 'Could not issue code: ' + error.message; return; }
+    state.textContent = 'Code issued.';
+    await this.loadAll();
+    this.openReferralCodes();
+  };
+
+  App.rotateReferralCode = function(id){
+    const a = (this.data.referralAgencies||[]).find(x => x.id === id);
+    if (!a) return;
+    this.confirm(`Rotate the code for ${a.agency_name}? Their current code stops working immediately.`, async () => {
+      const { error } = await this.sb.from('holloway_referral_agencies')
+        .update({ access_code: this.generateReferralCode() }).eq('id', id);
+      const state = document.getElementById('refcodes-state');
+      if (error){ if (state) state.textContent = 'Could not rotate: ' + error.message; return; }
+      await this.loadAll(); this.openReferralCodes();
+      if (state) state.textContent = 'New code issued — send it to the agency.';
+    });
+  };
+
+  App.toggleReferralCode = async function(id){
+    const a = (this.data.referralAgencies||[]).find(x => x.id === id);
+    if (!a) return;
+    const { error } = await this.sb.from('holloway_referral_agencies').update({ active: !a.active }).eq('id', id);
+    const state = document.getElementById('refcodes-state');
+    if (error){ if (state) state.textContent = 'Could not update: ' + error.message; return; }
+    await this.loadAll(); this.openReferralCodes();
+  };
+
 })();
 
 
