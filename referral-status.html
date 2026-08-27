@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Check Referral Status &middot; Holloway Interim Housing Program</title>
+<style>
+  :root {
+    --ink: #1c2430;
+    --muted: #5d6b7a;
+    --line: #d9e0e8;
+    --bg: #f4f6f9;
+    --card: #ffffff;
+    --accent: #1f4e79;
+    --danger: #a12b2b;
+    --danger-bg: #fdeded;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2rem 1rem 4rem;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 .35rem; }
+  .sub { color: var(--muted); margin: 0 0 1.5rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+  label { display: block; font-weight: 600; margin-bottom: .4rem; }
+  .hint { color: var(--muted); font-size: .875rem; font-weight: 400; }
+  .row { display: flex; gap: .6rem; flex-wrap: wrap; }
+  input[type="text"] {
+    flex: 1 1 260px;
+    padding: .65rem .75rem;
+    font-size: 1rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    letter-spacing: .04em;
+  }
+  input[type="text"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button {
+    padding: .65rem 1.4rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: .6; cursor: default; }
+  .msg { margin-top: .9rem; padding: .7rem .85rem; border-radius: 6px; font-size: .95rem; }
+  .msg.error { background: var(--danger-bg); color: var(--danger); border: 1px solid #f2c6c6; }
+  .msg.info { background: #eef3f8; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { text-align: left; padding: .6rem .5rem; border-bottom: 1px solid var(--line); }
+  th { font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  .badge {
+    display: inline-block; padding: .15rem .55rem; border-radius: 999px;
+    font-size: .8rem; font-weight: 600; white-space: nowrap;
+  }
+  .s-new       { background: #e7effa; color: #1f4e79; }
+  .s-review    { background: #fdf2dc; color: #8a5b00; }
+  .s-accepted  { background: #e4f4e8; color: #1e6b34; }
+  .s-declined  { background: #fdeded; color: #a12b2b; }
+  .s-withdrawn { background: #eceff2; color: #5d6b7a; }
+  .foot { color: var(--muted); font-size: .875rem; }
+  .hidden { display: none; }
+  caption { text-align: left; font-weight: 600; padding-bottom: .6rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Check Referral Status</h1>
+  <p class="sub">Holloway Interim Housing Program &middot; City of West Hollywood</p>
+
+  <div class="card">
+    <label for="code">
+      Agency access code
+      <span class="hint">The same code you use to submit a referral.</span>
+    </label>
+    <form id="lookup-form" class="row" autocomplete="off">
+      <input type="text" id="code" name="code" placeholder="e.g. ABCD-1234" required
+             autocapitalize="characters" spellcheck="false">
+      <button type="submit" id="submit-btn">Check status</button>
+    </form>
+    <div id="message" class="msg hidden" role="status" aria-live="polite"></div>
+  </div>
+
+  <div class="card hidden" id="results-card">
+    <table id="results-table">
+      <caption id="results-caption"></caption>
+      <thead>
+        <tr>
+          <th scope="col">Client</th>
+          <th scope="col">Submitted</th>
+          <th scope="col">Status</th>
+          <th scope="col">Status updated</th>
+        </tr>
+      </thead>
+      <tbody id="results-body"></tbody>
+    </table>
+    <p class="foot" style="margin-bottom:0">
+      Client names are shortened to first name and last initial. Questions about a specific
+      referral? Contact the Holloway team rather than replying here.
+    </p>
+  </div>
+
+</div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = 'https://osilouhgoehyesbastxr.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_mCJABa7yJS__DoG1QaSAbA_F8HHPrAl';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const form        = document.getElementById('lookup-form');
+const codeInput   = document.getElementById('code');
+const submitBtn   = document.getElementById('submit-btn');
+const messageEl   = document.getElementById('message');
+const resultsCard = document.getElementById('results-card');
+const resultsBody = document.getElementById('results-body');
+const caption     = document.getElementById('results-caption');
+
+const STATUS_CLASS = {
+  'New':       's-new',
+  'In Review': 's-review',
+  'Accepted':  's-accepted',
+  'Declined':  's-declined',
+  'Withdrawn': 's-withdrawn'
+};
+
+function showMessage(text, kind) {
+  messageEl.textContent = text;
+  messageEl.className = 'msg ' + kind;
+}
+
+function clearMessage() {
+  messageEl.textContent = '';
+  messageEl.className = 'msg hidden';
+}
+
+function formatDate(value) {
+  if (!value) return '—';
+  const [y, m, d] = value.split('-').map(Number);
+  if (!y || !m || !d) return value;
+  return new Date(y, m - 1, d).toLocaleDateString('en-US',
+    { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function render(agencyName, referrals) {
+  resultsBody.replaceChildren();
+  caption.textContent = agencyName + ' — ' + referrals.length +
+    (referrals.length === 1 ? ' referral' : ' referrals');
+
+  for (const r of referrals) {
+    const tr = document.createElement('tr');
+
+    const name = document.createElement('td');
+    name.textContent = r.client_name || '—';
+
+    const submitted = document.createElement('td');
+    submitted.textContent = formatDate(r.date_submitted);
+
+    const status = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.className = 'badge ' + (STATUS_CLASS[r.status] || 's-withdrawn');
+    badge.textContent = r.status;
+    status.appendChild(badge);
+
+    const changed = document.createElement('td');
+    changed.textContent = formatDate(r.status_changed_on);
+
+    tr.append(name, submitted, status, changed);
+    resultsBody.appendChild(tr);
+  }
+
+  resultsCard.classList.remove('hidden');
+}
+
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  clearMessage();
+  resultsCard.classList.add('hidden');
+
+  const code = codeInput.value.trim();
+  if (!code) return;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Checking…';
+
+  try {
+    const { data, error } = await supabase.rpc(
+      'holloway_referral_status_lookup', { p_code: code }
+    );
+
+    if (error) {
+      showMessage('Something went wrong reaching the server. Please try again in a moment.', 'error');
+      console.error(error);
+      return;
+    }
+
+    if (!data || data.ok !== true) {
+      showMessage((data && data.message) ||
+        'That code was not recognised. Check it with the Holloway team and try again.', 'error');
+      return;
+    }
+
+    if (!data.referrals || data.referrals.length === 0) {
+      showMessage('No referrals have been submitted under this access code yet.', 'info');
+      return;
+    }
+
+    render(data.agency_name, data.referrals);
+  } catch (err) {
+    showMessage('Something went wrong reaching the server. Please try again in a moment.', 'error');
+    console.error(err);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Check status';
+  }
+});
+</script>
+</body>
+</html>
