@@ -517,6 +517,33 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .brand-program { font-family: var(--font-sans); font-size: 15px; font-weight: 650; letter-spacing: -.01em;
   line-height:1.18; max-width:34ch; }
 
+/* ---- Referral pipeline (programs with has_referral_pipeline) ---- */
+.sla-badge { display:inline-block; font-size:11px; font-weight:600; letter-spacing:.01em; padding:2px 7px;
+  border-radius:999px; white-space:nowrap; border:1px solid transparent; }
+.sla-met       { background:#E8F6EE; color:#186A3B; border-color:#BFE3CD; }
+.sla-met_late  { background:#FDF3E0; color:#8A5B00; border-color:#F0DBAE; }
+.sla-open      { background:var(--gray-100); color:var(--gray-600); border-color:var(--border); }
+.sla-due_today { background:#FDF3E0; color:#8A5B00; border-color:#F0DBAE; }
+.sla-overdue   { background:#FBEAEA; color:#98241F; border-color:#F0C3C1; }
+
+.sla-strip { display:flex; gap:10px; flex-wrap:wrap; margin:16px 0 6px; }
+.sla-card { background:var(--white); border:1px solid var(--border); border-radius:10px; padding:11px 15px; min-width:150px; }
+.sla-card.is-alert { border-color:#F0C3C1; background:#FEF7F7; }
+.sla-card-label { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--gray-400); }
+.sla-card-value { font-family:var(--font-sans); font-size:21px; font-weight:700; color:var(--navy); letter-spacing:-.02em; margin-top:3px; }
+.sla-card.is-alert .sla-card-value { color:#98241F; }
+.sla-card-sub { font-size:11.5px; color:var(--gray-500); }
+
+.pipe-stage { font-size:11.5px; font-weight:600; color:var(--navy); }
+.pipe-source { font-size:11px; color:var(--gray-500); }
+.pipe-attempt-row { display:flex; justify-content:space-between; gap:12px; padding:8px 0;
+  border-bottom:1px solid var(--gray-100); font-size:12.5px; }
+.pipe-attempt-row:last-child { border-bottom:none; }
+.pipe-msg { font-size:12.5px; margin-top:10px; min-height:16px; }
+.pipe-msg.err { color:var(--red); }
+.pipe-msg.ok { color:var(--green); }
+.pipe-holiday-note { font-size:11.5px; color:var(--gray-500); margin-top:10px; }
+
 /* ---- Bed board (programs with has_beds) ---- */
 .bed-summary { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
 .bed-stat { background:var(--white); border:1px solid var(--border); border-radius:10px; padding:11px 15px; min-width:132px; }
@@ -11794,6 +11821,543 @@ const App = {
   App.showView = function(view){
     previousShowViewForBeds.call(this, view);
     if (view === 'beds') this.renderBeds();
+  };
+})();
+
+
+(function(){
+  /* ==========================================================================
+     City referral pipeline — programs with has_referral_pipeline.
+
+     Exhibit A section 4 measures two things in business days: a referral is
+     acknowledged within one, and within two it has either an admission status
+     or a documented barrier explaining why it does not. Referrals arrive from
+     the City, from the provider and from the community member directly, not
+     only from partner agencies, so staff can log one here as well as receive
+     one through the public form. Both live in the same table.
+
+     The deadlines are computed by holloway_referral_service_levels() rather
+     than in the browser, so the date a reviewer is shown is the date the
+     database would produce at an audit — the two cannot drift apart.
+
+     Holloway has has_referral_pipeline = false and takes the original code
+     path untouched.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+
+  const SOURCES = {
+    partner_agency: 'Partner agency',
+    city:           'City of West Hollywood',
+    program:        'Provider-identified',
+    self:           'Self-referral',
+    other:          'Other'
+  };
+
+  const ELIGIBILITY = {
+    eligible:          'Eligible',
+    not_eligible:      'Not eligible',
+    more_info_needed:  'More information needed'
+  };
+
+  const DECISIONS = {
+    admitted:   'Admitted',
+    scheduled:  'Admission scheduled',
+    waitlisted: 'Waitlisted',
+    declined:   'Declined',
+    withdrawn:  'Withdrawn',
+    barrier:    'Barrier documented'
+  };
+
+  // The pipeline decision is the fact; the shared Referrals status is a label
+  // over it. Keep them in step so the two screens never disagree.
+  const DECISION_STATUS = {
+    admitted:'Accepted', scheduled:'Accepted', waitlisted:'In Review',
+    declined:'Declined', withdrawn:'Withdrawn', barrier:'In Review'
+  };
+
+  const AFFILIATION = {
+    verified:       'Verified',
+    self_attested:  'Self-attested',
+    not_affiliated: 'Not affiliated',
+    pending:        'Pending verification'
+  };
+
+  const DESIGNATIONS = { reserved:'Reserved bed', fee_for_service:'Fee-for-service bed' };
+  const GENDERS      = { men:"Men's", women:"Women's" };
+
+  /* ------------------------------------------------------------- loading */
+
+  const previousLoadAllForPipeline = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAllForPipeline.call(this);
+    if (!this.data) this.data = {};
+    this.data.referralContacts = [];
+    this.data.referralClocks   = {};
+    this.data.holidays         = [];
+    const pid = this.program?.id;
+    if (!pid || !this.programHas('has_referral_pipeline') || this.isAgencyFiscal?.()) return;
+
+    const [contacts, clocks, holidays] = await Promise.all([
+      this.sb.from('holloway_referral_contacts').select('*').eq('program_id', pid)
+             .order('attempted_at', { ascending:false }),
+      this.sb.rpc('holloway_referral_service_levels', { p_program_id: pid }),
+      this.sb.from('holloway_business_holidays').select('*').order('holiday_date')
+    ]);
+    if (contacts.error) console.warn('referral contacts unavailable', contacts.error);
+    if (clocks.error)   console.warn('referral service levels unavailable', clocks.error);
+
+    this.data.referralContacts = contacts.data || [];
+    this.data.holidays         = holidays.data || [];
+    this.data.referralClocks   = (clocks.data || []).reduce((m,c) => (m[c.referral_id] = c, m), {});
+  };
+
+  App.referralContactsFor = function(id){
+    return (this.data.referralContacts || []).filter(c => c.referral_id === id);
+  };
+  App.referralClock = function(id){ return (this.data.referralClocks || {})[id] || null; };
+
+  /* --------------------------------------------------------- presentation */
+
+  App.slaBadge = function(state, due, daysLate, label){
+    const text = {
+      met:       `${label} on time`,
+      met_late:  `${label} ${daysLate} business day${daysLate===1?'':'s'} late`,
+      open:      `${label} due ${this.formatDate(due)}`,
+      due_today: `${label} due today`,
+      overdue:   `${label} ${daysLate} business day${daysLate===1?'':'s'} overdue`
+    }[state] || `${label} —`;
+    return `<span class="sla-badge sla-${esc(state)}">${esc(text)}</span>`;
+  };
+
+  App.referralStage = function(r){
+    if (r.actual_admission_date) return 'Admitted';
+    if (r.admission_decision)    return DECISIONS[r.admission_decision] || r.admission_decision;
+    if (r.eligibility_determination) return ELIGIBILITY[r.eligibility_determination] || 'Eligibility determined';
+    if (r.acknowledged_at)       return 'Acknowledged';
+    return 'Received';
+  };
+
+  // "Needs action" is the working queue: anything whose acknowledgement or
+  // determination clock is still running or already blown.
+  App.referralNeedsAction = function(r){
+    const c = this.referralClock(r.id);
+    if (!c) return false;
+    const live = s => s === 'open' || s === 'due_today' || s === 'overdue';
+    return live(c.ack_state) || live(c.det_state);
+  };
+
+  /* ---------------------------------------------------------- the list view */
+
+  const previousRenderReferrals = App.renderReferrals;
+  App.renderReferrals = function(){
+    if (!this.programHas('has_referral_pipeline')) return previousRenderReferrals.call(this);
+
+    const el = document.getElementById('view-referrals');
+    if (!el) return;
+    this._pipeFilter = this._pipeFilter || 'Needs action';
+
+    const all      = this.data.referrals || [];
+    const needs    = all.filter(r => this.referralNeedsAction(r));
+    const overdue  = all.filter(r => { const c = this.referralClock(r.id);
+                                       return c && (c.ack_state === 'overdue' || c.det_state === 'overdue'); });
+    const admitted = all.filter(r => r.actual_admission_date);
+    const closed   = all.filter(r => ['declined','withdrawn'].includes(r.admission_decision));
+
+    const buckets = {
+      'Needs action': needs, 'Overdue': overdue, 'Admitted': admitted,
+      'Not admitted': closed, 'All': all
+    };
+    const rows = buckets[this._pipeFilter] || all;
+
+    const chip = (label) => `<button type="button" class="btn btn-ghost btn-sm ${this._pipeFilter===label?'btn-gold':''}"
+        data-pipe-filter="${esc(label)}">${esc(label)} (${buckets[label].length})</button>`;
+
+    const clockCell = (r, which) => {
+      const c = this.referralClock(r.id);
+      if (!c) return '<span class="field-hint">—</span>';
+      return which === 'ack'
+        ? this.slaBadge(c.ack_state, c.ack_due, c.ack_days_late, 'Acknowledge')
+        : this.slaBadge(c.det_state, c.det_due, c.det_days_late, 'Determine');
+    };
+
+    const table = rows.length ? `<div class="client-table-wrap"><table class="client-table">
+      <thead><tr><th>Received</th><th>Community Member</th><th>Source</th><th>Stage</th>
+        <th>Acknowledgement</th><th>Determination</th><th>Admission</th><th>Actions</th></tr></thead>
+      <tbody>${rows.map(r => {
+        const c = this.referralClock(r.id);
+        return `<tr>
+        <td>${this.formatDate(c ? c.received_on : this.dateOnly(r.received_at || r.submitted_at))}</td>
+        <td><strong>${esc(r.community_member_name)}</strong>
+            ${r.date_of_birth ? `<br><span class="field-hint">DOB ${this.formatDate(this.dateOnly(r.date_of_birth))}</span>` : ''}</td>
+        <td><span class="pipe-source">${esc(SOURCES[r.referral_source] || r.referral_source)}</span>
+            ${r.referring_agency ? `<br><span class="field-hint">${esc(r.referring_agency)}</span>` : ''}</td>
+        <td><span class="pipe-stage">${esc(this.referralStage(r))}</span></td>
+        <td>${clockCell(r,'ack')}</td>
+        <td>${clockCell(r,'det')}</td>
+        <td>${r.actual_admission_date ? this.formatDate(this.dateOnly(r.actual_admission_date))
+             : r.scheduled_admission_date ? `<span class="field-hint">scheduled ${this.formatDate(this.dateOnly(r.scheduled_admission_date))}</span>`
+             : '<span class="field-hint">—</span>'}</td>
+        <td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-open-referral="${esc(r.id)}">Open</button></div></td>
+      </tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="client-table-wrap"><table class="client-table"><tbody><tr>
+          <td class="empty-table-state">No referrals in this view.</td></tr></tbody></table></div>`;
+
+    const unconfirmed = (this.data.holidays || []).filter(h => h.source !== 'confirmed').length;
+
+    el.innerHTML = `<div class="page-header">
+        <div><h1 class="page-title">Referral Pipeline</h1>
+          <div class="page-subtitle">Referrals from the City, partner agencies, the provider and self-referral, with the
+            section&nbsp;4 service levels measured in business days.</div></div>
+        <div class="client-actions">
+          <button class="btn btn-gold" id="btn-log-referral">Log a Referral</button>
+          ${this.isAdmin?.() ? `<button class="btn btn-ghost" id="btn-referral-codes">Manage Agency Codes</button>` : ''}
+        </div>
+      </div>
+
+      <div class="sla-strip">
+        <div class="sla-card"><div class="sla-card-label">Needs action</div>
+          <div class="sla-card-value">${needs.length}</div>
+          <div class="sla-card-sub">a clock is still running</div></div>
+        <div class="sla-card ${overdue.length ? 'is-alert' : ''}"><div class="sla-card-label">Past service level</div>
+          <div class="sla-card-value">${overdue.length}</div>
+          <div class="sla-card-sub">acknowledgement or determination</div></div>
+        <div class="sla-card"><div class="sla-card-label">Admitted</div>
+          <div class="sla-card-value">${admitted.length}</div>
+          <div class="sla-card-sub">admission date recorded</div></div>
+        <div class="sla-card"><div class="sla-card-label">Not admitted</div>
+          <div class="sla-card-value">${closed.length}</div>
+          <div class="sla-card-sub">declined or withdrawn</div></div>
+      </div>
+
+      <div class="table-filter-row" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        ${Object.keys(buckets).map(chip).join('')}
+      </div>
+      ${table}
+      <div class="pipe-holiday-note">Business days exclude weekends and ${(this.data.holidays||[]).length} holiday(s) on file${
+        unconfirmed ? ` &middot; ${unconfirmed} of them are the common municipal closure days and still need checking against the City&rsquo;s published calendar` : ''}.</div>`;
+
+    el.querySelectorAll('[data-pipe-filter]').forEach(b =>
+      b.addEventListener('click', () => { this._pipeFilter = b.dataset.pipeFilter; this.renderReferrals(); }));
+    el.querySelectorAll('[data-open-referral]').forEach(b =>
+      b.addEventListener('click', () => this.openReferralDetail(b.dataset.openReferral)));
+    el.querySelector('#btn-referral-codes')?.addEventListener('click', () => this.openReferralCodes());
+    el.querySelector('#btn-log-referral')?.addEventListener('click', () => this.openLogReferral());
+  };
+
+  /* ----------------------------------------------- pipeline detail sections */
+
+  const previousOpenReferralDetail = App.openReferralDetail;
+  App.openReferralDetail = function(id){
+    previousOpenReferralDetail.call(this, id);
+    if (!this.programHas('has_referral_pipeline')) return;
+    const r = (this.data.referrals || []).find(x => x.id === id);
+    const body = document.getElementById('referral-detail-body');
+    if (!r || !body) return;
+
+    const c = this.referralClock(id);
+    const attempts = this.referralContactsFor(id);
+    const sel = (name, map, current) => `<select class="field-select" id="${name}">
+        <option value="">—</option>
+        ${Object.entries(map).map(([v,l]) => `<option value="${esc(v)}" ${current===v?'selected':''}>${esc(l)}</option>`).join('')}
+      </select>`;
+
+    const pipeline = document.createElement('div');
+    pipeline.innerHTML = `
+      <div class="form-section"><div class="form-section-title">Service Levels &middot; Exhibit A Section 4</div>
+        ${c ? `<div style="display:flex;gap:8px;flex-wrap:wrap;">
+                 ${this.slaBadge(c.ack_state, c.ack_due, c.ack_days_late, 'Acknowledge')}
+                 ${this.slaBadge(c.det_state, c.det_due, c.det_days_late, 'Determine')}
+               </div>
+               <div class="field-hint" style="margin-top:8px;">Received ${this.formatDate(c.received_on)} &middot;
+                 acknowledgement due ${this.formatDate(c.ack_due)} &middot;
+                 admission status or documented barrier due ${this.formatDate(c.det_due)}.</div>`
+             : '<div class="field-hint">Service levels are not available for this referral.</div>'}
+        <div class="client-form-grid" style="margin-top:12px;">
+          <div class="field-group"><label class="field-label" for="pipe-ack-method">Acknowledged by</label>
+            <input type="text" class="field-input" id="pipe-ack-method" placeholder="Phone, email, HMIS note…"
+                   value="${esc(r.acknowledgement_method || '')}"></div>
+          <div class="field-group"><label class="field-label">&nbsp;</label>
+            ${r.acknowledged_at
+              ? `<div style="font-size:13px;padding:6px 0;">Acknowledged ${this.formatDate(this.dateOnly(r.acknowledged_at))} by ${esc(r.acknowledged_by || '—')}</div>`
+              : `<button class="btn btn-gold" id="btn-pipe-ack">Record Acknowledgement</button>`}</div>
+        </div>
+      </div>
+
+      <div class="form-section"><div class="form-section-title">Contact Attempts</div>
+        ${attempts.length ? attempts.map(a => `<div class="pipe-attempt-row">
+            <div><strong>${esc(a.method || 'Contact')}</strong>${a.reached ? ' &middot; reached' : ' &middot; no answer'}
+              ${a.outcome ? `<br><span class="field-hint">${esc(a.outcome)}</span>` : ''}
+              ${a.notes ? `<br>${esc(a.notes)}` : ''}</div>
+            <div class="field-hint" style="white-space:nowrap;">${this.formatDate(this.dateOnly(a.attempted_at))}<br>${esc(a.staff_email || '')}</div>
+          </div>`).join('') : '<div class="field-hint">No contact attempts logged.</div>'}
+        <div class="client-form-grid" style="margin-top:12px;">
+          <div class="field-group"><label class="field-label" for="pipe-attempt-method">Method</label>
+            <select class="field-select" id="pipe-attempt-method">
+              <option value="Phone">Phone</option><option value="Text">Text</option>
+              <option value="Email">Email</option><option value="In person">In person</option>
+              <option value="Through referring party">Through referring party</option></select></div>
+          <div class="field-group"><label class="field-label" for="pipe-attempt-reached">Outcome</label>
+            <select class="field-select" id="pipe-attempt-reached">
+              <option value="no">No answer</option><option value="yes">Reached</option></select></div>
+        </div>
+        <textarea id="pipe-attempt-notes" class="field-textarea" placeholder="What happened on this attempt…"></textarea>
+        <button class="btn btn-ghost btn-sm" id="btn-pipe-attempt" style="margin-top:8px;">Log Attempt</button>
+      </div>
+
+      <div class="form-section"><div class="form-section-title">Eligibility and Admission Decision</div>
+        <div class="client-form-grid">
+          <div class="field-group"><label class="field-label" for="pipe-eligibility">Eligibility determination</label>
+            ${sel('pipe-eligibility', ELIGIBILITY, r.eligibility_determination)}</div>
+          <div class="field-group"><label class="field-label" for="pipe-decision">Admission decision</label>
+            ${sel('pipe-decision', DECISIONS, r.admission_decision)}</div>
+          <div class="field-group"><label class="field-label" for="pipe-designation">Bed requested</label>
+            ${sel('pipe-designation', DESIGNATIONS, r.requested_designation)}</div>
+          <div class="field-group"><label class="field-label" for="pipe-gender">Bed category</label>
+            ${sel('pipe-gender', GENDERS, r.requested_gender_category)}</div>
+          <div class="field-group"><label class="field-label" for="pipe-scheduled">Scheduled admission</label>
+            <input type="date" class="field-input" id="pipe-scheduled" value="${esc(this.dateOnly(r.scheduled_admission_date) || '')}"></div>
+          <div class="field-group"><label class="field-label" for="pipe-actual">Actual admission</label>
+            <input type="date" class="field-input" id="pipe-actual" value="${esc(this.dateOnly(r.actual_admission_date) || '')}"></div>
+        </div>
+        <div class="field-group"><label class="field-label" for="pipe-reason">Reason for delay, denial or withdrawal</label>
+          <textarea id="pipe-reason" class="field-textarea">${esc(r.decision_reason || '')}</textarea></div>
+        <div class="field-group"><label class="field-label" for="pipe-barrier">Documented barrier</label>
+          <textarea id="pipe-barrier" class="field-textarea"
+            placeholder="Required within two business days when no admission status can be given.">${esc(r.barrier_description || '')}</textarea>
+          <div class="field-hint">Section 4 is satisfied by an admission status <em>or</em> a documented barrier &mdash; either one stops the clock.</div></div>
+      </div>
+
+      <div class="form-section"><div class="form-section-title">West Hollywood Affiliation &middot; Sections 4 and 12.4</div>
+        <div class="client-form-grid">
+          <div class="field-group"><label class="field-label" for="pipe-affiliation">Affiliation status</label>
+            ${sel('pipe-affiliation', AFFILIATION, r.weho_affiliation)}</div>
+          <div class="field-group"><label class="field-label" for="pipe-affiliation-date">Verified on</label>
+            <input type="date" class="field-input" id="pipe-affiliation-date" value="${esc(this.dateOnly(r.weho_affiliation_date) || '')}"></div>
+          <div class="field-group"><label class="field-label" for="pipe-affiliation-method">How it was verified</label>
+            <input type="text" class="field-input" id="pipe-affiliation-method"
+                   placeholder="Encampment location, service record, City referral…" value="${esc(r.weho_affiliation_method || '')}"></div>
+        </div>
+        <div class="field-group"><label class="field-label" for="pipe-affiliation-notes">Notes</label>
+          <textarea id="pipe-affiliation-notes" class="field-textarea">${esc(r.weho_affiliation_notes || '')}</textarea>
+          <div class="field-hint">Affiliation determines whether City funds may be charged for this participant, so record how it was established, not just that it was.</div></div>
+      </div>
+
+      <div class="form-section">
+        <button class="btn btn-gold" id="btn-pipe-save">Save Pipeline Details</button>
+        <p class="pipe-msg" id="pipe-msg"></p>
+      </div>`;
+
+    while (pipeline.firstElementChild) body.appendChild(pipeline.firstElementChild);
+
+    body.querySelector('#btn-pipe-ack')?.addEventListener('click', () => this.acknowledgeReferral(id));
+    body.querySelector('#btn-pipe-attempt')?.addEventListener('click', () => this.logReferralContact(id));
+    body.querySelector('#btn-pipe-save')?.addEventListener('click', () => this.savePipelineDetails(id));
+  };
+
+  App.pipeMsg = function(text, kind){
+    const el = document.getElementById('pipe-msg');
+    if (el) { el.textContent = text; el.className = 'pipe-msg' + (kind ? ' ' + kind : ''); }
+  };
+
+  /* --------------------------------------------------------------- actions */
+
+  App.acknowledgeReferral = async function(id){
+    const method = document.getElementById('pipe-ack-method')?.value?.trim() || null;
+    this.pipeMsg('Recording acknowledgement…');
+    const { error } = await this.sb.from('holloway_referrals').update({
+      acknowledged_at: new Date().toISOString(),
+      acknowledged_by: this.user?.email || null,
+      acknowledgement_method: method,
+      updated_at: new Date().toISOString()
+    }).eq('id', id).eq('program_id', this.program.id);
+    if (error) { this.pipeMsg('Could not save: ' + error.message, 'err'); return; }
+    await this.loadAll();
+    this.openReferralDetail(id);
+    this.renderReferrals();
+  };
+
+  App.logReferralContact = async function(id){
+    const method  = document.getElementById('pipe-attempt-method')?.value || null;
+    const reached = document.getElementById('pipe-attempt-reached')?.value === 'yes';
+    const notes   = document.getElementById('pipe-attempt-notes')?.value?.trim() || null;
+    this.pipeMsg('Logging attempt…');
+    const { error } = await this.sb.from('holloway_referral_contacts').insert({
+      program_id: this.program.id, referral_id: id,
+      method, reached, notes, staff_email: this.user?.email || null
+    });
+    if (error) { this.pipeMsg('Could not save: ' + error.message, 'err'); return; }
+    await this.loadAll();
+    this.openReferralDetail(id);
+  };
+
+  App.savePipelineDetails = async function(id){
+    const v = x => { const el = document.getElementById(x); const s = el ? String(el.value).trim() : ''; return s === '' ? null : s; };
+    const decision = v('pipe-decision');
+    const barrier  = v('pipe-barrier');
+    const actual   = v('pipe-actual');
+    const scheduled= v('pipe-scheduled');
+    const r = (this.data.referrals || []).find(x => x.id === id) || {};
+
+    // Section 4 wants a reason on the record whenever the answer is no, so a
+    // decline or a withdrawal without one is refused rather than saved thin.
+    if (['declined','withdrawn'].includes(decision) && !v('pipe-reason')) {
+      this.pipeMsg('Record the reason for the ' + (decision === 'declined' ? 'denial' : 'withdrawal') + ' before saving.', 'err'); return;
+    }
+    if (decision === 'barrier' && !barrier) {
+      this.pipeMsg('Describe the barrier — that description is what satisfies the two business day service level.', 'err'); return;
+    }
+    if (actual && scheduled && actual < scheduled) {
+      this.pipeMsg('The actual admission date is before the scheduled one. Check both dates.', 'err'); return;
+    }
+
+    const payload = {
+      eligibility_determination: v('pipe-eligibility'),
+      eligibility_determined_at: v('pipe-eligibility')
+        ? (r.eligibility_determined_at || new Date().toISOString()) : null,
+      admission_decision: decision,
+      // A documented barrier stops the section 4 clock just as a decision does,
+      // so it stamps the same timestamp.
+      decision_at: (decision || barrier) ? (r.decision_at || new Date().toISOString()) : null,
+      decision_by: (decision || barrier) ? (r.decision_by || this.user?.email || null) : null,
+      decision_reason: v('pipe-reason'),
+      barrier_description: barrier,
+      scheduled_admission_date: scheduled,
+      actual_admission_date: actual,
+      requested_designation: v('pipe-designation'),
+      requested_gender_category: v('pipe-gender'),
+      weho_affiliation: v('pipe-affiliation'),
+      weho_affiliation_date: v('pipe-affiliation-date'),
+      weho_affiliation_method: v('pipe-affiliation-method'),
+      weho_affiliation_notes: v('pipe-affiliation-notes'),
+      updated_at: new Date().toISOString()
+    };
+    if (decision && DECISION_STATUS[decision]) {
+      payload.status = DECISION_STATUS[decision];
+      payload.status_changed_at = new Date().toISOString();
+      payload.status_changed_by = this.user?.email || null;
+    }
+
+    this.pipeMsg('Saving…');
+    const { error } = await this.sb.from('holloway_referrals').update(payload)
+      .eq('id', id).eq('program_id', this.program.id);
+    if (error) { this.pipeMsg('Could not save: ' + error.message, 'err'); return; }
+    await this.loadAll();
+    this.openReferralDetail(id);
+    this.renderReferrals();
+    this.pipeMsg('Saved.', 'ok');
+  };
+
+  /* ------------------------------------------------------- logging one in */
+
+  App.ensureLogReferralModal = function(){
+    if (document.getElementById('modal-logref')) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `<div id="modal-logref" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="logref-title">
+      <div class="form-modal">
+        <div class="form-modal-header">
+          <div><h2 class="form-modal-title" id="logref-title">Log a Referral</h2>
+            <div class="form-modal-meta">For referrals that did not come through the partner agency form</div></div>
+          <button class="form-close-btn" data-close="logref">&#10005;</button>
+        </div>
+        <div class="form-gold-bar"></div>
+        <div class="form-body" id="logref-body"></div>
+        <div class="form-footer">
+          <div class="save-state" id="logref-state"></div>
+          <div style="display:flex;gap:10px;">
+            <button class="btn btn-ghost" data-close="logref">Cancel</button>
+            <button class="btn btn-gold" id="btn-logref-save">Save Referral</button></div>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(wrap.firstElementChild);
+    document.getElementById('modal-logref').querySelectorAll('[data-close="logref"]')
+      .forEach(el => el.addEventListener('click', () => this.closeForm('logref')));
+    document.getElementById('btn-logref-save').addEventListener('click', () => this.saveLoggedReferral());
+  };
+
+  App.openLogReferral = function(){
+    this.ensureLogReferralModal();
+    const today = this.localDate();
+    document.getElementById('logref-body').innerHTML = `
+      <div class="form-section"><div class="form-section-title">How it arrived</div>
+        <div class="client-form-grid">
+          <div class="field-group"><label class="field-label" for="logref-source">Referral source</label>
+            <select class="field-select" id="logref-source">
+              ${Object.entries(SOURCES).filter(([v]) => v !== 'partner_agency')
+                .map(([v,l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('')}
+            </select></div>
+          <div class="field-group"><label class="field-label" for="logref-received">Date received</label>
+            <input type="date" class="field-input" id="logref-received" value="${esc(today)}"></div>
+          <div class="field-group"><label class="field-label" for="logref-party">Referring party</label>
+            <input type="text" class="field-input" id="logref-party" placeholder="City staff member, outreach team, self…"></div>
+          <div class="field-group"><label class="field-label" for="logref-party-contact">Their contact</label>
+            <input type="text" class="field-input" id="logref-party-contact" placeholder="Phone or email"></div>
+        </div>
+        <div class="field-hint">The acknowledgement and determination clocks start from the date received, so enter the date the
+          referral actually reached the program rather than today&rsquo;s date if they differ.</div>
+      </div>
+
+      <div class="form-section"><div class="form-section-title">Community Member</div>
+        <div class="client-form-grid">
+          <div class="field-group"><label class="field-label" for="logref-name">Name</label>
+            <input type="text" class="field-input" id="logref-name"></div>
+          <div class="field-group"><label class="field-label" for="logref-dob">Date of birth</label>
+            <input type="date" class="field-input" id="logref-dob"></div>
+          <div class="field-group"><label class="field-label" for="logref-contact">How to reach them</label>
+            <input type="text" class="field-input" id="logref-contact" placeholder="Phone, email, or where they are staying"></div>
+          <div class="field-group"><label class="field-label" for="logref-affiliation">West Hollywood affiliation</label>
+            <select class="field-select" id="logref-affiliation">
+              <option value="">—</option>
+              ${Object.entries(AFFILIATION).map(([v,l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('')}
+            </select></div>
+        </div>
+      </div>
+
+      <div class="form-section"><div class="form-section-title">Bed Requested</div>
+        <div class="client-form-grid">
+          <div class="field-group"><label class="field-label" for="logref-designation">Designation</label>
+            <select class="field-select" id="logref-designation"><option value="">—</option>
+              ${Object.entries(DESIGNATIONS).map(([v,l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('')}</select></div>
+          <div class="field-group"><label class="field-label" for="logref-gender">Category</label>
+            <select class="field-select" id="logref-gender"><option value="">—</option>
+              ${Object.entries(GENDERS).map(([v,l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('')}</select></div>
+        </div>
+      </div>`;
+    document.getElementById('logref-state').textContent = '';
+    this.openOverlay('logref');
+  };
+
+  App.saveLoggedReferral = async function(){
+    const v = x => { const el = document.getElementById(x); const s = el ? String(el.value).trim() : ''; return s === '' ? null : s; };
+    const state = document.getElementById('logref-state');
+    const name = v('logref-name');
+    const received = v('logref-received');
+    if (!name || !received) { if (state) state.textContent = 'A name and a date received are required.'; return; }
+    if (received > this.localDate()) { if (state) state.textContent = 'The date received cannot be in the future.'; return; }
+
+    if (state) state.textContent = 'Saving…';
+    const { error } = await this.sb.from('holloway_referrals').insert({
+      id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
+      program_id: this.program.id,
+      referral_source: v('logref-source') || 'other',
+      received_at: new Date(received + 'T12:00:00').toISOString(),
+      referring_agency: v('logref-party'),
+      case_manager_name: v('logref-party'),
+      case_manager_email: v('logref-party-contact'),
+      community_member_name: name,
+      date_of_birth: v('logref-dob'),
+      member_contact_info: v('logref-contact'),
+      requested_designation: v('logref-designation'),
+      requested_gender_category: v('logref-gender'),
+      weho_affiliation: v('logref-affiliation'),
+      status: 'New',
+      logged_by: this.user?.email || null
+    });
+    if (error) { if (state) state.textContent = 'Could not save: ' + error.message; return; }
+    await this.loadAll();
+    this.closeForm('logref');
+    this.renderReferrals();
   };
 })();
 
