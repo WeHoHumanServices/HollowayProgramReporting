@@ -514,7 +514,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   padding: 0 28px;
   box-shadow: 0 2px 16px rgba(15,23,42,.16);
 }
-.brand-program { font-family: var(--font-sans); font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+.brand-program { font-family: var(--font-sans); font-size: 15px; font-weight: 650; letter-spacing: -.01em;
+  line-height:1.18; max-width:34ch; }
+.program-switch { display:none; align-items:center; gap:7px; margin-right:4px; }
+.program-switch.show { display:flex; }
+.program-switch label { font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.6); }
+.program-switch select { font-family:var(--font-sans); font-size:12.5px; font-weight:600; color:var(--white);
+  background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.28); border-radius:8px;
+  padding:5px 9px; max-width:260px; cursor:pointer; }
+.program-switch select:focus-visible { outline:2px solid var(--gold); outline-offset:1px; }
+.program-switch option { color:var(--gray-800); background:var(--white); }
 .brand-sub { font-size: 10px; letter-spacing: .09em; }
 .deadline-chip, .user-pill { backdrop-filter: blur(8px); }
 .user-pill { padding: 5px 12px 5px 6px; }
@@ -1344,6 +1353,10 @@ th.sortable:hover { color:var(--navy); }
       </div>
     </div>
     <div class="topbar-right">
+      <div class="program-switch" id="program-switch">
+        <label for="program-select">Program</label>
+        <select id="program-select"></select>
+      </div>
       <span id="deadline-chip" class="deadline-chip"></span>
       <span class="badge badge-navy" id="topbar-fy">FY 2025–26</span>
       <button type="button" class="user-pill" id="user-pill-btn" title="Account settings" aria-haspopup="dialog"><div class="user-avatar" id="user-avatar">U</div><span id="user-name">User</span></button>
@@ -2318,16 +2331,12 @@ const App = {
     if (error) throw error;
     this.profile = Array.isArray(data) ? data[0] : data;
 
-    let pq = this.sb.from('programs').select('*');
-    if (CONFIG.PROGRAM_ID) {
-      pq = pq.eq('id', CONFIG.PROGRAM_ID);
-    } else {
-      pq = pq.eq('name', CONFIG.PROGRAM_NAME);
+    await this.resolveAvailablePrograms();
+    if (!this.program) {
+      throw new Error(this.isAdmin()
+        ? 'No programs are configured.'
+        : 'No program is assigned to your account. Contact the City program monitor.');
     }
-    const { data: programs, error: pErr } = await pq.limit(1);
-    if (pErr) throw pErr;
-    this.program = programs?.[0] || null;
-    if (!this.program) throw new Error((CONFIG.PROGRAM_NAME || 'Program') + ' not found.');
     // Fiscal visibility is deliberately separate from the existing program role.
     // Existing agency users default to Support Staff; only users explicitly
     // designated Agency Management can see fiscal data. City admins always can.
@@ -2336,6 +2345,57 @@ const App = {
     // and the quarter map has to exist before any view renders.
     await this.loadContractPeriods();
   },
+
+  // Which programs this account may work in. City admins may choose any; agency
+  // staff get the ones they hold a membership for, which is usually exactly one.
+  async resolveAvailablePrograms() {
+    const { data: all, error } = await this.sb.from('programs').select('*').order('name');
+    if (error) throw error;
+    let mine = all || [];
+    if (!this.isAdmin()) {
+      const { data: ids, error: idErr } = await this.sb.rpc('holloway_my_program_ids');
+      if (idErr) throw idErr;
+      const allowed = new Set(ids || []);
+      mine = mine.filter(p => allowed.has(p.id));
+    }
+    // A pinned build still wins, so a single-program deployment stays possible.
+    if (CONFIG.PROGRAM_ID) mine = mine.filter(p => p.id === CONFIG.PROGRAM_ID);
+    this.availablePrograms = mine;
+    this.program = mine.find(p => p.id === this.rememberedProgramId())
+                || mine.find(p => p.name === CONFIG.PROGRAM_NAME)
+                || mine[0] || null;
+  },
+
+  programStorageKey() { return 'holloway.program.' + (this.user?.email || 'anon').toLowerCase(); },
+  rememberedProgramId() { try { return localStorage.getItem(this.programStorageKey()); } catch (e) { return null; } },
+
+  // Switching reloads rather than swapping in place: every view caches program
+  // data, and a full reload is the only way to be certain none of it survives
+  // into the other program's workspace.
+  switchProgram(id) {
+    if (!id || id === this.program?.id) return;
+    try { localStorage.setItem(this.programStorageKey(), id); } catch (e) {}
+    location.reload();
+  },
+
+  renderProgramSwitcher() {
+    const wrap = document.getElementById('program-switch');
+    const sel = document.getElementById('program-select');
+    if (!wrap || !sel) return;
+    const list = this.availablePrograms || [];
+    wrap.classList.toggle('show', list.length > 1);
+    if (list.length > 1) {
+      sel.innerHTML = list.map(p =>
+        `<option value="${this.escape(p.id)}" ${p.id === this.program?.id ? 'selected' : ''}>${this.escape(p.name)}</option>`).join('');
+      if (!sel.dataset.bound) { sel.dataset.bound = '1'; sel.addEventListener('change', () => this.switchProgram(sel.value)); }
+    }
+    const brand = document.getElementById('brand-program');
+    if (brand && this.program?.name) brand.textContent = this.program.name + ' Reporting Portal';
+  },
+
+  // What this program's contract actually includes. One file serves both, so
+  // each shows only its own modules.
+  programHas(feature) { return this.program?.[feature] === true; },
 
   isAdmin() { return this.profile?.role === 'city_admin' || this.profile?.access_type === 'city_admin'; },
   canEdit() {
@@ -2647,7 +2707,10 @@ const App = {
     document.getElementById('nav-review').style.display = this.isAdmin() ? 'flex' : 'none';
     document.getElementById('nav-access').style.display = this.isAdmin() ? 'flex' : 'none';
     const fiscalNav = document.getElementById('nav-fiscal');
-    if (fiscalNav) fiscalNav.style.display = this.canViewFiscal?.() ? 'flex' : 'none';
+    // Fiscal now needs both the permission and a program that uses cost reports.
+    if (fiscalNav) fiscalNav.style.display =
+      (this.programHas('has_fiscal') && this.canViewFiscal?.()) ? 'flex' : 'none';
+    this.renderProgramSwitcher();
 
     // Agency-Fiscal has a deliberately narrow workspace: aggregate Program
     // Dashboard plus Fiscal Reporting, and — when FISCAL_VIEW_PROGRAM_REPORTS
@@ -2664,7 +2727,11 @@ const App = {
         section.style.display = visible ? '' : 'none';
       });
     } else {
-      document.querySelectorAll('.sidebar-section').forEach(section => { section.style.display = ''; });
+      document.querySelectorAll('.sidebar-section').forEach(section => {
+        const items = [...section.querySelectorAll('.sidebar-item')];
+        const visible = items.some(el => getComputedStyle(el).display !== 'none');
+        section.style.display = (items.length && !visible) ? 'none' : '';
+      });
     }
 
     // Hide form actions in the sidebar from non-editors so unauthorized users
@@ -9058,7 +9125,10 @@ const App = {
     if(this.profile) this.profile.agency_group=this.agencyGroup;
     return this.agencyGroup;
   };
-  App.canViewFiscal = function(){ return this.isAdmin() || ['management','fiscal'].includes(this.agencyGroup) || ['management','fiscal'].includes(this.profile?.agency_group); };
+  App.canViewFiscal = function(){
+    if (!this.programHas('has_fiscal')) return false;
+    return this.isAdmin() || ['management','fiscal'].includes(this.agencyGroup) || ['management','fiscal'].includes(this.profile?.agency_group);
+  };
 
   App.fiscalMoney = function(v){ return Number(v||0).toLocaleString('en-US',{style:'currency',currency:'USD',minimumFractionDigits:0,maximumFractionDigits:2}); };
   App.fiscalPct = function(v){ return Number.isFinite(v) ? `${Math.round(v*100)}%` : '—'; };
