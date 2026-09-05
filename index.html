@@ -2580,7 +2580,7 @@ const App = {
       try {
         const clientIds = this.data.clients.map(c => c.id).filter(Boolean);
         if (clientIds.length) {
-          const { data: identity, error: identityErr } = await this.sb.from('holloway_client_identity').select('*').in('client_id', clientIds);
+          const { data: identity, error: identityErr } = await this.sb.from('holloway_client_identity').select('*').eq('program_id', this.program.id).in('client_id', clientIds);
           if (identityErr) console.warn('client identity', identityErr);
           else {
             const nameMap = new Map((identity || []).map(r => [r.client_id, r.client_name]));
@@ -6456,10 +6456,11 @@ const App = {
     if(clientName){
       await this.sb.from('holloway_client_identity').upsert({
         client_id:id,
+        program_id:this.program.id,
         client_name:clientName,
         updated_by:this.user?.email||null,
         updated_at:new Date().toISOString()
-      },{onConflict:'client_id'});
+      },{onConflict:'program_id,client_id'});
     }
 
     document.getElementById('client-save-state').textContent='Saved.'; await this.loadAll(); this.closeForm('client'); this.showView(this.view||'clients');
@@ -8159,16 +8160,17 @@ const App = {
 
   // Fallback for environments where the RPC has not been deployed yet.
   App.deleteClientFallback = async function(id){
-    const { data: incidents } = await this.sb.from('holloway_client_incidents').select('id').eq('client_id', id);
+    const pid = this.program.id;
+    const { data: incidents } = await this.sb.from('holloway_client_incidents').select('id').eq('program_id', pid).eq('client_id', id);
     const incidentIds = (incidents || []).map(i => i.id).filter(Boolean);
     if (incidentIds.length) await this.sb.from('holloway_incident_attachments').delete().in('incident_id', incidentIds);
-    await this.sb.from('holloway_client_incidents').delete().eq('client_id', id);
-    await this.sb.from('holloway_case_notes').delete().eq('client_id', id);
-    await this.sb.from('holloway_housing_followups').delete().eq('client_id', id);
-    await this.sb.from('holloway_client_services').delete().eq('client_id', id);
-    await this.sb.from('holloway_client_quarterly_updates').delete().eq('client_id', id);
-    await this.sb.from('holloway_client_identity').delete().eq('client_id', id);
-    const { error } = await this.sb.from('holloway_clients').delete().eq('id', id);
+    await this.sb.from('holloway_client_incidents').delete().eq('program_id', pid).eq('client_id', id);
+    await this.sb.from('holloway_case_notes').delete().eq('program_id', pid).eq('client_id', id);
+    await this.sb.from('holloway_housing_followups').delete().eq('program_id', pid).eq('client_id', id);
+    await this.sb.from('holloway_client_services').delete().eq('program_id', pid).eq('client_id', id);
+    await this.sb.from('holloway_client_quarterly_updates').delete().eq('program_id', pid).eq('client_id', id);
+    await this.sb.from('holloway_client_identity').delete().eq('program_id', pid).eq('client_id', id);
+    const { error } = await this.sb.from('holloway_clients').delete().eq('program_id', pid).eq('id', id);
     if (error) throw error;
   };
 
