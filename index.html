@@ -516,6 +516,46 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .brand-program { font-family: var(--font-sans); font-size: 15px; font-weight: 650; letter-spacing: -.01em;
   line-height:1.18; max-width:34ch; }
+
+/* ---- Bed board (programs with has_beds) ---- */
+.bed-summary { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+.bed-stat { background:var(--white); border:1px solid var(--border); border-radius:10px; padding:11px 15px; min-width:132px; }
+.bed-stat-label { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--gray-400); }
+.bed-stat-value { font-family:var(--font-sans); font-size:21px; font-weight:700; color:var(--navy); letter-spacing:-.02em; margin-top:3px; }
+.bed-stat-sub { font-size:11.5px; color:var(--gray-500); }
+
+.bed-group { margin-bottom:22px; }
+.bed-group-title { font-size:11.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--navy); margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+.bed-group-title .bed-group-count { font-weight:500; color:var(--gray-400); letter-spacing:0; text-transform:none; font-size:12px; }
+.bed-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(196px,1fr)); gap:12px; }
+
+.bed-tile { text-align:left; background:var(--white); border:1px solid var(--border); border-left:4px solid var(--gray-200);
+  border-radius:10px; padding:13px 14px; cursor:pointer; font:inherit; transition:box-shadow .15s ease, transform .15s ease; }
+.bed-tile:hover { box-shadow:0 6px 18px rgba(27,47,91,.12); transform:translateY(-1px); }
+.bed-tile:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+.bed-tile-top { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:7px; }
+.bed-tile-label { font-family:var(--font-sans); font-weight:700; font-size:14px; color:var(--navy); white-space:nowrap; }
+.bed-tile-body { min-height:34px; }
+.bed-tile-who { font-size:13px; color:var(--gray-800); font-weight:600; line-height:1.3; }
+.bed-tile-meta { font-size:11.5px; color:var(--gray-500); margin-top:3px; }
+.bed-tile-empty { font-size:12.5px; color:var(--gray-400); font-style:italic; }
+
+.bed-tile.s-occupied          { border-left-color:var(--green); }
+.bed-tile.s-vacant_available  { border-left-color:var(--gray-200); }
+.bed-tile.s-held              { border-left-color:var(--gold); }
+.bed-tile.s-unavailable       { border-left-color:var(--red); }
+.bed-tile.s-pending_discharge { border-left-color:var(--amber); }
+.bed-tile.s-released          { border-left-color:var(--gray-400); }
+
+.bed-panel-row { display:grid; grid-template-columns:130px 1fr; gap:10px; padding:9px 0; border-bottom:1px solid var(--gray-100); font-size:13.5px; }
+.bed-panel-row:last-of-type { border-bottom:none; }
+.bed-panel-row dt { color:var(--gray-500); font-size:12px; }
+.bed-panel-row dd { margin:0; }
+.bed-action-block { border-top:1px solid var(--border); margin-top:16px; padding-top:16px; }
+.bed-action-title { font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--navy); margin-bottom:10px; }
+.bed-msg { font-size:12.5px; margin-top:10px; min-height:16px; }
+.bed-msg.err { color:var(--red); }
+.bed-msg.ok { color:var(--green); }
 .program-switch { display:none; align-items:center; gap:7px; margin-right:4px; }
 .program-switch.show { display:flex; }
 .program-switch label { font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.6); }
@@ -1370,6 +1410,7 @@ th.sortable:hover { color:var(--navy); }
         <div class="sidebar-section">
           <div class="sidebar-label" id="role-nav-label">Workspace</div>
           <div class="sidebar-item active" data-view="dashboard"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Dashboard</div>
+          <div class="sidebar-item" id="nav-beds" data-view="beds" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 17v-5h20v5"/><path d="M2 17v3M22 17v3M2 12V7a2 2 0 0 1 2-2h5v7"/><circle cx="7" cy="9" r="1.6"/></svg>Bed Board</div>
           <div class="sidebar-item sidebar-parent" data-view="clients"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clients<button type="button" class="sidebar-caret" id="clients-subnav-toggle" aria-expanded="false" aria-controls="clients-subnav" aria-label="Show client panels" title="Show client panels"><svg class="caret-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button></div>
           <div class="sidebar-subgroup is-collapsed" id="clients-subnav" role="group" aria-label="Client panels">
             <div class="sidebar-item" data-view="services"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V7a2 2 0 0 1 4 0v4"/><path d="M11 10V6a2 2 0 0 1 4 0v5"/><path d="M15 10V8a2 2 0 0 1 4 0v6c0 4.42-3.58 8-8 8h-1a7 7 0 0 1-7-7v-3a2 2 0 0 1 4 0v2"/></svg>Services</div>
@@ -1377,7 +1418,7 @@ th.sortable:hover { color:var(--navy); }
             <div class="sidebar-item" data-view="housing-followups"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg>Housing Follow-Ups</div>
             <div class="sidebar-item" data-view="incident-log"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Incident Log</div>
             <div class="sidebar-item" data-view="income"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Income Tracking</div>
-            <div class="sidebar-item" data-view="referrals"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>Referrals</div>
+          <div class="sidebar-item" data-view="referrals"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>Referrals</div>
           </div>
           <div class="sidebar-item" id="nav-review" data-view="admin-review" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review Queue</div>
           <div class="sidebar-item" id="nav-access" data-view="access" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1"/></svg>Access Management</div>
@@ -1401,6 +1442,7 @@ th.sortable:hover { color:var(--navy); }
       <section id="view-housing-followups" class="view-section"></section>
       <section id="view-incident-log" class="view-section"></section>
       <section id="view-income" class="view-section"></section>
+      <section id="view-beds" class="view-section"></section>
       <section id="view-referrals" class="view-section"></section>
       <section id="view-quarter" class="view-section"></section>
       <section id="view-fiscal" class="view-section"></section>
@@ -1489,6 +1531,19 @@ th.sortable:hover { color:var(--navy); }
 
 
 <!-- Client Modal -->
+<div id="modal-bed" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="bed-panel-title">
+  <div class="form-modal">
+    <div class="form-modal-header">
+      <div>
+        <h2 class="form-modal-title" id="bed-panel-title">Bed</h2>
+        <div class="form-modal-meta" id="bed-panel-meta"></div>
+      </div>
+      <button class="form-close-btn" data-close="bed">&#10005;</button>
+    </div>
+    <div class="form-modal-body" id="bed-panel-body"></div>
+  </div>
+</div>
+
 <div id="modal-client" class="form-overlay" role="dialog" aria-modal="true" aria-labelledby="client-title">
   <div class="form-modal wide">
     <div class="form-modal-header">
@@ -2710,6 +2765,8 @@ const App = {
     // Fiscal now needs both the permission and a program that uses cost reports.
     if (fiscalNav) fiscalNav.style.display =
       (this.programHas('has_fiscal') && this.canViewFiscal?.()) ? 'flex' : 'none';
+    const bedsNav = document.getElementById('nav-beds');
+    if (bedsNav) bedsNav.style.display = this.programHas('has_beds') ? 'flex' : 'none';
     this.renderProgramSwitcher();
 
     // Agency-Fiscal has a deliberately narrow workspace: aggregate Program
@@ -11239,6 +11296,506 @@ const App = {
 
 })();
 
+
+
+(function(){
+  /* ==========================================================================
+     Bed board — programs whose contract tracks beds as assets.
+
+     The Emergency Housing contract treats each bed as something with a status
+     that changes during the day, a gender category and a funding designation
+     (Exhibit A sections 3.1, 3.2 and 5). Holloway has has_beds = false, so none
+     of this appears there.
+
+     Occupancy comes from stays; the other five statuses come from the status
+     event log. Neither is inferred from the other, because "held for an accepted
+     referral" and "temporarily unavailable" are things staff assert, not things
+     the data implies.
+     ========================================================================== */
+
+  const BED_STATUS = {
+    occupied:          'Occupied',
+    vacant_available:  'Vacant and available',
+    held:              'Held for an accepted referral',
+    unavailable:       'Temporarily unavailable',
+    pending_discharge: 'Pending discharge',
+    released:          'Released by City authorisation'
+  };
+  // Tiles are narrow, so they carry a short form; the panel and list spell it out.
+  const BED_STATUS_SHORT = {
+    occupied:'Occupied', vacant_available:'Available', held:'Held',
+    unavailable:'Unavailable', pending_discharge:'Discharging', released:'Released'
+  };
+  // Statuses staff set directly. Occupancy is set by assigning or ending a stay.
+  const SETTABLE = ['vacant_available','held','unavailable','pending_discharge','released'];
+  const esc = s => App.escape(s ?? '');
+
+  App.bedsFor        = function(){ return (this.data.beds || []); };
+  App.openStayForBed = function(bedId){ return (this.data.stays || []).find(s => s.bed_id === bedId && !s.end_date) || null; };
+  App.latestBedEvent = function(bedId){ return (this.data.bedStatus || []).find(e => e.bed_id === bedId) || null; };
+
+  // Occupancy wins, except that a bed can be occupied AND flagged for discharge.
+  App.bedStatus = function(bed){
+    const stay = this.openStayForBed(bed.id);
+    const ev   = this.latestBedEvent(bed.id);
+    if (stay) return (ev && ev.status === 'pending_discharge') ? 'pending_discharge' : 'occupied';
+    if (ev && ['held','unavailable','released'].includes(ev.status)) return ev.status;
+    return 'vacant_available';
+  };
+
+  App.clientForStay = function(stay){
+    if (!stay) return null;
+    return (this.data.clients || []).find(c => c.id === stay.client_id) || { id: stay.client_id };
+  };
+
+  App.loadBedData = async function(){
+    if (!this.programHas('has_beds')) { this.data.beds = []; this.data.stays = []; this.data.bedStatus = []; return; }
+    const pid = this.program.id;
+    const month = this.censusMonth();
+    const [beds, stays, events, absences, nights] = await Promise.all([
+      this.sb.from('holloway_beds').select('*').eq('program_id', pid).eq('active', true).order('sort_order'),
+      this.sb.from('holloway_stays').select('*').eq('program_id', pid).is('end_date', null),
+      this.sb.from('holloway_bed_status_events').select('*').eq('program_id', pid).order('effective_at', { ascending:false }).limit(600),
+      this.sb.from('holloway_stay_absences').select('*').eq('program_id', pid),
+      this.sb.from('holloway_bed_nights').select('*').eq('program_id', pid)
+        .gte('service_date', month).lte('service_date', this.monthEnd(month))
+    ]);
+    if (beds.error)   console.warn('beds', beds.error);
+    if (stays.error)  console.warn('stays', stays.error);
+    if (events.error) console.warn('bed status', events.error);
+    this.data.beds      = beds.data     || [];
+    this.data.stays     = stays.data    || [];
+    this.data.bedStatus = events.data   || [];
+    this.data.absences  = absences.data || [];
+    this.data.bedNights = nights.data   || [];
+  };
+
+  App.renderBeds = async function(){
+    const el = document.getElementById('view-beds');
+    if (!el) return;
+    if (!this.programHas('has_beds')) {
+      el.innerHTML = '<div class="notice navy"><div>i</div><div>This program does not track beds.</div></div>';
+      return;
+    }
+    if (!this.data.beds || !this.data.beds.length) {
+      el.innerHTML = '<div class="notice navy"><div>i</div><div>Loading beds…</div></div>';
+      await this.loadBedData();
+    }
+    this._bedTab = this._bedTab || 'grid';
+    const beds = this.bedsFor();
+    const counts = beds.reduce((m,b) => {
+      const s = this.bedStatus(b);
+      const key = b.designation === 'reserved' ? ('reserved_' + b.gender_category) : 'ffs';
+      m.total++; if (s === 'occupied' || s === 'pending_discharge') { m.occupied++; m[key] = (m[key]||0) + 1; }
+      m['cap_' + key] = (m['cap_' + key]||0) + 1;
+      return m;
+    }, { total:0, occupied:0 });
+
+    el.innerHTML = `
+      <div class="page-header"><div>
+        <h1 class="page-title">Bed Board</h1>
+        <div class="page-subtitle">${esc(this.program.name)} · ten reserved beds and up to five fee-for-service</div>
+      </div></div>
+      <div class="bed-summary">
+        <div class="bed-stat"><div class="bed-stat-label">Occupied</div><div class="bed-stat-value">${counts.occupied} / ${counts.total}</div><div class="bed-stat-sub">across all beds</div></div>
+        <div class="bed-stat"><div class="bed-stat-label">Reserved · men</div><div class="bed-stat-value">${counts.reserved_men||0} / ${counts.cap_reserved_men||0}</div><div class="bed-stat-sub">held for West Hollywood</div></div>
+        <div class="bed-stat"><div class="bed-stat-label">Reserved · women</div><div class="bed-stat-value">${counts.reserved_women||0} / ${counts.cap_reserved_women||0}</div><div class="bed-stat-sub">held for West Hollywood</div></div>
+        <div class="bed-stat"><div class="bed-stat-label">Fee-for-service</div><div class="bed-stat-value">${counts.ffs||0} / ${counts.cap_ffs||0}</div><div class="bed-stat-sub">billable above ten</div></div>
+      </div>
+      <div class="fiscal-tabs">
+        <button class="fiscal-tab ${this._bedTab==='grid'?'active':''}" data-bed-tab="grid">Bed Board</button>
+        <button class="fiscal-tab ${this._bedTab==='list'?'active':''}" data-bed-tab="list">List</button>
+      </div>
+      ${this._bedTab === 'grid' ? this.bedGridHtml() : this.bedListHtml()}
+      ${this.censusSummaryHtml()}`;
+
+    el.querySelectorAll('[data-bed-tab]').forEach(b =>
+      b.addEventListener('click', () => { this._bedTab = b.dataset.bedTab; this.renderBeds(); }));
+    el.querySelectorAll('[data-bed-id]').forEach(b =>
+      b.addEventListener('click', () => this.openBedPanel(b.dataset.bedId)));
+    el.querySelector('#census-generate')?.addEventListener('click', () => this.generateCensus());
+    el.querySelector('#census-month')?.addEventListener('change', async (e) => {
+      this._censusMonth = e.target.value; await this.loadBedData(); this.renderBeds();
+    });
+  };
+
+  App.bedGridHtml = function(){
+    const groups = [
+      ['Reserved · men',   b => b.designation === 'reserved' && b.gender_category === 'men'],
+      ['Reserved · women', b => b.designation === 'reserved' && b.gender_category === 'women'],
+      ['Fee-for-service',  b => b.designation === 'fee_for_service']
+    ];
+    return groups.map(([title, match]) => {
+      const beds = this.bedsFor().filter(match);
+      if (!beds.length) return '';
+      const filled = beds.filter(b => ['occupied','pending_discharge'].includes(this.bedStatus(b))).length;
+      return `<div class="bed-group">
+        <div class="bed-group-title">${esc(title)} <span class="bed-group-count">${filled} of ${beds.length} occupied</span></div>
+        <div class="bed-grid">${beds.map(b => this.bedTileHtml(b)).join('')}</div>
+      </div>`;
+    }).join('');
+  };
+
+  App.bedTileHtml = function(bed){
+    const status = this.bedStatus(bed);
+    const stay = this.openStayForBed(bed.id);
+    const client = this.clientForStay(stay);
+    const ev = this.latestBedEvent(bed.id);
+    const detail = stay
+      ? `<div class="bed-tile-who">${esc(this.clientName(client) || client.id)}</div>
+         <div class="bed-tile-meta">Since ${esc(this.formatDate(stay.start_date))}</div>`
+      : (ev && ev.reason && status !== 'vacant_available'
+          ? `<div class="bed-tile-meta">${esc(ev.reason)}${ev.expected_return_date ? ' · back ' + esc(this.formatDate(ev.expected_return_date)) : ''}</div>`
+          : `<div class="bed-tile-empty">Ready for a participant</div>`);
+    return `<button type="button" class="bed-tile s-${status}" data-bed-id="${esc(bed.id)}">
+      <div class="bed-tile-top">
+        <span class="bed-tile-label">${esc(bed.label)}</span>
+        <span class="badge ${status==='occupied'?'badge-green':status==='unavailable'?'badge-red':status==='held'||status==='pending_discharge'?'badge-amber':'badge-gray'}">${esc(BED_STATUS_SHORT[status])}</span>
+      </div><div class="bed-tile-body">${detail}</div></button>`;
+  };
+
+  App.bedListHtml = function(){
+    const rows = this.bedsFor().map(b => {
+      const status = this.bedStatus(b);
+      const stay = this.openStayForBed(b.id);
+      const client = this.clientForStay(stay);
+      const ev = this.latestBedEvent(b.id);
+      return `<tr>
+        <td><strong>${esc(b.label)}</strong></td>
+        <td>${b.designation === 'reserved' ? 'Reserved · ' + esc(b.gender_category) : 'Fee-for-service'}</td>
+        <td><span class="badge ${status==='occupied'?'badge-green':status==='unavailable'?'badge-red':status==='held'||status==='pending_discharge'?'badge-amber':'badge-gray'}">${esc(BED_STATUS[status])}</span></td>
+        <td>${stay ? esc(this.clientName(client) || client.id) : '—'}</td>
+        <td>${stay ? esc(this.formatDate(stay.start_date)) : '—'}</td>
+        <td>${ev ? esc(this.formatDate(ev.effective_at)) : '—'}</td>
+        <td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-bed-id="${esc(b.id)}">Open</button></div></td>
+      </tr>`;
+    }).join('');
+    return `<div class="client-table-wrap"><table class="client-table">
+      <thead><tr><th>Bed</th><th>Designation</th><th>Status</th><th>Participant</th><th>Since</th><th>Status changed</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  };
+
+  /* --------------------------------------------------------------- panel */
+
+  App.openBedPanel = function(bedId){
+    this._bedPanelId = bedId;
+    document.getElementById('modal-bed').classList.add('open');
+    this.renderBedPanel();
+  };
+  App.closeBedPanel = function(){
+    document.getElementById('modal-bed').classList.remove('open');
+    this._bedPanelId = null;
+  };
+  App.bedMsg = function(text, kind){
+    const el = document.getElementById('bed-msg');
+    if (el) { el.textContent = text || ''; el.className = 'bed-msg' + (kind ? ' ' + kind : ''); }
+  };
+
+  App.renderBedPanel = function(){
+    const bed = this.bedsFor().find(b => b.id === this._bedPanelId);
+    const body = document.getElementById('bed-panel-body');
+    if (!bed || !body) return;
+    const status = this.bedStatus(bed);
+    const stay = this.openStayForBed(bed.id);
+    const client = this.clientForStay(stay);
+    const ev = this.latestBedEvent(bed.id);
+    const editable = !this.isAdmin();
+    document.getElementById('bed-panel-title').textContent = 'Bed ' + bed.label;
+    document.getElementById('bed-panel-meta').textContent =
+      (bed.designation === 'reserved' ? 'Reserved · ' + bed.gender_category : 'Fee-for-service') + ' · ' + BED_STATUS[status];
+
+    // Participants without a current bed anywhere in this program.
+    const taken = new Set((this.data.stays || []).filter(s => !s.end_date).map(s => s.client_id));
+    const available = (this.data.clients || []).filter(c => !taken.has(c.id) && !c.exit_date);
+
+    body.innerHTML = `
+      <dl>
+        <div class="bed-panel-row"><dt>Status</dt><dd>${esc(BED_STATUS[status])}</dd></div>
+        <div class="bed-panel-row"><dt>Participant</dt><dd>${stay ? esc(this.clientName(client) || client.id) : '<span class="field-hint">None</span>'}</dd></div>
+        ${stay ? `<div class="bed-panel-row"><dt>Occupied since</dt><dd>${esc(this.formatDate(stay.start_date))}</dd></div>` : ''}
+        ${ev ? `<div class="bed-panel-row"><dt>Last change</dt><dd>${esc(this.formatDateTime(ev.effective_at))}${ev.reason ? ' — ' + esc(ev.reason) : ''}${ev.changed_by ? '<div class="field-hint">by ' + esc(ev.changed_by) + '</div>' : ''}</dd></div>` : ''}
+        ${ev && ev.expected_return_date ? `<div class="bed-panel-row"><dt>Back in service</dt><dd>${esc(this.formatDate(ev.expected_return_date))}</dd></div>` : ''}
+      </dl>
+
+      ${!editable ? '<div class="notice navy" style="margin-top:16px"><div>i</div><div>City accounts view bed status but do not change it.</div></div>' : `
+      ${stay ? `
+        <div class="bed-action-block">
+          <div class="bed-action-title">End this stay</div>
+          <div class="form-row">
+            <div class="field-group"><label class="field-label required" for="bed-end-date">Exit date</label>
+              <input type="date" class="field-input" id="bed-end-date" value="${esc(this.localDate())}"></div>
+            <div class="field-group"><label class="field-label" for="bed-end-reason">Reason</label>
+              <input type="text" class="field-input" id="bed-end-reason" placeholder="Discharge, transfer, moved to housing…"></div>
+          </div>
+          <button class="btn btn-primary" id="bed-end-btn" style="margin-top:10px">End stay and free the bed</button>
+        </div>
+        <div class="bed-action-block">
+          <div class="bed-action-title">Temporary absences</div>
+          ${this.absenceListHtml(stay)}
+          <div class="form-row" style="margin-top:12px">
+            <div class="field-group"><label class="field-label required" for="abs-from">First day away</label>
+              <input type="date" class="field-input" id="abs-from"></div>
+            <div class="field-group"><label class="field-label" for="abs-to">Last day away</label>
+              <input type="date" class="field-input" id="abs-to"><div class="field-hint">Leave blank if ongoing</div></div>
+          </div>
+          <div class="field-group" style="margin-top:10px"><label class="field-label" for="abs-reason">Reason</label>
+            <input type="text" class="field-input" id="abs-reason" placeholder="Hospital, family, unexplained\u2026"></div>
+          <label class="checkbox-label" style="margin-top:10px"><input type="checkbox" id="abs-approved"> <span>The City approved billing for this absence in writing</span></label>
+          <div class="field-group" style="margin-top:8px"><label class="field-label" for="abs-ref">Approval reference</label>
+            <input type="text" class="field-input" id="abs-ref" placeholder="Email date, approver, or note reference">
+            <div class="field-hint">Section 3.2 requires prior written approval before an absent night can be billed. Without it the night is recorded but not billable.</div></div>
+          <button class="btn btn-primary" id="bed-absence-btn" style="margin-top:12px">Record absence</button>
+        </div>` : `
+        <div class="bed-action-block">
+          <div class="bed-action-title">Assign a participant</div>
+          <div class="form-row">
+            <div class="field-group"><label class="field-label required" for="bed-client">Participant</label>
+              <select class="field-select" id="bed-client">
+                <option value="">Select…</option>
+                ${available.map(c => `<option value="${esc(c.id)}">${esc(this.clientName(c) || c.id)}</option>`).join('')}
+              </select>
+              <div class="field-hint">${available.length} participant${available.length===1?'':'s'} without a bed</div></div>
+            <div class="field-group"><label class="field-label required" for="bed-start-date">Start date</label>
+              <input type="date" class="field-input" id="bed-start-date" value="${esc(this.localDate())}"></div>
+          </div>
+          <button class="btn btn-primary" id="bed-assign-btn" style="margin-top:10px">Assign to this bed</button>
+        </div>`}
+
+      <div class="bed-action-block">
+        <div class="bed-action-title">Change bed status</div>
+        <div class="form-row">
+          <div class="field-group"><label class="field-label" for="bed-status">Status</label>
+            <select class="field-select" id="bed-status">
+              ${SETTABLE.filter(s => stay ? s === 'pending_discharge' : s !== 'pending_discharge')
+                        .map(s => `<option value="${s}" ${s===status?'selected':''}>${esc(BED_STATUS[s])}</option>`).join('')}
+            </select></div>
+          <div class="field-group"><label class="field-label" for="bed-return">Expected back in service</label>
+            <input type="date" class="field-input" id="bed-return"></div>
+        </div>
+        <div class="field-group" style="margin-top:10px"><label class="field-label" for="bed-reason">Reason</label>
+          <input type="text" class="field-input" id="bed-reason" placeholder="Required when a bed is unavailable"></div>
+        <label class="checkbox-label" style="margin-top:10px"><input type="checkbox" id="bed-notified"> <span>City notified of this change</span></label>
+        <div class="field-hint">Section 3.1 requires the City to be told within one business day.</div>
+        <button class="btn btn-primary" id="bed-status-btn" style="margin-top:12px">Record status change</button>
+      </div>`}
+      <p class="bed-msg" id="bed-msg"></p>`;
+
+    document.getElementById('bed-assign-btn')?.addEventListener('click', () => this.assignBed());
+    document.getElementById('bed-end-btn')?.addEventListener('click', () => this.endBedStay());
+    document.getElementById('bed-status-btn')?.addEventListener('click', () => this.recordBedStatus());
+    document.getElementById('bed-absence-btn')?.addEventListener('click', () => this.addAbsence());
+  };
+
+  /* -------------------------------------------------------------- actions */
+
+  App.logBedStatus = async function(bedId, status, extra){
+    return this.sb.from('holloway_bed_status_events').insert(Object.assign({
+      program_id: this.program.id, bed_id: bedId, status,
+      changed_by: this.user?.email || null
+    }, extra || {}));
+  };
+
+  App.assignBed = async function(){
+    const bed = this.bedsFor().find(b => b.id === this._bedPanelId);
+    const clientId = document.getElementById('bed-client')?.value;
+    const start = document.getElementById('bed-start-date')?.value;
+    if (!clientId || !start) { this.bedMsg('Choose a participant and a start date.', 'err'); return; }
+    this.bedMsg('Assigning…');
+    const { error } = await this.sb.from('holloway_stays').insert({
+      program_id: this.program.id, client_id: clientId, bed_id: bed.id,
+      start_date: start, created_by: this.user?.email || null
+    });
+    if (error) {
+      // The database refuses to double-book a bed or a participant; say so plainly.
+      this.bedMsg(/exclusion|overlap|conflict/i.test(error.message || '')
+        ? 'That participant or bed is already occupied for these dates.'
+        : 'Could not assign: ' + error.message, 'err');
+      return;
+    }
+    await this.logBedStatus(bed.id, 'occupied', { reason: 'Participant assigned' });
+    await this.loadBedData();
+    this.renderBedPanel(); this.renderBeds();
+    this.bedMsg('Assigned.', 'ok');
+  };
+
+  App.endBedStay = async function(){
+    const bed = this.bedsFor().find(b => b.id === this._bedPanelId);
+    const stay = this.openStayForBed(bed.id);
+    const end = document.getElementById('bed-end-date')?.value;
+    if (!stay || !end) { this.bedMsg('Enter an exit date.', 'err'); return; }
+    this.bedMsg('Ending stay…');
+    const { error } = await this.sb.from('holloway_stays')
+      .update({ end_date: end, end_reason: document.getElementById('bed-end-reason')?.value || null, updated_at: new Date().toISOString() })
+      .eq('id', stay.id).eq('program_id', this.program.id);
+    if (error) { this.bedMsg('Could not end the stay: ' + error.message, 'err'); return; }
+    // Section 3.1: a reserved bed returns to the City's inventory immediately.
+    await this.logBedStatus(bed.id, 'vacant_available', { reason: 'Stay ended' });
+    await this.loadBedData();
+    this.renderBedPanel(); this.renderBeds();
+    this.bedMsg('Stay ended. The bed is back in the available inventory.', 'ok');
+  };
+
+  App.recordBedStatus = async function(){
+    const bed = this.bedsFor().find(b => b.id === this._bedPanelId);
+    const status = document.getElementById('bed-status')?.value;
+    const reason = document.getElementById('bed-reason')?.value?.trim() || null;
+    const ret = document.getElementById('bed-return')?.value || null;
+    const notified = document.getElementById('bed-notified')?.checked;
+    if (status === 'unavailable' && !reason) {
+      this.bedMsg('A reason is required when a bed is unavailable — the City is told why.', 'err'); return;
+    }
+    this.bedMsg('Recording…');
+    const { error } = await this.logBedStatus(bed.id, status, {
+      reason, expected_return_date: ret,
+      city_notified_at: notified ? new Date().toISOString() : null
+    });
+    if (error) { this.bedMsg('Could not record: ' + error.message, 'err'); return; }
+    await this.loadBedData();
+    this.renderBedPanel(); this.renderBeds();
+    this.bedMsg('Status recorded.', 'ok');
+  };
+
+
+  /* ------------------------------------------------------------- absences */
+
+  App.absencesForStay = function(stayId){
+    return (this.data.absences || []).filter(a => a.stay_id === stayId)
+      .sort((a,b) => (b.start_date || '').localeCompare(a.start_date || ''));
+  };
+
+  App.absenceListHtml = function(stay){
+    const rows = this.absencesForStay(stay.id);
+    if (!rows.length) return '<div class="field-hint">No absences recorded for this stay.</div>';
+    return `<div class="client-table-wrap"><table class="client-table">
+      <thead><tr><th>From</th><th>To</th><th>Reason</th><th>Billable</th></tr></thead>
+      <tbody>${rows.map(a => `<tr>
+        <td>${esc(this.formatDate(a.start_date))}</td>
+        <td>${a.end_date ? esc(this.formatDate(a.end_date)) : '<span class="field-hint">ongoing</span>'}</td>
+        <td>${esc(a.reason || '—')}</td>
+        <td>${a.billing_approved
+              ? `<span class="badge badge-green">Approved</span><div class="field-hint">${esc(a.approval_reference || '')}</div>`
+              : '<span class="badge badge-gray">Not billable</span>'}</td>
+      </tr>`).join('')}</tbody></table></div>`;
+  };
+
+  App.addAbsence = async function(){
+    const bed = this.bedsFor().find(b => b.id === this._bedPanelId);
+    const stay = this.openStayForBed(bed.id);
+    const from = document.getElementById('abs-from')?.value;
+    const to   = document.getElementById('abs-to')?.value || null;
+    const reason = document.getElementById('abs-reason')?.value?.trim() || null;
+    const approved = document.getElementById('abs-approved')?.checked;
+    const ref = document.getElementById('abs-ref')?.value?.trim() || null;
+    if (!stay || !from) { this.bedMsg('Enter the first day of the absence.', 'err'); return; }
+    // Section 3.2: an absence is only billable with the City's prior written
+    // approval, so the reference to that approval is required alongside it.
+    if (approved && !ref) { this.bedMsg('Record the City’s written approval reference before marking an absence billable.', 'err'); return; }
+    this.bedMsg('Saving absence…');
+    const { error } = await this.sb.from('holloway_stay_absences').insert({
+      program_id: this.program.id, stay_id: stay.id,
+      start_date: from, end_date: to, reason,
+      billing_approved: !!approved,
+      approval_reference: ref,
+      approved_by: approved ? (this.user?.email || null) : null,
+      approved_at: approved ? new Date().toISOString() : null,
+      created_by: this.user?.email || null
+    });
+    if (error) { this.bedMsg('Could not save: ' + error.message, 'err'); return; }
+    await this.loadBedData();
+    this.renderBedPanel();
+    this.bedMsg('Absence recorded. Regenerate the census for that month so billing reflects it.', 'ok');
+  };
+
+  /* --------------------------------------------------------- night census */
+
+  App.censusMonth = function(){
+    return this._censusMonth || (this.localDate() || '').slice(0,7) + '-01';
+  };
+
+  App.censusSummaryHtml = function(){
+    const month = this.censusMonth();
+    const end = this.monthEnd(month);
+    const rows = (this.data.bedNights || []).filter(n => n.service_date >= month && n.service_date <= end);
+    const billable = rows.filter(n => n.billable);
+    const amount = billable.reduce((t,n) => t + Number(n.rate || 0), 0);
+    const locked = rows.filter(n => n.locked).length;
+    const months = this.censusMonthOptions();
+    return `<div class="card" style="margin-top:22px">
+      <div class="card-header">
+        <div><h2 class="card-title">Bed night census</h2>
+        <div class="field-hint">Generated from stays and absences. This is the participant-level record behind each billed night.</div></div>
+        <div class="client-actions">
+          <select class="field-select" id="census-month" style="max-width:190px">
+            ${months.map(m => `<option value="${m.value}" ${m.value===month?'selected':''}>${esc(m.label)}</option>`).join('')}
+          </select>
+          <button class="btn btn-primary" id="census-generate">Generate census</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="bed-summary" style="margin-bottom:0">
+          <div class="bed-stat"><div class="bed-stat-label">Nights recorded</div><div class="bed-stat-value">${rows.length}</div><div class="bed-stat-sub">bed nights in this month</div></div>
+          <div class="bed-stat"><div class="bed-stat-label">Occupied</div><div class="bed-stat-value">${rows.filter(n=>n.occupied).length}</div><div class="bed-stat-sub">participant in the bed</div></div>
+          <div class="bed-stat"><div class="bed-stat-label">Billable</div><div class="bed-stat-value">${billable.length}</div><div class="bed-stat-sub">fee-for-service nights</div></div>
+          <div class="bed-stat"><div class="bed-stat-label">Amount</div><div class="bed-stat-value">${this.fiscalMoney ? this.fiscalMoney(amount) : '$'+amount.toFixed(2)}</div><div class="bed-stat-sub">${locked ? locked + ' night(s) invoiced and locked' : 'not yet invoiced'}</div></div>
+        </div>
+        ${rows.length ? '' : '<div class="field-hint" style="margin-top:12px">Nothing generated for this month yet.</div>'}
+        <p class="bed-msg" id="census-msg"></p>
+      </div></div>`;
+  };
+
+  App.censusMonthOptions = function(){
+    const out = [];
+    const start = this.contractPeriod?.start || this.program?.contract_year_start;
+    const end   = this.contractPeriod?.end   || this.program?.contract_year_end;
+    if (!start || !end) return [{ value: this.censusMonth(), label: 'This month' }];
+    let d = new Date(start + 'T00:00:00');
+    const last = new Date(end + 'T00:00:00');
+    while (d <= last) {
+      const value = d.toISOString().slice(0,8) + '01';
+      out.push({ value, label: d.toLocaleDateString(undefined, { month:'long', year:'numeric' }) });
+      d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    }
+    return out;
+  };
+
+  App.monthEnd = function(monthStart){
+    const d = new Date(monthStart + 'T00:00:00');
+    return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0,10);
+  };
+
+  App.generateCensus = async function(){
+    const month = document.getElementById('census-month')?.value || this.censusMonth();
+    this._censusMonth = month;
+    const el = document.getElementById('census-msg');
+    if (el) { el.textContent = 'Generating…'; el.className = 'bed-msg'; }
+    const { data, error } = await this.sb.rpc('holloway_generate_bed_nights', {
+      p_program_id: this.program.id, p_from: month, p_to: this.monthEnd(month)
+    });
+    if (error) {
+      if (el) { el.textContent = 'Could not generate: ' + error.message; el.className = 'bed-msg err'; }
+      return;
+    }
+    await this.loadBedData();
+    this.renderBeds();
+    const m = document.getElementById('census-msg');
+    if (m) {
+      m.textContent = `${data.rows_written} night${data.rows_written===1?'':'s'} written, ${data.billable_nights} billable`
+        + (data.locked_skipped ? ` · ${data.locked_skipped} already invoiced and left untouched` : '');
+      m.className = 'bed-msg ok';
+    }
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-close="bed"]').forEach(b =>
+      b.addEventListener('click', () => App.closeBedPanel()));
+  });
+
+  const previousShowViewForBeds = App.showView;
+  App.showView = function(view){
+    previousShowViewForBeds.call(this, view);
+    if (view === 'beds') this.renderBeds();
+  };
+})();
 
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
