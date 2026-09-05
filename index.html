@@ -517,6 +517,30 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .brand-program { font-family: var(--font-sans); font-size: 15px; font-weight: 650; letter-spacing: -.01em;
   line-height:1.18; max-width:34ch; }
 
+/* ---- Monthly operating report (programs with has_monthly_report) ---- */
+.mr-head { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; margin-top:16px; }
+.mr-due { font-size:12.5px; color:var(--gray-600); }
+.mr-due strong { color:var(--navy); }
+.mr-due.is-late { color:#98241F; }
+.mr-due.is-late strong { color:#98241F; }
+
+.mr-grid { display:flex; gap:10px; flex-wrap:wrap; margin:6px 0 4px; }
+.mr-stat { background:var(--white); border:1px solid var(--border); border-radius:10px; padding:11px 15px; min-width:138px; flex:1 1 138px; }
+.mr-stat-label { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--gray-400); }
+.mr-stat-value { font-family:var(--font-sans); font-size:21px; font-weight:700; color:var(--navy); letter-spacing:-.02em; margin-top:3px; }
+.mr-stat-sub { font-size:11.5px; color:var(--gray-500); }
+
+.mr-empty { font-size:12.5px; color:var(--gray-500); font-style:italic; }
+.mr-generated { font-size:11.5px; color:var(--gray-500); margin-top:4px; }
+.mr-msg { font-size:12.5px; margin-top:10px; min-height:16px; }
+.mr-msg.err { color:var(--red); }
+.mr-msg.ok  { color:var(--green); }
+.mr-log-row { display:flex; justify-content:space-between; gap:12px; padding:7px 0;
+  border-bottom:1px solid var(--gray-100); font-size:12.5px; }
+.mr-log-row:last-child { border-bottom:none; }
+.mr-locked { background:#F6F8FB; border:1px solid var(--border); border-left:3px solid var(--navy);
+  border-radius:8px; padding:11px 14px; font-size:12.5px; color:var(--gray-700); margin-bottom:16px; }
+
 /* ---- Referral pipeline (programs with has_referral_pipeline) ---- */
 .sla-badge { display:inline-block; font-size:11px; font-weight:600; letter-spacing:.01em; padding:2px 7px;
   border-radius:999px; white-space:nowrap; border:1px solid transparent; }
@@ -1453,6 +1477,7 @@ th.sortable:hover { color:var(--navy); }
         <div class="sidebar-section">
           <div class="sidebar-label">Program Reports</div>
           <div class="sidebar-item" data-view="quarter"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Program Reports</div>
+          <div class="sidebar-item" id="nav-monthly" data-view="monthly" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/><path d="M8 15h5"/></svg>Monthly Report</div>
         </div>
         <div class="sidebar-section">
           <div class="sidebar-label">Fiscal</div>
@@ -1472,6 +1497,7 @@ th.sortable:hover { color:var(--navy); }
       <section id="view-beds" class="view-section"></section>
       <section id="view-referrals" class="view-section"></section>
       <section id="view-quarter" class="view-section"></section>
+      <section id="view-monthly" class="view-section"></section>
       <section id="view-fiscal" class="view-section"></section>
       <section id="view-admin-review" class="view-section"></section>
       <section id="view-access" class="view-section"></section>
@@ -12358,6 +12384,414 @@ const App = {
     await this.loadAll();
     this.closeForm('logref');
     this.renderReferrals();
+  };
+})();
+
+
+(function(){
+  /* ==========================================================================
+     Monthly operating report — programs with has_monthly_report.
+
+     Exhibit A section 12.2 wants a report on the fifteenth of the following
+     month covering bed status by reserved category, fee-for-service nights,
+     referrals and admissions, non-admissions with reasons, discharges and
+     destinations, case management activity, and issues needing City attention.
+
+     Everything except the last two is already in the database, so it is
+     generated rather than typed: holloway_generate_monthly_report() computes
+     the figures from the live rows and writes them onto the month. The
+     narrative and the issues are the only fields a person fills in, and
+     regenerating never touches them.
+
+     Submitting freezes the month. That is enforced by a trigger, not by hiding
+     the buttons, so a stale tab cannot write over the City's copy.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+
+  const MR_STATUS = {
+    draft:              { label:'Draft',              badge:'badge-amber' },
+    submitted:          { label:'Submitted to City',  badge:'badge-navy'  },
+    revision_requested: { label:'Revision requested', badge:'badge-red'   },
+    accepted:           { label:'Accepted by City',   badge:'badge-green' }
+  };
+
+  const CATEGORY_LABEL = {
+    reserved_men:        "Reserved &middot; men's",
+    reserved_women:      "Reserved &middot; women's",
+    reserved_unspecified:'Reserved &middot; unspecified',
+    fee_for_service:     'Fee-for-service'
+  };
+
+  const STATUS_EVENT_LABEL = {
+    occupied:'Occupied', vacant_available:'Vacant and available', held:'Held for an accepted referral',
+    unavailable:'Temporarily unavailable', pending_discharge:'Pending discharge', released:'Released by written authorization'
+  };
+
+  /* ------------------------------------------------------------- loading */
+
+  const previousLoadAllForMonthly = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAllForMonthly.call(this);
+    if (!this.data) this.data = {};
+    this.data.monthlyReports = [];
+    this.data.monthlyLog     = [];
+    const pid = this.program?.id;
+    if (!pid || !this.programHas('has_monthly_report') || this.isAgencyFiscal?.()) return;
+
+    const [reports, log] = await Promise.all([
+      this.sb.from('holloway_monthly_reports').select('*').eq('program_id', pid).order('report_month', { ascending:false }),
+      this.sb.from('holloway_monthly_report_log').select('*').eq('program_id', pid).order('created_at', { ascending:false })
+    ]);
+    if (reports.error) console.warn('monthly reports unavailable', reports.error);
+    this.data.monthlyReports = reports.data || [];
+    this.data.monthlyLog     = log.data || [];
+  };
+
+  /* ------------------------------------------------------------- helpers */
+
+  App.monthlyMonths = function(){
+    const out = [];
+    const start = this.contractPeriod?.start || this.program?.contract_year_start;
+    const end   = this.contractPeriod?.end   || this.program?.contract_year_end;
+    if (!start || !end) return out;
+    let d = new Date(start + 'T00:00:00');
+    const last = new Date(end + 'T00:00:00');
+    const today = this.localDate();
+    while (d <= last) {
+      const value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+      // A month cannot be reported before it has started.
+      if (value <= today) out.push({ value, label: d.toLocaleDateString(undefined, { month:'long', year:'numeric' }) });
+      d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    }
+    return out.reverse();
+  };
+
+  App.monthlyDueDate = function(month){
+    const d = new Date(month + 'T00:00:00');
+    const due = new Date(d.getFullYear(), d.getMonth() + 1, 15);
+    return `${due.getFullYear()}-${String(due.getMonth()+1).padStart(2,'0')}-15`;
+  };
+
+  App.monthlyMonth = function(){
+    if (this._monthlyMonth) return this._monthlyMonth;
+    const months = this.monthlyMonths();
+    return months.length ? months[0].value : null;
+  };
+
+  App.monthlyReport = function(month){
+    return (this.data.monthlyReports || []).find(r => this.dateOnly(r.report_month) === month) || null;
+  };
+
+  App.monthlyIsLocked = function(r){
+    return !!r && ['submitted','accepted'].includes(r.status) && !this.isAdmin();
+  };
+
+  /* ---------------------------------------------------------------- view */
+
+  App.renderMonthly = function(){
+    const el = document.getElementById('view-monthly');
+    if (!el) return;
+    if (!this.programHas('has_monthly_report')) { el.innerHTML = ''; return; }
+
+    const months = this.monthlyMonths();
+    const month  = this.monthlyMonth();
+    if (!month) {
+      el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Monthly Report</h1>
+        <div class="page-subtitle">No contract month is open yet for this program.</div></div></div>`;
+      return;
+    }
+
+    const r      = this.monthlyReport(month);
+    const due    = r ? this.dateOnly(r.due_date) : this.monthlyDueDate(month);
+    const status = r?.status || 'draft';
+    const badge  = MR_STATUS[status] || MR_STATUS.draft;
+    const locked = this.monthlyIsLocked(r);
+    const overdue = status === 'draft' && due < this.localDate();
+    const canEdit = !locked && (this.canEditQuarter?.() || this.isAdmin());
+
+    const money = n => this.fiscalMoney ? this.fiscalMoney(Number(n||0)) : '$' + Number(n||0).toFixed(2);
+    const num   = n => (n == null ? '—' : Number(n).toLocaleString());
+
+    const stat = (label, value, sub) => `<div class="mr-stat">
+      <div class="mr-stat-label">${label}</div><div class="mr-stat-value">${value}</div>
+      <div class="mr-stat-sub">${sub}</div></div>`;
+
+    const bedRows = Object.entries((r?.bed_status_breakdown?.nights) || {});
+    const bedTable = bedRows.length ? `<div class="client-table-wrap"><table class="client-table">
+        <thead><tr><th>Category</th><th>Bed nights available</th><th>Occupied</th><th>Billable</th><th>Utilisation</th></tr></thead>
+        <tbody>${bedRows.map(([k,v]) => `<tr>
+          <td>${CATEGORY_LABEL[k] || esc(k)}</td><td>${num(v.available)}</td><td>${num(v.occupied)}</td>
+          <td>${num(v.billable)}</td>
+          <td>${v.available ? Math.round((v.occupied / v.available) * 100) + '%' : '—'}</td>
+        </tr>`).join('')}</tbody></table></div>`
+      : '<div class="mr-empty">No bed nights generated for this month yet. Generate the census on the Bed Board first.</div>';
+
+    const statusChanges = Object.entries((r?.bed_status_breakdown?.status_changes) || {});
+    const statusTable = statusChanges.length ? `<div class="client-table-wrap"><table class="client-table">
+        <thead><tr><th>Status recorded</th><th>Changes this month</th></tr></thead>
+        <tbody>${statusChanges.map(([k,n]) => `<tr><td>${STATUS_EVENT_LABEL[k] || esc(k)}</td><td>${num(n)}</td></tr>`).join('')}</tbody>
+        </table></div>`
+      : '<div class="mr-empty">No bed status changes recorded this month.</div>';
+
+    const reasons = r?.non_admission_reasons || [];
+    const reasonTable = reasons.length ? `<div class="client-table-wrap"><table class="client-table">
+        <thead><tr><th>Outcome</th><th>Reason recorded</th><th>Count</th></tr></thead>
+        <tbody>${reasons.map(x => `<tr><td>${esc(x.decision === 'withdrawn' ? 'Withdrawn' : 'Declined')}</td>
+          <td>${esc(x.reason)}</td><td>${num(x.count)}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="mr-empty">No referrals were declined or withdrawn this month.</div>';
+
+    const dests = r?.exit_destinations || [];
+    const destTable = dests.length ? `<div class="client-table-wrap"><table class="client-table">
+        <thead><tr><th>Destination</th><th>Participants</th></tr></thead>
+        <tbody>${dests.map(x => `<tr><td>${esc(x.destination)}</td><td>${num(x.count)}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="mr-empty">No stays ended this month.</div>';
+
+    const svc = r?.service_activity || [];
+    const svcTable = svc.length ? `<div class="client-table-wrap"><table class="client-table">
+        <thead><tr><th>Activity</th><th>Contacts</th><th>Minutes</th></tr></thead>
+        <tbody>${svc.map(x => `<tr><td>${esc(x.service)}</td><td>${num(x.count)}</td><td>${num(x.minutes)}</td></tr>`).join('')}</tbody>
+        </table></div>`
+      : '<div class="mr-empty">No case management activity recorded this month.</div>';
+
+    const log = (this.data.monthlyLog || []).filter(x => this.dateOnly(x.report_month) === month);
+
+    el.innerHTML = `<div class="page-header">
+        <div><h1 class="page-title">Monthly Report</h1>
+          <div class="page-subtitle">The section&nbsp;12.2 operating report. Figures are computed from the month&rsquo;s beds,
+            referrals, stays and services &mdash; only the narrative is written by hand.</div></div>
+        <span class="badge ${badge.badge}">${esc(badge.label)}</span>
+      </div>
+
+      <div class="mr-head">
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+          <div><label class="field-label" for="mr-month">Report month</label>
+            <select class="field-select" id="mr-month" style="min-width:190px">
+              ${months.map(m => `<option value="${m.value}" ${m.value===month?'selected':''}>${esc(m.label)}</option>`).join('')}
+            </select></div>
+          <div class="mr-due ${overdue ? 'is-late' : ''}">Due <strong>${this.formatDate(due)}</strong>${
+            overdue ? ' &middot; past due' : ''}</div>
+        </div>
+        <div class="client-actions">
+          ${canEdit ? `<button class="btn btn-ghost" id="mr-generate">Generate Figures</button>` : ''}
+          ${canEdit ? `<button class="btn btn-gold" id="mr-save">Save Narrative</button>` : ''}
+          ${canEdit && !this.isAdmin?.() && this.canSign?.() ? `<button class="btn btn-primary" id="mr-submit">Certify and Submit</button>` : ''}
+          ${this.isAdmin?.() && status === 'submitted'
+            ? `<button class="btn btn-ghost" id="mr-revise">Request Revision</button>
+               <button class="btn btn-primary" id="mr-accept">Accept</button>` : ''}
+        </div>
+      </div>
+
+      ${locked ? `<div class="mr-locked">This month was submitted to the City on
+          ${this.formatDate(this.dateOnly(r.submitted_at))} and is now read-only. Ask the City to reopen it if something needs
+          to change.</div>` : ''}
+
+      <div class="card" style="margin-top:16px"><div class="card-header">
+          <div><h2 class="card-title">Beds and Occupancy</h2>
+            <div class="field-hint">Bed status by reserved category, as nights across the whole month rather than a single day.</div></div>
+        </div><div class="card-body">
+          <div class="mr-grid">
+            ${stat('Beds in service', num(r?.beds_total), `${num(r?.reserved_men_beds)} men &middot; ${num(r?.reserved_women_beds)} women &middot; ${num(r?.ffs_beds)} fee-for-service`)}
+            ${stat('Bed nights available', num(r?.bed_nights_available), 'across all beds')}
+            ${stat('Bed nights occupied', num(r?.bed_nights_occupied), r?.bed_nights_available ? Math.round((r.bed_nights_occupied / r.bed_nights_available)*100) + '% utilisation' : 'no nights generated')}
+            ${stat('Fee-for-service', num(r?.ffs_nights_billable), money(r?.ffs_amount) + ' billable')}
+          </div>
+          ${bedTable}
+          <div style="margin-top:16px"><div class="form-section-title">Bed status changes</div>${statusTable}</div>
+        </div></div>
+
+      <div class="card" style="margin-top:22px"><div class="card-header">
+          <div><h2 class="card-title">Referrals and Admissions</h2>
+            <div class="field-hint">Counted against the section&nbsp;4 service levels for referrals received this month.</div></div>
+        </div><div class="card-body">
+          <div class="mr-grid">
+            ${stat('Referrals received', num(r?.referrals_received), 'all sources')}
+            ${stat('Admitted', num(r?.referrals_admitted), 'admission date recorded')}
+            ${stat('Not admitted', num(r?.referrals_not_admitted), 'declined or withdrawn')}
+            ${stat('Still open', num(r?.referrals_pending), 'no decision yet')}
+            ${stat('Acknowledged in time', num(r?.ack_within_sla), 'within one business day')}
+            ${stat('Determined in time', num(r?.det_within_sla), 'within two business days')}
+          </div>
+          <div style="margin-top:16px"><div class="form-section-title">Non-admissions with reasons</div>${reasonTable}</div>
+        </div></div>
+
+      <div class="card" style="margin-top:22px"><div class="card-header">
+          <div><h2 class="card-title">Admissions, Discharges and Destinations</h2></div>
+        </div><div class="card-body">
+          <div class="mr-grid">
+            ${stat('Admissions', num(r?.admissions), 'stays beginning this month')}
+            ${stat('Discharges', num(r?.discharges), 'stays ending this month')}
+          </div>
+          ${destTable}
+        </div></div>
+
+      <div class="card" style="margin-top:22px"><div class="card-header">
+          <div><h2 class="card-title">Case Management Activity</h2></div>
+        </div><div class="card-body">
+          <div class="mr-grid">
+            ${stat('Participants served', num(r?.participants_served), 'received at least one service')}
+            ${stat('Contacts', num(r?.case_mgmt_contacts), 'service records')}
+            ${stat('Minutes', num(r?.case_mgmt_minutes), r?.case_mgmt_minutes ? Math.round(r.case_mgmt_minutes/60) + ' hours' : '')}
+          </div>
+          ${svcTable}
+        </div></div>
+
+      <div class="card" style="margin-top:22px"><div class="card-header">
+          <div><h2 class="card-title">Narrative</h2>
+            <div class="field-hint">The two parts of this report that are not computed.</div></div>
+        </div><div class="card-body">
+          <div class="field-group"><label class="field-label" for="mr-narrative">Program narrative</label>
+            <textarea id="mr-narrative" class="field-textarea" style="min-height:120px" ${canEdit?'':'disabled'}
+              placeholder="What happened this month at the program.">${esc(r?.narrative_text || '')}</textarea></div>
+          <div class="field-group"><label class="field-label" for="mr-issues">Issues needing City attention</label>
+            <textarea id="mr-issues" class="field-textarea" style="min-height:90px" ${canEdit?'':'disabled'}
+              placeholder="Anything the City needs to act on. Leave empty if there is nothing.">${esc(r?.issues_for_city || '')}</textarea></div>
+          ${canEdit && !this.isAdmin?.() && this.canSign?.() ? `
+          <div class="field-group"><label class="field-label" for="mr-signatory">Certified by</label>
+            <input type="text" class="field-input" id="mr-signatory" value="${esc(r?.certified_by || this.profile?.full_name || '')}"
+              placeholder="Your name"></div>
+          <label style="display:flex;gap:9px;align-items:flex-start;font-size:12.5px;margin-top:6px;">
+            <input type="checkbox" id="mr-certify" style="margin-top:2px;">
+            <span>I certify that the figures and narrative in this report are accurate and complete to the best of my knowledge.</span>
+          </label>` : ''}
+          <p class="mr-msg" id="mr-msg"></p>
+          ${r?.generated_at ? `<div class="mr-generated">Figures last generated ${this.formatDate(this.dateOnly(r.generated_at))}${
+            r.generated_by ? ' by ' + esc(r.generated_by) : ''}.</div>` : ''}
+          ${r?.review_note ? `<div class="mr-locked" style="margin-top:12px;border-left-color:#98241F;">City review note: ${esc(r.review_note)}</div>` : ''}
+        </div></div>
+
+      <div class="card" style="margin-top:22px"><div class="card-header"><div><h2 class="card-title">History</h2></div></div>
+        <div class="card-body">${log.length ? log.map(x => `<div class="mr-log-row">
+            <div>${esc(x.action)}${x.note ? `<br><span class="field-hint">${esc(x.note)}</span>` : ''}</div>
+            <div class="field-hint" style="white-space:nowrap;">${this.formatDate(this.dateOnly(x.created_at))}<br>${esc(x.acted_by || '')}</div>
+          </div>`).join('') : '<div class="mr-empty">Nothing recorded for this month yet.</div>'}</div></div>`;
+
+    el.querySelector('#mr-month')?.addEventListener('change', e => {
+      this._monthlyMonth = e.target.value; this.renderMonthly();
+    });
+    el.querySelector('#mr-generate')?.addEventListener('click', () => this.generateMonthly());
+    el.querySelector('#mr-save')?.addEventListener('click', () => this.saveMonthlyNarrative());
+    el.querySelector('#mr-submit')?.addEventListener('click', () => this.submitMonthly());
+    el.querySelector('#mr-accept')?.addEventListener('click', () => this.reviewMonthly('accepted'));
+    el.querySelector('#mr-revise')?.addEventListener('click', () => this.reviewMonthly('revision_requested'));
+  };
+
+  App.mrMsg = function(text, kind){
+    const el = document.getElementById('mr-msg');
+    if (el) { el.textContent = text; el.className = 'mr-msg' + (kind ? ' ' + kind : ''); }
+  };
+
+  /* ------------------------------------------------------------- actions */
+
+  App.generateMonthly = async function(){
+    const month = this.monthlyMonth();
+    this.mrMsg('Generating figures…');
+    const { error } = await this.sb.rpc('holloway_generate_monthly_report', {
+      p_program_id: this.program.id, p_month: month
+    });
+    if (error) { this.mrMsg('Could not generate: ' + error.message, 'err'); return; }
+    await this.loadAll();
+    this.renderMonthly();
+    this.mrMsg('Figures generated from this month’s beds, referrals, stays and services.', 'ok');
+  };
+
+  // The narrative is saved on its own so a long write-up is never lost to a
+  // regeneration, and so saving does not imply certifying.
+  App.saveMonthlyNarrative = async function(){
+    const month = this.monthlyMonth();
+    const r = this.monthlyReport(month);
+    const payload = {
+      narrative_text:  document.getElementById('mr-narrative')?.value?.trim() || null,
+      issues_for_city: document.getElementById('mr-issues')?.value?.trim() || null
+    };
+    this.mrMsg('Saving…');
+    let error;
+    if (r) {
+      ({ error } = await this.sb.from('holloway_monthly_reports').update(payload)
+        .eq('program_id', this.program.id).eq('report_month', month));
+    } else {
+      ({ error } = await this.sb.from('holloway_monthly_reports').insert(Object.assign({
+        program_id: this.program.id, report_month: month,
+        due_date: this.monthlyDueDate(month), fiscal_year: this.fiscalYear, status: 'draft'
+      }, payload)));
+    }
+    if (error) { this.mrMsg('Could not save: ' + error.message, 'err'); return; }
+    await this.loadAll();
+    this.renderMonthly();
+    this.mrMsg('Saved.', 'ok');
+  };
+
+  App.submitMonthly = async function(){
+    const month = this.monthlyMonth();
+    const r = this.monthlyReport(month);
+    const signatory = document.getElementById('mr-signatory')?.value?.trim();
+    const certified = document.getElementById('mr-certify')?.checked;
+    const narrative = document.getElementById('mr-narrative')?.value?.trim();
+
+    // Submitting freezes the month, so the things that make it a report rather
+    // than an empty shell are required before it can be sent.
+    if (!r?.generated_at) { this.mrMsg('Generate the figures before submitting this month.', 'err'); return; }
+    if (!narrative)  { this.mrMsg('Write the program narrative before submitting.', 'err'); return; }
+    if (!signatory)  { this.mrMsg('Enter the name of the person certifying this report.', 'err'); return; }
+    if (!certified)  { this.mrMsg('Tick the certification before submitting.', 'err'); return; }
+
+    this.mrMsg('Submitting…');
+    const now = new Date().toISOString();
+    const { error } = await this.sb.from('holloway_monthly_reports').update({
+      narrative_text:  narrative,
+      issues_for_city: document.getElementById('mr-issues')?.value?.trim() || null,
+      status: 'submitted',
+      certification_text: 'Certified accurate and complete by ' + signatory,
+      certified_by: signatory, certified_at: now,
+      submitted_by: this.user?.email || null, submitted_at: now
+    }).eq('program_id', this.program.id).eq('report_month', month);
+    if (error) { this.mrMsg('Could not submit: ' + error.message, 'err'); return; }
+
+    await this.sb.from('holloway_monthly_report_log').insert({
+      program_id: this.program.id, report_month: month,
+      action: 'submitted to City', note: 'Certified by ' + signatory, acted_by: this.user?.email || null
+    });
+    await this.loadAll();
+    this.renderMonthly();
+  };
+
+  App.reviewMonthly = async function(status){
+    const month = this.monthlyMonth();
+    const note = status === 'revision_requested'
+      ? (window.prompt('What needs to change before this month can be accepted?') || '').trim()
+      : null;
+    if (status === 'revision_requested' && !note) { this.mrMsg('A revision request needs a note saying what to change.', 'err'); return; }
+
+    this.mrMsg('Recording…');
+    const { error } = await this.sb.from('holloway_monthly_reports').update({
+      status, review_note: note,
+      reviewed_by: this.user?.email || null, reviewed_at: new Date().toISOString()
+    }).eq('program_id', this.program.id).eq('report_month', month);
+    if (error) { this.mrMsg('Could not record: ' + error.message, 'err'); return; }
+
+    await this.sb.from('holloway_monthly_report_log').insert({
+      program_id: this.program.id, report_month: month,
+      action: status === 'accepted' ? 'accepted by City' : 'revision requested',
+      note, acted_by: this.user?.email || null
+    });
+    await this.loadAll();
+    this.renderMonthly();
+  };
+
+  /* ------------------------------------------------------------ plumbing */
+
+  const previousShowViewForMonthly = App.showView;
+  App.showView = function(view){
+    previousShowViewForMonthly.call(this, view);
+    if (view === 'monthly') this.renderMonthly();
+  };
+
+  const previousSidebarForMonthly = App.renderSidebarForRole;
+  App.renderSidebarForRole = function(){
+    previousSidebarForMonthly.call(this);
+    const nav = document.getElementById('nav-monthly');
+    if (nav && !this.isAgencyFiscal?.()) nav.style.display = this.programHas('has_monthly_report') ? 'flex' : 'none';
+    // Agency-Fiscal's narrow workspace is set by the previous function; leave it alone.
   };
 })();
 
