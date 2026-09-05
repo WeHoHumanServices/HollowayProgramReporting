@@ -1317,7 +1317,7 @@ th.sortable:hover { color:var(--navy); }
       <div class="login-footer" id="login-referral-cta" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
         Referring someone to Holloway?
         <button type="button" class="login-link-btn" id="btn-open-referral">Submit a referral &rarr;</button>
-        <button type="button" class="login-link-btn" id="btn-open-referral-status" style="margin-top:8px;">Check a referral &rarr;</button>
+          <button type="button" class="login-link-btn" id="btn-open-referral-status" onclick="window.location.href='referral-status.html'">Check a referral status &rarr;</button>
       </div>
     </div>
   </div>
@@ -10594,8 +10594,8 @@ const App = {
 
   /* ================= public referral flow ================= */
 
-  App.openReferralScreen = function(mode){
-    this._referral = { step:'code', mode:(mode==='status'?'status':'submit'), token:null, agencyName:null, error:'', busy:false, files:{} };
+  App.openReferralScreen = function(){
+    this._referral = { step:'code', token:null, agencyName:null, error:'', busy:false, files:{} };
     document.getElementById('loading-screen')?.style.setProperty('display','none');
     document.getElementById('login-screen')?.style.setProperty('display','none');
     document.getElementById('app')?.style.setProperty('display','none');
@@ -10607,7 +10607,7 @@ const App = {
     document.getElementById('referral-screen').style.display = 'none';
     if (this.user) document.getElementById('app')?.style.setProperty('display','block');
     else document.getElementById('login-screen')?.style.setProperty('display','block');
-    if (location.hash === '#referral' || location.hash === '#referral-status') history.replaceState(null, '', location.pathname + location.search);
+    if (location.hash === '#referral') history.replaceState(null, '', location.pathname + location.search);
   };
 
   App.renderReferralStep = function(){
@@ -10616,25 +10616,20 @@ const App = {
     if (!body) return;
     if (st.step === 'code') body.innerHTML = this.referralCodeStepHtml(st);
     else if (st.step === 'form') body.innerHTML = this.referralFormStepHtml(st);
-    else if (st.step === 'status') body.innerHTML = this.referralStatusStepHtml(st);
     else body.innerHTML = this.referralDoneStepHtml(st);
     this.bindReferralStep();
   };
 
   App.referralCodeStepHtml = function(st){
-    const isStatus = st.mode === 'status';
-    return `<div class="referral-step-head"><h3>${isStatus?'Check a referral':'Enter your agency code'}</h3><span class="referral-progress">${isStatus?'':'Step 1 of 2'}</span></div>
-      <p class="field-hint" style="margin-bottom:16px;">${isStatus
-        ? 'Enter your agency code to see every referral your agency has sent and where each one stands.'
-        : "Partner agencies are issued a five-digit code by the Holloway team. If you don't have one, contact the City's Human Services Division."}</p>
+    return `<div class="referral-step-head"><h3>Enter your agency code</h3><span class="referral-progress">Step 1 of 2</span></div>
+      <p class="field-hint" style="margin-bottom:16px;">Partner agencies are issued a five-digit code by the Holloway team. If you don't have one, contact the City's Human Services Division.</p>
       <div class="field-group">
         <label class="field-label required" for="ref-code">Agency Code</label>
         <input id="ref-code" class="field-input referral-code-input" autocomplete="off" spellcheck="false" placeholder="00000" inputmode="numeric" maxlength="12" ${st.busy?'disabled':''}>
       </div>
-      <button class="login-submit" id="ref-code-submit" ${st.busy?'disabled':''}>${st.busy?'Checking…':(isStatus?'Look Up Referrals &rarr;':'Continue &rarr;')}</button>
+      <button class="login-submit" id="ref-code-submit" ${st.busy?'disabled':''}>${st.busy?'Checking…':'Continue &rarr;'}</button>
       ${st.error?`<p class="referral-error">${esc(st.error)}</p>`:''}
-      <button type="button" class="login-link-btn" id="ref-switch-mode" style="margin-top:16px;">${isStatus?'Submit a new referral instead':'Check the status of a referral instead'}</button>
-      <button type="button" class="login-link-btn" id="ref-back-login" style="margin-top:10px;">&larr; Back to staff sign in</button>`;
+      <button type="button" class="login-link-btn" id="ref-back-login" style="margin-top:16px;">&larr; Back to staff sign in</button>`;
   };
 
   App.referralFormStepHtml = function(st){
@@ -10705,31 +10700,10 @@ const App = {
     </div>`;
   };
 
-  App.referralStatusStepHtml = function(st){
-    const rows = st.statusRows || [];
-    const body = rows.length
-      ? rows.map(r => `<tr>
-            <td>${esc(r.client_name || '—')}</td>
-            <td>${esc(r.date_submitted || '—')}</td>
-            <td><span class="badge ${STATUS_BADGE[r.status] || 'badge-gray'}">${esc(r.status || '—')}</span></td>
-            <td>${esc(r.status_changed_on || '—')}</td>
-          </tr>`).join('')
-      : `<tr><td colspan="4" class="field-hint" style="padding:18px 12px;">No referrals have been submitted by your agency yet.</td></tr>`;
-    return `<div class="referral-step-head"><h3>Referrals from ${esc(st.agencyName || 'your agency')}</h3><span class="referral-progress">${rows.length} total</span></div>
-      <p class="field-hint" style="margin-bottom:16px;">Community member names are shortened to a first name and last initial.</p>
-      <div class="client-table-wrap"><table class="client-table">
-        <thead><tr><th>Community Member</th><th>Submitted</th><th>Status</th><th>Status Updated</th></tr></thead>
-        <tbody>${body}</tbody></table></div>
-      <button type="button" class="login-link-btn" id="ref-switch-mode" style="margin-top:18px;">Submit a new referral</button>
-      <button type="button" class="login-link-btn" id="ref-back-login" style="margin-top:10px;">&larr; Back to staff sign in</button>`;
-  };
-
   App.bindReferralStep = function(){
     const st = this._referral;
     document.getElementById('ref-back-login')?.addEventListener('click', () => this.closeReferralScreen());
-    document.getElementById('ref-another')?.addEventListener('click', () => this.openReferralScreen('submit'));
-    document.getElementById('ref-switch-mode')?.addEventListener('click', () =>
-      this.openReferralScreen(this._referral?.mode === 'status' ? 'submit' : 'status'));
+    document.getElementById('ref-another')?.addEventListener('click', () => this.openReferralScreen());
 
     const codeInput = document.getElementById('ref-code');
     if (codeInput){
@@ -10775,16 +10749,10 @@ const App = {
     const code = (document.getElementById('ref-code')?.value || '').trim();
     if (!code){ st.error = 'Enter the code your agency was issued.'; this.renderReferralStep(); return; }
     st.busy = true; st.error = ''; this.renderReferralStep();
-    const isStatus = st.mode === 'status';
-    const { data, error } = await this.sb.rpc(
-      isStatus ? 'holloway_referral_status_lookup' : 'holloway_referral_start', { p_code: code });
+    const { data, error } = await this.sb.rpc('holloway_referral_start', { p_code: code });
     st.busy = false;
     if (error){ st.error = 'Could not reach the referral service. Please try again.'; this.renderReferralStep(); return; }
     if (!data?.ok){ st.error = data?.message || 'That code was not recognised.'; this.renderReferralStep(); return; }
-    if (isStatus){
-      st.agencyName = data.agency_name; st.statusRows = data.referrals || []; st.step = 'status';
-      this.renderReferralStep(); return;
-    }
     st.token = data.token; st.agencyName = data.agency_name; st.step = 'form';
     st.values = { referring_agency: data.agency_name, certification_date: todayStr(), date_submitted: todayStr() };
     st.crits = {}; st.files = {}; st.caseNotesMethod = null;
@@ -10861,11 +10829,9 @@ const App = {
   };
 
   // Entry points: the login-card link, and a #referral deep link agencies can bookmark.
-  document.getElementById('btn-open-referral')?.addEventListener('click', () => App.openReferralScreen('submit'));
-  document.getElementById('btn-open-referral-status')?.addEventListener('click', () => App.openReferralScreen('status'));
-  if (location.hash === '#referral' || location.hash === '#referral-status'){
-    const refMode = location.hash === '#referral-status' ? 'status' : 'submit';
-    document.addEventListener('DOMContentLoaded', () => setTimeout(() => App.openReferralScreen(refMode), 350));
+  document.getElementById('btn-open-referral')?.addEventListener('click', () => App.openReferralScreen());
+  if (location.hash === '#referral'){
+    document.addEventListener('DOMContentLoaded', () => setTimeout(() => App.openReferralScreen(), 350));
   }
 
   /* ================= staff side ================= */
