@@ -517,6 +517,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .brand-program { font-family: var(--font-sans); font-size: 15px; font-weight: 650; letter-spacing: -.01em;
   line-height:1.18; max-width:34ch; }
 
+/* ---- Equity fields, case assignment and housing plan reviews ---- */
+.pr-row { display:flex; justify-content:space-between; gap:12px; padding:9px 0;
+  border-bottom:1px solid var(--gray-100); font-size:12.5px; }
+.pr-row:last-of-type { border-bottom:none; }
+.pr-due { font-size:12px; padding:9px 12px; border-radius:8px; margin-bottom:10px; border:1px solid var(--border); background:var(--gray-50); }
+.pr-due.is-late { border-color:#F0C3C1; background:#FEF7F7; color:#98241F; }
+.pr-due.is-soon { border-color:#F0DBAE; background:#FDF3E0; color:#8A5B00; }
+.pr-msg { font-size:12.5px; margin-top:8px; min-height:15px; }
+.pr-msg.err { color:var(--red); }
+.pr-msg.ok  { color:var(--green); }
+.eq-hint { font-size:11.5px; color:var(--gray-500); margin-top:8px; }
+
+.tg-card { background:var(--white); border:1px solid var(--border); border-radius:10px; padding:12px 15px; min-width:170px; flex:1 1 170px; }
+.tg-label { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--gray-400); }
+.tg-value { font-family:var(--font-sans); font-size:20px; font-weight:700; color:var(--navy); margin-top:3px; }
+.tg-sub { font-size:11.5px; color:var(--gray-500); margin-top:2px; }
+.tg-bar { height:5px; border-radius:999px; background:var(--gray-100); margin-top:8px; overflow:hidden; }
+.tg-bar span { display:block; height:100%; background:var(--green); }
+.tg-bar.is-short span { background:var(--gold); }
+
 /* ---- Monthly operating report (programs with has_monthly_report) ---- */
 .mr-head { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; margin-top:16px; }
 .mr-due { font-size:12.5px; color:var(--gray-600); }
@@ -2713,7 +2733,7 @@ const App = {
       ? this.sb.from('quarterly_reports').select('program_id,fiscal_year,quarter,income_increase,income_maintained,satisfaction_satisfied,satisfaction_total').eq('program_id', pid).eq('fiscal_year', this.fiscalYear)
       : this.sb.from('quarterly_reports').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear);
     const clientsQ = fiscalOnly
-      ? this.sb.from('holloway_clients').select('id,program_id,fiscal_year,entry_date,exit_date,exit_destination_type,age,gender,gender_other,transgender_status,race_ethnicity,race_ethnicity_other,primary_language,veteran,disability').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('entry_date', { ascending: false })
+      ? this.sb.from('holloway_clients').select('id,program_id,fiscal_year,entry_date,exit_date,exit_destination_type,age,gender,gender_other,transgender_status,race_ethnicity,race_ethnicity_other,primary_language,veteran,disability,chronic_homeless,hiv_aids_status,substance_use_disorder,immigration_or_asylum,sexual_orientation,general_case_manager,general_cm_assigned_on,retention_case_manager,retention_cm_assigned_on,housing_plan_completed').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('entry_date', { ascending: false })
       : this.sb.from('holloway_clients').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('entry_date', { ascending: false });
     const servicesQ = fiscalOnly
       ? this.sb.from('holloway_client_services').select('client_id,service_date').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('service_date', { ascending: false })
@@ -6617,11 +6637,14 @@ const App = {
     // Same degradation strategy as the service form: if exit_reasons has not
     // been migrated on this deployment, drop it and save the rest rather than
     // failing the whole record. exit_reason still carries the first selection.
-    let {error}=await this.sb.from('holloway_clients').upsert(payload,{onConflict:'id'});
+    // The participant key became (program_id, id) when the portal took on a
+    // second program. Postgres rejects ON CONFLICT (id) outright once there is
+    // no unique index on id alone, so this has to name the whole key.
+    let {error}=await this.sb.from('holloway_clients').upsert(payload,{onConflict:'program_id,id'});
     let reasonsDropped=false;
     if(error && this.isMissingColumnError(error)){
       const fallback={...payload}; delete fallback.exit_reasons;
-      const retry=await this.sb.from('holloway_clients').upsert(fallback,{onConflict:'id'});
+      const retry=await this.sb.from('holloway_clients').upsert(fallback,{onConflict:'program_id,id'});
       error=retry.error; reasonsDropped=!retry.error;
     }
     if(error){ document.getElementById('client-save-state').textContent='Save failed: '+error.message; return; }
@@ -8326,7 +8349,10 @@ const App = {
   // Storage files are invisible to the database, so clear them first.
   App.purgeIncidentAttachments = async function(clientId){
     try {
-      const { data: incidents } = await this.sb.from('holloway_client_incidents').select('id').eq('client_id', clientId);
+      // Scoped to the program as well as the participant: client ids repeat
+      // across programs, and this deletes storage files, which is not undoable.
+      const { data: incidents } = await this.sb.from('holloway_client_incidents').select('id')
+        .eq('program_id', this.program.id).eq('client_id', clientId);
       const ids = (incidents || []).map(i => i.id).filter(Boolean);
       if (!ids.length) return;
       const { data: atts } = await this.sb.from('holloway_incident_attachments').select('file_path').in('incident_id', ids);
@@ -10307,7 +10333,10 @@ const App = {
       // Not filtered by fiscal_year: the series is longitudinal by design.
       this.sb.from('holloway_client_income').select('*').eq('program_id', pid).order('measured_on', { ascending:false }),
       this.sb.from('holloway_income_source_types').select('*').order('sort_order'),
-      this.sb.from('holloway_income_coverage').select('*')
+      // The coverage view now carries program_id; without this filter a City
+      // admin saw every program's participants under whichever program was
+      // selected.
+      this.sb.from('holloway_income_coverage').select('*').eq('program_id', pid)
     ]);
     if (readings.error) console.warn('income readings unavailable', readings.error);
     if (types.error)    console.warn('income source types unavailable', types.error);
@@ -12792,6 +12821,314 @@ const App = {
     const nav = document.getElementById('nav-monthly');
     if (nav && !this.isAgencyFiscal?.()) nav.style.display = this.programHas('has_monthly_report') ? 'flex' : 'none';
     // Agency-Fiscal's narrow workspace is set by the previous function; leave it alone.
+  };
+})();
+
+
+(function(){
+  /* ==========================================================================
+     Priority populations, case assignment, housing plan reviews and
+     per-program performance targets.
+
+     The first three are participant-record gaps the scope review found:
+     five priority populations section 12.3 reports on that were not captured,
+     no assigned case manager and nowhere to record the transfer between the
+     General and Housing Retention roles, and a single housing plan completion
+     date where section 7.1 asks for a thirty-day review cadence.
+
+     The fourth is the constants problem: Holloway's targets were literals in
+     this file, which stops working the moment a second program is held to
+     different numbers. They are rows now. Holloway's row carries the value the
+     file used to hold, so its dashboard reads exactly the same.
+
+     The first three are gated on program flags. The targets change applies to
+     both programs, but Holloway's stored target is identical to the constant
+     it replaces, so nothing there moves.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+
+  const YND = { yes:'Yes', no:'No', declined:'Client prefers not to answer', unknown:'Unknown / not collected' };
+
+  const ORIENTATION = {
+    straight:'Straight or heterosexual', gay_lesbian:'Gay or lesbian', bisexual:'Bisexual',
+    queer:'Queer', asexual:'Asexual', questioning:'Questioning or unsure', other:'Different identity',
+    declined:'Client prefers not to answer', unknown:'Unknown / not collected'
+  };
+
+  const PLAN_STATUS = { on_track:'On track', revised:'Revised', stalled:'Stalled', completed:'Plan completed' };
+
+  const EQUITY_FIELDS = [
+    ['chronic_homeless',       'Chronic homelessness', YND],
+    ['hiv_aids_status',        'HIV/AIDS status',      YND],
+    ['substance_use_disorder', 'Substance use disorder', YND],
+    ['immigration_or_asylum',  'Immigrant or asylum seeker', YND],
+    ['sexual_orientation',     'Sexual orientation',   ORIENTATION]
+  ];
+
+  /* ------------------------------------------------------------- loading */
+
+  const previousLoadAllForExtended = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAllForExtended.call(this);
+    if (!this.data) this.data = {};
+    this.data.planReviews    = [];
+    this.data.planReviewDue  = [];
+    this.data.programTargets = [];
+    const pid = this.program?.id;
+    if (!pid || this.isAgencyFiscal?.()) return;
+
+    const wants = this.programHas('has_case_plan_tracking');
+    const [reviews, due, targets] = await Promise.all([
+      wants ? this.sb.from('holloway_housing_plan_reviews').select('*').eq('program_id', pid)
+                  .order('review_date', { ascending:false }) : Promise.resolve({ data: [] }),
+      wants ? this.sb.from('holloway_plan_review_due').select('*').eq('program_id', pid)
+                  : Promise.resolve({ data: [] }),
+      this.sb.from('holloway_program_targets').select('*').eq('program_id', pid).order('sort_order')
+    ]);
+    if (reviews.error) console.warn('plan reviews unavailable', reviews.error);
+    if (targets.error) console.warn('program targets unavailable', targets.error);
+    this.data.planReviews    = reviews.data || [];
+    this.data.planReviewDue  = due.data     || [];
+    this.data.programTargets = targets.data || [];
+  };
+
+  /* ------------------------------------------------------------- targets */
+
+  // The effective benchmark for a metric: the program's stored row where one
+  // exists, otherwise the file constant. Reference chips stay in the file —
+  // they are sector context, not contract terms, and are the same either way.
+  App.benchmark = function(key){
+    const base = CONFIG.BENCHMARKS[key] || null;
+    const row  = (this.data?.programTargets || []).find(t => t.metric_key === key && t.kind === 'rate');
+    if (!row) return base;
+    return Object.assign({}, base, {
+      contract:  row.target_value == null ? null : Number(row.target_value),
+      direction: row.direction || base?.direction || 'above',
+      label:     row.label,
+      source:    row.source
+    });
+  };
+
+  App.countTargets = function(){
+    return (this.data?.programTargets || []).filter(t => t.kind === 'count');
+  };
+
+  const previousBenchmarkTone = App.benchmarkTone;
+  App.benchmarkTone = function(key, value){
+    const b = this.benchmark(key);
+    if (!b || value == null || b.contract == null) return 'neutral';
+    if (b.direction === 'below') {
+      if (value > b.contract) return 'bad';
+      return value > b.contract * 0.75 ? 'warn' : 'good';
+    }
+    if (value >= b.contract) return 'good';
+    return value >= b.contract * 0.7 ? 'warn' : 'bad';
+  };
+
+  const previousBenchmarkNote = App.benchmarkNote;
+  App.benchmarkNote = function(key, value){
+    const b = this.benchmark(key);
+    if (!b) return '';
+    // Temporarily present the program's figures to the original wording so the
+    // note keeps its exact phrasing rather than being rewritten here.
+    const saved = CONFIG.BENCHMARKS[key];
+    CONFIG.BENCHMARKS[key] = b;
+    try { return previousBenchmarkNote.call(this, key, value); }
+    finally { CONFIG.BENCHMARKS[key] = saved; }
+  };
+
+  App.phRateTarget = function(){
+    const b = this.benchmark('phRate');
+    return b?.contract != null ? b.contract : CONFIG.PH_RATE_TARGET;
+  };
+
+  /* -------------------------------------------------------- plan reviews */
+
+  App.planReviewsFor = function(clientId){
+    return (this.data.planReviews || []).filter(r => r.client_id === clientId);
+  };
+
+  App.planReviewDueFor = function(clientId){
+    return (this.data.planReviewDue || []).find(r => r.client_id === clientId) || null;
+  };
+
+  /* ------------------------------------------- extra client form sections */
+
+  const sectionAfter = (title) => {
+    const body = document.getElementById('client-body');
+    if (!body) return null;
+    return [...body.querySelectorAll('.form-section')]
+      .find(s => (s.querySelector('.form-section-title')?.textContent || '').trim() === title) || null;
+  };
+
+  const insertAfter = (node, html) => {
+    if (!node) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = html;
+    let ref = node;
+    while (wrap.firstElementChild) {
+      const el = wrap.firstElementChild;
+      ref.parentNode.insertBefore(el, ref.nextSibling);
+      ref = el;
+    }
+  };
+
+  const previousOpenClientForm = App.openClientForm;
+  App.openClientForm = function(id = null){
+    previousOpenClientForm.call(this, id);
+    const equity = this.programHas('has_equity_fields');
+    const cases  = this.programHas('has_case_plan_tracking');
+    if (!equity && !cases) return;
+
+    const c = id ? (this.data.clients || []).find(x => x.id === id) || {} : {};
+    const sel = (fid, map, current) => `<select class="field-select" id="${fid}">
+        <option value="">—</option>
+        ${Object.entries(map).map(([v,l]) => `<option value="${esc(v)}" ${current===v?'selected':''}>${esc(l)}</option>`).join('')}
+      </select>`;
+
+    if (equity) {
+      insertAfter(sectionAfter('Demographics'), `
+        <div class="form-section"><div class="form-section-title">Priority Populations</div>
+          <div class="client-form-grid">
+            ${EQUITY_FIELDS.map(([col, label, map]) => `<div class="field-group">
+              <label class="field-label" for="cf-${col.replace(/_/g,'-')}">${esc(label)}</label>
+              ${sel('cf-' + col.replace(/_/g,'-'), map, c[col])}</div>`).join('')}
+            <div class="field-group" id="cf-orientation-other-wrap" style="display:none;">
+              <label class="field-label" for="cf-orientation-other">Please specify</label>
+              <input type="text" class="field-input" id="cf-orientation-other"
+                     value="${esc(c.sexual_orientation_other || '')}"></div>
+          </div>
+          <div class="eq-hint">&ldquo;Client prefers not to answer&rdquo; and &ldquo;unknown&rdquo; are different answers and are
+            reported differently: one is the participant&rsquo;s choice, the other is a gap in the record. Leave a field blank only
+            if it has not been asked yet.</div>
+        </div>`);
+
+      const orient = document.getElementById('cf-sexual-orientation');
+      const wrap   = document.getElementById('cf-orientation-other-wrap');
+      const sync = () => { if (wrap) wrap.style.display = orient?.value === 'other' ? '' : 'none'; };
+      orient?.addEventListener('change', sync); sync();
+    }
+
+    if (cases) {
+      const due = id ? this.planReviewDueFor(id) : null;
+      const reviews = id ? this.planReviewsFor(id) : [];
+      const dueBanner = !due ? '' : (() => {
+        const overdue = due.next_review_due < this.localDate();
+        const soon = !overdue && due.days_since >= 23;
+        return `<div class="pr-due ${overdue ? 'is-late' : soon ? 'is-soon' : ''}">
+          ${due.reviews ? `Last reviewed ${this.formatDate(this.dateOnly(due.last_review_on))}.` : 'No review recorded since the plan was completed.'}
+          Next review due <strong>${this.formatDate(this.dateOnly(due.next_review_due))}</strong>${
+            overdue ? ' &mdash; overdue' : ''}.</div>`;
+      })();
+
+      insertAfter(sectionAfter('Housing & Case Management'), `
+        <div class="form-section"><div class="form-section-title">Assigned Case Managers</div>
+          <div class="client-form-grid">
+            <div class="field-group"><label class="field-label" for="cf-general-cm">General case manager</label>
+              <input type="text" class="field-input" id="cf-general-cm" value="${esc(c.general_case_manager || '')}"></div>
+            <div class="field-group"><label class="field-label" for="cf-general-cm-date">Assigned on</label>
+              <input type="date" class="field-input" id="cf-general-cm-date" value="${esc(this.dateOnly(c.general_cm_assigned_on) || '')}"></div>
+            <div class="field-group"><label class="field-label" for="cf-retention-cm">Housing retention case manager</label>
+              <input type="text" class="field-input" id="cf-retention-cm" value="${esc(c.retention_case_manager || '')}"></div>
+            <div class="field-group"><label class="field-label" for="cf-retention-cm-date">Transferred on</label>
+              <input type="date" class="field-input" id="cf-retention-cm-date" value="${esc(this.dateOnly(c.retention_cm_assigned_on) || '')}"></div>
+          </div>
+          <div class="eq-hint">The retention assignment date is the transfer between the two roles, which is itself reportable
+            under section&nbsp;8.</div>
+        </div>
+
+        <div class="form-section"><div class="form-section-title">Housing Plan Reviews</div>
+          ${id ? `${dueBanner}
+            ${reviews.length ? reviews.map(r => `<div class="pr-row">
+                <div><strong>${esc(PLAN_STATUS[r.plan_status] || 'Reviewed')}</strong>
+                  ${r.changes_made ? `<br>${esc(r.changes_made)}` : ''}
+                  ${r.next_steps ? `<br><span class="field-hint">Next: ${esc(r.next_steps)}</span>` : ''}</div>
+                <div class="field-hint" style="white-space:nowrap;">${this.formatDate(this.dateOnly(r.review_date))}<br>${esc(r.reviewed_by || '')}</div>
+              </div>`).join('') : '<div class="field-hint">No reviews recorded yet.</div>'}
+            <div class="client-form-grid" style="margin-top:12px;">
+              <div class="field-group"><label class="field-label" for="pr-date">Review date</label>
+                <input type="date" class="field-input" id="pr-date" value="${esc(this.localDate())}"></div>
+              <div class="field-group"><label class="field-label" for="pr-status">Plan status</label>
+                ${sel('pr-status', PLAN_STATUS, '')}</div>
+            </div>
+            <div class="field-group"><label class="field-label" for="pr-changes">What changed</label>
+              <textarea id="pr-changes" class="field-textarea" placeholder="What was revised, or what confirmed the plan is still right."></textarea></div>
+            <div class="field-group"><label class="field-label" for="pr-next">Next steps</label>
+              <input type="text" class="field-input" id="pr-next"></div>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-add-plan-review">Record Review</button>
+            <p class="pr-msg" id="pr-msg"></p>`
+          : '<div class="field-hint">Save the participant before recording a plan review.</div>'}
+        </div>`);
+
+      document.getElementById('btn-add-plan-review')?.addEventListener('click', () => this.addPlanReview(id));
+    }
+  };
+
+  App.addPlanReview = async function(clientId){
+    const msg = (t, k) => { const el = document.getElementById('pr-msg');
+      if (el) { el.textContent = t; el.className = 'pr-msg' + (k ? ' ' + k : ''); } };
+    const date   = document.getElementById('pr-date')?.value;
+    const status = document.getElementById('pr-status')?.value || null;
+    const changes= document.getElementById('pr-changes')?.value?.trim() || null;
+    const next   = document.getElementById('pr-next')?.value?.trim() || null;
+
+    if (!date) { msg('Enter the date the plan was reviewed.', 'err'); return; }
+    if (date > this.localDate()) { msg('A review cannot be dated in the future.', 'err'); return; }
+    // A review that records nothing is not evidence that one happened.
+    if (!status && !changes) { msg('Record the plan status or what changed — an empty review is not evidence of one.', 'err'); return; }
+
+    msg('Saving…');
+    const { error } = await this.sb.from('holloway_housing_plan_reviews').insert({
+      program_id: this.program.id, client_id: clientId, review_date: date,
+      plan_status: status, changes_made: changes, next_steps: next,
+      reviewed_by: this.profile?.full_name || this.user?.email || null,
+      created_by: this.user?.email || null
+    });
+    if (error) { msg('Could not save: ' + error.message, 'err'); return; }
+    await this.loadAll();
+    this.openClientForm(clientId);
+  };
+
+  /* ------------------------------------------------------ saving the extras */
+
+  const previousSaveClientForExtended = App.saveClient;
+  App.saveClient = async function(){
+    const equity = this.programHas('has_equity_fields');
+    const cases  = this.programHas('has_case_plan_tracking');
+    if (!equity && !cases) return previousSaveClientForExtended.call(this);
+
+    const v = x => { const el = document.getElementById(x); const s = el ? String(el.value).trim() : ''; return s === '' ? null : s; };
+    // Read before saving: the base save reloads and closes the form.
+    const extras = {};
+    if (equity) Object.assign(extras, {
+      chronic_homeless:         v('cf-chronic-homeless'),
+      hiv_aids_status:          v('cf-hiv-aids-status'),
+      substance_use_disorder:   v('cf-substance-use-disorder'),
+      immigration_or_asylum:    v('cf-immigration-or-asylum'),
+      sexual_orientation:       v('cf-sexual-orientation'),
+      sexual_orientation_other: v('cf-sexual-orientation') === 'other' ? v('cf-orientation-other') : null
+    });
+    if (cases) Object.assign(extras, {
+      general_case_manager:     v('cf-general-cm'),
+      general_cm_assigned_on:   v('cf-general-cm-date'),
+      retention_case_manager:   v('cf-retention-cm'),
+      retention_cm_assigned_on: v('cf-retention-cm-date')
+    });
+    const clientId = v('cf-hmis-id') || this.currentClientId;
+
+    const result = await previousSaveClientForExtended.call(this);
+
+    // Only write the extras once the base save has actually succeeded, so a
+    // rejected record never gets a half-row of demographics attached to it.
+    const state = document.getElementById('client-save-state')?.textContent || '';
+    if (!clientId || !/saved/i.test(state)) return result;
+
+    const { error } = await this.sb.from('holloway_clients').update(extras)
+      .eq('program_id', this.program.id).eq('id', clientId);
+    if (error) { console.warn('extended client fields not saved', error); return result; }
+    await this.loadAll();
+    return result;
   };
 })();
 
