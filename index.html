@@ -12,7 +12,7 @@
 <title>Interim Housing &amp; Shelter Reporting Portal — City of West Hollywood</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Archivo:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
 <script>
   const SUPABASE_URL = 'https://osilouhgoehyesbastxr.supabase.co';
@@ -1415,9 +1415,10 @@ th.sortable:hover { color:var(--navy); }
 
 <style id="typographic-refresh">
 /* ==========================================================================
-   Typographic refresh — a civic serif for the things that name something, and
-   Public Sans, the typeface the US federal design system is built on, for
-   everything that is read or operated.
+   Typographic refresh — Archivo, a modern grotesque, for the things that name
+   something, and Manrope for everything that is read or operated. No serif:
+   the portal should read as a current piece of software rather than as a
+   printed form.
 
    Nothing here moves layout. It sets a real scale between a page title and a
    table header, lines figures up in their columns, and spends borders and
@@ -1429,10 +1430,10 @@ th.sortable:hover { color:var(--navy); }
    ========================================================================== */
 
 :root{
-  --font-display: 'Source Serif 4', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
-  --font-ui: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Archivo', 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-ui: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-sans: var(--font-ui);
-  --font-num: 'Public Sans', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-num: 'Manrope', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Surfaces spend their emphasis by role: a hairline for a container, a
      shadow only for something that genuinely sits above the page. */
@@ -1458,14 +1459,19 @@ button, input, select, textarea { font-family: var(--font-ui); }
 .kpi-value, .hero-value, .ytd-kpi-value, .mr-stat-value, .bed-stat-value,
 .sla-card-value, .cg-value, .tg-value, .tally dd, .goal-name{
   font-family: var(--font-display);
-  font-weight: 600;
-  letter-spacing: -.012em;
+  font-weight: 700;
+  letter-spacing: -.022em;
 }
-.page-title{ font-size: 33px; line-height: 1.12; text-wrap: balance; }
-.card-title{ font-size: 20.5px; line-height: 1.25; }
-.form-modal-title{ font-size: 23px; }
+.page-title{ font-size: 32px; line-height: 1.1; text-wrap: balance; }
+.card-title{ font-size: 19.5px; line-height: 1.28; letter-spacing: -.018em; }
+.form-modal-title{ font-size: 22px; }
 .login-title{ font-size: 25px; line-height: 1.2; text-wrap: balance; }
-.goal-name{ font-size: 15px; letter-spacing: -.005em; }
+.goal-name{ font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+
+/* Figures are the display face's other job: set them a touch tighter so a
+   column of them reads as one block rather than as separate words. */
+.kpi-value, .hero-value, .ytd-kpi-value, .mr-stat-value, .bed-stat-value,
+.sla-card-value, .cg-value, .tg-value, .tally dd{ letter-spacing: -.03em; }
 
 /* Figures are read in columns, so they line up in columns. */
 .kpi-value, .hero-value, .ytd-kpi-value, .mr-stat-value, .bed-stat-value,
@@ -1508,7 +1514,7 @@ button, input, select, textarea { font-family: var(--font-ui); }
 
 /* The printed report keeps the same voice as the screen. */
 @media print{
-  .print-title{ font-family: var(--font-display); font-weight: 600; }
+  .print-title{ font-family: var(--font-display); font-weight: 700; letter-spacing: -.02em; }
   .print-table td, .print-table th{ font-variant-numeric: tabular-nums; }
 }
 </style>
@@ -14684,7 +14690,7 @@ const App = {
         <thead><tr><th>Measure</th><th style="text-align:right;">Target</th><th style="text-align:right;">Actual</th><th>Progress</th><th style="text-align:right;">%</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p style="font-size:10.5px;color:#555;margin-top:6px;">Targets are the contract's own, held per program. A dash means the measure cannot be computed yet rather than that it came to nothing &mdash; twelve-month retention has no figure until twelve-month follow-ups have been completed.</p>
+      <p style="font-size:10.5px;color:#555;margin-top:6px;">Targets are the contract's own, held per program. A dash means the measure cannot be computed yet rather than that it came to nothing &mdash; twelve-month retention has no figure until twelve-month follow-ups have been completed, and the ninety-day measure none until ninety-day checks have been.</p>
     </div>`;
   };
 
@@ -14776,6 +14782,245 @@ const App = {
     const cards = [...el.querySelectorAll('.card')]
       .filter(c => (c.querySelector('.card-title')?.textContent || '').trim() === 'Annual Contract Goals');
     cards.slice(1).forEach(c => c.remove());
+  };
+})();
+
+
+
+(function(){
+  /* ==========================================================================
+     Thirty- and ninety-day checks on stable exits that were not to permanent
+     housing.
+
+     The contract measure "Other Stable Exits Housed at 90 Days" was being read
+     off holloway_clients.exit_expected_90_days. That column is not a
+     follow-up: it is filled in automatically the moment an exit is recorded,
+     from the exit destination itself. Somebody leaving to stay with family
+     became "Unknown", somebody leaving to a lease became "Yes", and nobody was
+     ever contacted. Reporting it as contract performance reported a guess made
+     on the day of exit as an outcome measured ninety days later.
+
+     So the measure now rests on a check that actually happened. A stable exit
+     to somewhere other than permanent housing is owed a check at thirty days
+     and again at ninety, on the same screen and in the same record as the
+     six- and twelve-month checks that follow a permanent housing exit. The
+     ninety-day one is what the contract figure counts, and it counts only when
+     it was completed, records how the household was reached, and found them
+     housed. The thirty-day check is not counted towards anything: it exists so
+     that the ninety-day one can still find the person.
+
+     Only a program whose contract carries this measure gets the two extra
+     tracks. Holloway's follow-up screen is exactly as it was.
+     ========================================================================== */
+
+  const DAY_TYPES = [['30-day', 30], ['90-day', 90]];
+  const STABLE_EXIT_CLASSES = ['Stable', 'Potentially Stable'];
+
+  // The statuses that mean "still housed" for an exit that was never to
+  // permanent housing. Kept in step with holloway_program_goal_progress —
+  // if one list changes the other has to.
+  const DAY_STATUSES = ['Still housed at exit destination', 'Moved, still housed',
+                        'Moved into permanent housing', 'Returned to homelessness',
+                        'Unable to contact', 'Unknown'];
+  const HOUSED_STATUSES = ['Still housed at exit destination', 'Moved, still housed',
+                           'Moved into permanent housing'];
+
+  const isDayType = t => DAY_TYPES.some(([type]) => type === t);
+
+  App.addDaysDate = function(dateStr, days){
+    if (!dateStr) return null;
+    const d = new Date(dateStr + 'T12:00:00');
+    d.setDate(d.getDate() + days);
+    return this.localDate(d);
+  };
+
+  // Contract-driven, like everything else here: the tracks appear because the
+  // program's targets name the measure, not because of a hard-coded program.
+  App.tracksStableExitFollowUps = function(){
+    return (this.data?.programTargets || []).some(t => t.metric_key === 'stableExits90Day');
+  };
+
+  App.stableExitClients = function(){
+    return (this.data?.clients || []).filter(c =>
+      c.exit_date && !this.isPermanentExit(c)
+      && STABLE_EXIT_CLASSES.includes(c.exit_housing_stability || ''));
+  };
+
+  // A ninety-day check counts towards the contract figure only if it says how
+  // the household was reached and that they were housed when reached.
+  App.followUpVerified = function(f){
+    if (!f || !f.completed_date) return false;
+    if (!(f.contact_method || '').trim()) return false;
+    return f.stable_at_followup === 'Yes' || HOUSED_STATUSES.includes(f.housing_status || '');
+  };
+
+  /* ------------------------------------------------- the expected work list */
+
+  const previousExpectedFollowUps = App.expectedFollowUps;
+  App.expectedFollowUps = function(){
+    const rows = previousExpectedFollowUps.call(this);
+    if (!this.tracksStableExitFollowUps()) return rows;
+
+    const existing = new Map((this.data.housingFollowUps || [])
+      .map(f => [this.followUpKey(f.client_id, f.followup_type), f]));
+
+    this.stableExitClients().forEach(c => {
+      DAY_TYPES.forEach(([type, days]) => {
+        const row = existing.get(this.followUpKey(c.id, type)) || {
+          id: null, program_id: this.program.id, fiscal_year: this.fiscalYear,
+          client_id: c.id, followup_type: type,
+          due_date: this.addDaysDate(this.dateOnly(c.exit_date), days), status: 'due'
+        };
+        rows.push({ ...row, client: c });
+      });
+    });
+    return rows.sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
+  };
+
+  /* --------------------------------------------------------- the two tables */
+
+  const previousRenderHousingFollowUps = App.renderHousingFollowUps;
+  App.renderHousingFollowUps = function(){
+    previousRenderHousingFollowUps.call(this);
+    if (!this.tracksStableExitFollowUps()) return;
+
+    const el = document.getElementById('view-housing-followups');
+    if (!el) return;
+    const rows = this.expectedFollowUps();
+
+    // The headline counts above the tables were written when the only exits
+    // followed up on were to permanent housing.
+    const sub = el.querySelector('.page-subtitle');
+    if (sub) sub.textContent = 'Track housing status after exit: 6 and 12 months for permanent housing '
+      + 'placements, 30 and 90 days for stable exits to somewhere else.';
+    const phTile = [...el.querySelectorAll('.generated-metric')]
+      .find(t => (t.querySelector('.label')?.textContent || '').trim() === 'PH Clients');
+    if (phTile){
+      phTile.insertAdjacentHTML('afterend',
+        `<div class="generated-metric"><div class="label">Stable Exits</div>`
+        + `<div class="value">${this.stableExitClients().length}</div></div>`);
+    }
+
+    this._followup30Sort = this._followup30Sort || { key: null, dir: 'asc' };
+    this._followup90Sort = this._followup90Sort || { key: null, dir: 'asc' };
+
+    const verified = rows.filter(f => f.followup_type === '90-day' && this.followUpVerified(f)).length;
+    const owed = this.stableExitClients().length;
+
+    const html = `<div class="notice navy" style="margin-top:18px;">
+        <div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg></div>
+        <div><strong>Stable exits that were not to permanent housing</strong> are checked at 30 and 90 days.
+        The 90-day check is the contract's <em>Other Stable Exits Housed at 90 Days</em> measure, and it counts
+        only when it records how the household was reached and finds them housed &mdash; ${verified} of ${owed}
+        stable exit${owed === 1 ? '' : 's'} so far. The 30-day check is not counted towards anything; it is there
+        so the 90-day one can still find the person.</div>
+      </div>`
+      + this.renderFollowUpSection(rows, '30-day', '30-Day Checks (Stable Exits)', this._followup30Sort)
+      + this.renderFollowUpSection(rows, '90-day', '90-Day Checks (Stable Exits)', this._followup90Sort);
+
+    el.insertAdjacentHTML('beforeend', html);
+    el.querySelectorAll('[data-followup-table="30-day"] [data-followup-client], [data-followup-table="90-day"] [data-followup-client]')
+      .forEach(b => b.addEventListener('click', () => this.openFollowUpForm(b.dataset.followupClient, b.dataset.followupType)));
+    this.wireSortableHeaders(el.querySelector('[data-followup-table="30-day"]'), this._followup30Sort, () => this.renderHousingFollowUps());
+    this.wireSortableHeaders(el.querySelector('[data-followup-table="90-day"]'), this._followup90Sort, () => this.renderHousingFollowUps());
+  };
+
+  /* ------------------------------------------------------------- the record */
+
+  const previousOpenFollowUpForm = App.openFollowUpForm;
+  App.openFollowUpForm = function(clientId, type){
+    previousOpenFollowUpForm.call(this, clientId, type);
+    if (!isDayType(type)) return;
+
+    const c = (this.data.clients || []).find(x => x.id === clientId) || {};
+    const existing = (this.data.housingFollowUps || [])
+      .find(f => f.client_id === clientId && f.followup_type === type) || {};
+    const days = DAY_TYPES.find(([t]) => t === type)[1];
+
+    const title = document.getElementById('followup-title');
+    if (title) title.textContent = `${days}-Day Check · ${this.clientDisplayId(c)}`;
+
+    const due = document.getElementById('fu-due');
+    if (due) due.value = this.dateOnly(existing.due_date)
+      || this.addDaysDate(this.dateOnly(c.exit_date), days) || '';
+
+    // "Still in permanent housing" is not an option for somebody who never
+    // exited to permanent housing.
+    const status = document.getElementById('fu-status');
+    if (status){
+      status.innerHTML = '<option></option>' + DAY_STATUSES
+        .map(x => `<option ${existing.housing_status === x ? 'selected' : ''}>${x}</option>`).join('');
+      const label = status.closest('.field-group')?.querySelector('.field-label');
+      if (label) label.textContent = 'Housing Status at Check';
+    }
+
+    // The method is what makes the check evidence rather than an assertion, so
+    // for these two it is required and says so.
+    const method = document.getElementById('fu-method');
+    const methodLabel = method?.closest('.field-group')?.querySelector('.field-label');
+    if (methodLabel){
+      methodLabel.classList.add('required');
+      methodLabel.textContent = 'How Contact Was Made';
+    }
+
+    const notes = document.getElementById('fu-notes');
+    const body = document.getElementById('followup-body');
+    if (body && !body.querySelector('.fu-day-hint')){
+      (notes?.closest('.field-group') || body).insertAdjacentHTML('beforebegin',
+        `<div class="field-hint fu-day-hint" style="grid-column:1/-1;margin:-4px 0 6px;">`
+        + `Exited ${this.formatDate(c.exit_date)} to ${this.escape(c.exit_destination || c.exit_destination_type || 'a stable destination')}.`
+        + ` A check counts as verified when it records how contact was made and finds the household housed.</div>`);
+    }
+  };
+
+  const previousSaveFollowUp = App.saveFollowUp;
+  App.saveFollowUp = async function(){
+    const cur = this.currentFollowUp || {};
+    if (isDayType(cur.type)){
+      const method = (document.getElementById('fu-method')?.value || '').trim();
+      if (!method){
+        const state = document.getElementById('followup-save-state');
+        if (state) state.textContent = 'Record how contact was made — a check without it cannot be counted as verified.';
+        return;
+      }
+    }
+    return previousSaveFollowUp.call(this);
+  };
+
+  /* ---------------------------------------------- the rest of the portal ---- */
+
+  // The confirmed-retention figure is about permanent housing placements and
+  // says so in its own comment; 30- and 90-day checks on other destinations
+  // would otherwise land in its denominator and drag the rate down.
+  const previousConfirmedRetention = App.confirmedRetentionSummary;
+  App.confirmedRetentionSummary = function(){
+    const all = this.data.housingFollowUps || [];
+    this.data.housingFollowUps = all.filter(f => !isDayType(f.followup_type));
+    try { return previousConfirmedRetention.call(this); }
+    finally { this.data.housingFollowUps = all; }
+  };
+
+  // The work queue named the two check types it knew about.
+  const previousReadiness = App.renderQuarterReadinessChecklist;
+  if (previousReadiness){
+    App.renderQuarterReadinessChecklist = function(q){
+      const html = previousReadiness.call(this, q);
+      if (!this.tracksStableExitFollowUps()) return html;
+      return html.replace('6- and 12-month PH check-ins past their due date',
+                          'Post-exit check-ins past their due date');
+    };
+  }
+
+  // A baseline measure with no target still has something to say about how far
+  // the checks behind it have got.
+  const previousContractGoalsHtml = App.contractGoalsHtml;
+  App.contractGoalsHtml = function(){
+    const html = previousContractGoalsHtml.call(this);
+    if (!html) return html;
+    const p = (this.data?.goalProgress || {}).stableExits90Day;
+    if (!p?.note) return html;
+    return html.replace('Baseline measure — no target on file.',
+      this.escape('Baseline measure · ' + p.note));
   };
 })();
 
