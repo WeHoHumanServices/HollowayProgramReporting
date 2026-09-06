@@ -2378,10 +2378,10 @@ const App = {
     this.currentQuarter = this.resolveCurrentQuarter();
     // Replace any static program-name text with values from the loaded program record.
     const brand = document.getElementById('brand-program');
-    if (brand) brand.textContent = `${this.programName()} Reporting Portal`;
-    const loginTitle = document.getElementById('login-title');
-    if (loginTitle) loginTitle.textContent = `${this.programName()} Reporting Portal`;
-    document.title = `${this.programName()} Reporting Portal — City of West Hollywood`;
+    // The topbar names the program being worked on; the portal keeps its own
+    // name on the sign-in card, which is shown before any program is chosen.
+    if (brand) brand.textContent = this.programName();
+    document.title = `${this.programName()} — Interim Housing & Shelter Reporting Portal`;
     this.renderUser();
     this.renderSidebarForRole();
     this.installToastRegion();
@@ -14454,6 +14454,159 @@ const App = {
 
   App.programName2 = function(id){
     return (this.availablePrograms || []).find(p => p.id === id)?.name || 'that program';
+  };
+})();
+
+
+(function(){
+  /* ==========================================================================
+     Three fixes found in use.
+
+     1. The Bed Night Invoice was unreachable. Its nav item sits in the Fiscal
+        group, and the sidebar hides a group when every item in it is hidden.
+        That check ran before the invoice item was shown, so for a program with
+        no cost reporting the whole group was hidden and the item inside it
+        stayed invisible however visible it thought it was. Group visibility is
+        now settled after the feature items are, not before.
+
+     2. The program report still showed Holloway's annual goals for every
+        program. The goals became program data when the targets did; this makes
+        the report read them the same way the dashboard does, including the
+        distinction between a measure that came to nothing and one that cannot
+        be measured yet.
+
+     3. The browser names a printed PDF after the page title, which was
+        "<program name> Reporting Portal — City of West Hollywood" — accurate
+        and useless as a filename. Each export now names itself.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+
+  /* ------------------------------------------------- 1. sidebar group visibility */
+
+  const previousSidebarForGroups = App.renderSidebarForRole;
+  App.renderSidebarForRole = function(){
+    previousSidebarForGroups.call(this);
+    if (this.isAgencyFiscal?.()) return;   // that workspace sets its own visibility
+    document.querySelectorAll('.sidebar-section').forEach(section => {
+      const items = [...section.querySelectorAll('.sidebar-item')];
+      const visible = items.some(el => el.style.display !== 'none');
+      section.style.display = (items.length && !visible) ? 'none' : '';
+    });
+  };
+
+  /* ----------------------------------------------------- 2. goals in the report */
+
+  App.hasContractGoals = function(){
+    return (this.contractGoals ? this.contractGoals() : []).length > 0;
+  };
+
+  // One shape for both consumers: the report card and the printed table.
+  // measurable is carried through so neither renders a dash as a nought.
+  const previousAnnualGoals = App.annualGoals;
+  App.annualGoals = function(q){
+    if (!this.hasContractGoals()) return previousAnnualGoals.call(this, q);
+    const progress = this.data?.goalProgress || {};
+    return this.contractGoals().map(g => {
+      const p = progress[g.metric_key];
+      const measurable = p ? p.measurable !== false : false;
+      return {
+        key: g.metric_key,
+        name: g.label,
+        desc: g.description || '',
+        group: g.metric_group,
+        kind: g.kind,
+        measurable,
+        denominator: p?.denominator ?? null,
+        actual: measurable && p?.actual != null ? Number(p.actual) : null,
+        target: g.target_value == null ? null : Number(g.target_value),
+        suffix: g.unit || ''
+      };
+    });
+  };
+
+  const previousRenderGoalProgress = App.renderGoalProgress;
+  App.renderGoalProgress = function(q){
+    if (!this.hasContractGoals()) return previousRenderGoalProgress.call(this, q);
+    // The dashboard card already renders these correctly; the report shows the
+    // same thing rather than a second version that could drift from it.
+    return this.contractGoalsHtml().replace(
+      '<h2 class="card-title">Annual Contract Goals</h2>',
+      `<h2 class="card-title">Annual Contract Goals</h2><span class="badge badge-gray">Through ${esc(q)}</span>`);
+  };
+
+  const previousContractProgress = App.contractProgressSectionHtml;
+  App.contractProgressSectionHtml = function(q = this.currentQuarter){
+    if (!this.hasContractGoals()) return previousContractProgress.call(this, q);
+    const goals = this.annualGoals(q);
+    let group = null;
+    const rows = goals.map(g => {
+      const head = g.group && g.group !== group
+        ? (group = g.group, `<tr class="print-subhead"><td colspan="5">${esc(g.group)}</td></tr>`) : '';
+      const target = g.target;
+      const pct = (g.measurable && g.actual != null && target) ? Math.round((g.actual / target) * 100) : null;
+      const capped = pct === null ? 0 : Math.min(100, pct);
+      const met = pct !== null && pct >= 100;
+      const actualCell = !g.measurable || g.actual == null
+        ? '—' : g.actual.toLocaleString() + (g.kind === 'rate' ? '%' : '');
+      return head + `<tr>
+        <td><span class="print-goal-name">${esc(g.name)}</span>
+          <span class="print-goal-basis">${esc(g.desc)}</span></td>
+        <td style="text-align:right;">${target != null ? target.toLocaleString() + esc(g.suffix || '') : 'no target'}</td>
+        <td style="text-align:right;font-weight:800;">${actualCell}</td>
+        <td style="width:110px;">
+          <div class="print-goal-track"><div class="print-goal-fill${met ? ' met' : ''}" style="width:${capped}%"></div></div>
+        </td>
+        <td style="text-align:right;" class="print-goal-pct">${pct === null ? '—' : pct + '%'}</td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="print-section"><h2>Contract Year Progress</h2>
+      <table class="print-table">
+        <thead><tr><th>Measure</th><th style="text-align:right;">Target</th><th style="text-align:right;">Actual</th><th>Progress</th><th style="text-align:right;">%</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p style="font-size:10.5px;color:#555;margin-top:6px;">Targets are the contract's own, held per program. A dash means the measure cannot be computed yet rather than that it came to nothing &mdash; twelve-month retention has no figure until twelve-month follow-ups have been completed.</p>
+    </div>`;
+  };
+
+  /* ------------------------------------------------------------ 3. print titles */
+
+  // The browser uses the page title as the PDF's name and running header, so
+  // each export borrows a title of its own and gives it back afterwards.
+  App.printAs = function(name){
+    const original = document.title;
+    document.title = name;
+    const restore = () => { document.title = original; window.removeEventListener('afterprint', restore); };
+    window.addEventListener('afterprint', restore);
+    setTimeout(restore, 60000);   // some browsers never fire afterprint
+  };
+
+  App.printFileLabel = function(kind, period){
+    const program = (this.program?.name || 'Program').replace(/\s+/g, ' ').trim();
+    return `${program} — ${kind}${period ? ' — ' + period : ''}`;
+  };
+
+  const previousPrintReport = App.printReport;
+  App.printReport = function(q = this.currentQuarter){
+    this.printAs(this.printFileLabel('Quarterly Report', `${q} ${this.fyLabel ? this.fyLabel() : ''}`.trim()));
+    return previousPrintReport.call(this, q);
+  };
+
+  const previousPrintFiscalInvoice = App.printFiscalInvoice;
+  App.printFiscalInvoice = function(){
+    const m = this.fiscalMonthRecord?.(this.resolveFiscalMonth?.());
+    this.printAs(this.printFileLabel('Invoice', m?.label || this.fiscalYearLabel?.() || ''));
+    return previousPrintFiscalInvoice.call(this);
+  };
+
+  const previousPrintFfsInvoice = App.printFfsInvoice;
+  App.printFfsInvoice = function(){
+    const month = this.ffsMonth();
+    const label = month ? new Date(month + 'T00:00:00')
+      .toLocaleDateString(undefined, { month:'long', year:'numeric' }) : '';
+    this.printAs(this.printFileLabel('Bed Night Invoice', label));
+    return previousPrintFfsInvoice.call(this);
   };
 })();
 
