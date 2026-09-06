@@ -12621,6 +12621,12 @@ const App = {
     unavailable:'Temporarily unavailable', pending_discharge:'Pending discharge', released:'Released by written authorization'
   };
 
+  // Shared with the printed export below, so the screen and the page the City
+  // receives cannot drift apart on what a category is called.
+  App.mrCategoryLabel    = k => CATEGORY_LABEL[k]     || k;
+  App.mrStatusEventLabel = k => STATUS_EVENT_LABEL[k] || k;
+  App.mrStatusLabel      = k => (MR_STATUS[k] || MR_STATUS.draft).label;
+
   /* ------------------------------------------------------------- loading */
 
   const previousLoadAllForMonthly = App.loadAll;
@@ -15123,6 +15129,329 @@ const App = {
       + `<strong>Billing basis:</strong> ${esc(this.ffsBasisLabel())}. ${esc(this.ffsBasisSentence())}</p>`;
     return html.replace('</tbody></table>\n\n      <div class="fiscal-cert">',
                         '</tbody></table>' + footnote + '\n\n      <div class="fiscal-cert">');
+  };
+})();
+
+
+
+(function(){
+  /* ==========================================================================
+     The monthly operating report as a document.
+
+     Until now the monthly report existed only on screen. The print stylesheet
+     hides the app and shows a single container that the quarterly report, the
+     fiscal invoice and the bed night invoice each fill before printing —
+     nothing filled it for the monthly one, so pressing Ctrl+P on that screen
+     produced a blank sheet. The report the City receives on the 15th could not
+     leave the portal.
+
+     This builds it in the quarterly report's own vocabulary — the same cover,
+     the same summary-then-figures order, the same print sections and tables —
+     but reporting what a month is actually about. The quarterly is an outcomes
+     document: who was served, what happened to them, how the year is tracking.
+     The monthly is an operating one: were beds used, were referrals answered
+     inside the section 4 clocks, what was billed. Sharing the design without
+     sharing the contents is the point.
+     ========================================================================== */
+
+  const esc  = s => App.escape(s ?? '');
+  const LOGO = 'https://www.governmentjobs.com/AgencyPages/weho/agencyImages/download/weho_white_on_blue.jpg';
+
+  const st = document.createElement('style');
+  st.textContent = `
+    .print-draft{border:1.4px solid #98241F;color:#98241F;border-radius:6px;padding:7px 11px;
+      margin:14px 0 0;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+      -webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .print-note{font-size:10.5px;color:#555;margin-top:7px}
+  `;
+  document.head.appendChild(st);
+
+  const num   = v => (v == null ? '—' : Number(v).toLocaleString());
+  const money = v => (v == null ? '—' : '$' + Number(v).toLocaleString(undefined,
+                        { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  const pct   = (n, d) => (d ? Math.round((Number(n || 0) / Number(d)) * 100) + '%' : '—');
+  const monthLabel = m => m
+    ? new Date(m + 'T00:00:00').toLocaleDateString(undefined, { month:'long', year:'numeric' }) : '';
+  const monthPeriod = (m, App) => {
+    if (!m) return '';
+    const start = new Date(m + 'T00:00:00');
+    const end   = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+    return `${App.formatDate(m)} – ${App.formatDate(App.localDate(end))}`;
+  };
+
+  /* --------------------------------------------------------- the prose bit */
+
+  // Written from the figures rather than by anybody, the way the quarterly's
+  // executive summary is. If a figure is missing it says so instead of
+  // rendering a nought that reads as a fact.
+  App.monthlyExecutiveSummary = function(r, month){
+    if (!r || !r.generated_at) {
+      return `<p style="font-size:12px;line-height:1.65;margin:0;">Figures have not been generated for
+        ${esc(monthLabel(month))} yet. Generate them on the Monthly Report screen before submitting.</p>`;
+    }
+    const occ = Number(r.bed_nights_occupied || 0), avail = Number(r.bed_nights_available || 0);
+    const rec = Number(r.referrals_received || 0);
+    const p = (t) => `<p style="font-size:12px;line-height:1.65;margin:0 0 8px;">${t}</p>`;
+
+    const beds = avail
+      ? `Beds were occupied for ${num(occ)} of ${num(avail)} available bed nights, an occupancy of
+         ${pct(occ, avail)}.`
+      : `No bed night census had been generated for this month when these figures were produced, so
+         occupancy is not reported.`;
+
+    const refs = rec
+      ? `The program received ${num(rec)} referral${rec === 1 ? '' : 's'}, admitted
+         ${num(r.referrals_admitted)}, and did not admit ${num(r.referrals_not_admitted)}.
+         ${num(r.ack_within_sla)} of ${num(rec)} were acknowledged within one business day and
+         ${num(r.det_within_sla)} had an admission determination within two, the service levels set by
+         Exhibit A section 4.`
+      : `No referrals were received during the month.`;
+
+    return p(`During ${esc(monthLabel(month))}, the ${esc(this.programName())} recorded
+        ${num(r.admissions)} admission${Number(r.admissions) === 1 ? '' : 's'} and
+        ${num(r.discharges)} discharge${Number(r.discharges) === 1 ? '' : 's'}. ${beds}
+        ${num(r.participants_served)} participant${Number(r.participants_served) === 1 ? '' : 's'}
+        received at least one service contact.`)
+      + p(`${refs} Fee-for-service billing for the month came to ${num(r.ffs_nights_billable)} bed
+        night${Number(r.ffs_nights_billable) === 1 ? '' : 's'} at ${money(r.ffs_amount)}.`);
+  };
+
+  /* ------------------------------------------------------------- the tables */
+
+  App.monthlyBedTableHtml = function(r){
+    const nights = (r?.bed_status_breakdown || {}).nights || {};
+    const keys = Object.keys(nights);
+    const rows = keys.length ? keys.map(k => {
+      const v = nights[k] || {};
+      return `<tr><td>${this.mrCategoryLabel(k)}</td>
+        <td>${num(v.available)}</td><td>${num(v.occupied)}</td>
+        <td>${pct(v.occupied, v.available)}</td><td>${num(v.billable)}</td></tr>`;
+    }).join('') : '<tr><td colspan="5">No bed nights generated for this month.</td></tr>';
+
+    return `<table class="print-table"><thead><tr>
+        <th>Bed category</th><th>Nights available</th><th>Nights occupied</th>
+        <th>Occupancy</th><th>Billable</th></tr></thead><tbody>${rows}</tbody></table>`;
+  };
+
+  App.monthlyStatusTableHtml = function(r){
+    const changes = (r?.bed_status_breakdown || {}).status_changes || {};
+    const keys = Object.keys(changes);
+    if (!keys.length) return '<p class="print-note">No bed status changes recorded this month.</p>';
+    return `<table class="print-table"><thead><tr><th>Status recorded</th><th>Times</th></tr></thead>
+      <tbody>${keys.map(k => `<tr><td>${this.mrStatusEventLabel(k)}</td><td>${num(changes[k])}</td></tr>`)
+        .join('')}</tbody></table>`;
+  };
+
+  App.monthlyReasonTableHtml = function(r){
+    const list = r?.non_admission_reasons || [];
+    if (!list.length) return '<p class="print-note">No referrals were declined or withdrawn this month.</p>';
+    return `<table class="print-table"><thead><tr>
+        <th>Outcome</th><th>Reason recorded</th><th>Referrals</th></tr></thead><tbody>${
+      list.map(x => `<tr><td>${esc((x.decision || '').replace(/^./, c => c.toUpperCase()))}</td>
+        <td>${esc(x.reason)}</td><td>${num(x.count)}</td></tr>`).join('')}</tbody></table>`;
+  };
+
+  App.monthlyDestTableHtml = function(r){
+    const list = r?.exit_destinations || [];
+    if (!list.length) return '<p class="print-note">No stays ended during this month.</p>';
+    const total = list.reduce((t, x) => t + Number(x.count || 0), 0);
+    return `<table class="print-table"><thead><tr>
+        <th>Exit destination</th><th>Participants</th><th>Share</th></tr></thead><tbody>${
+      list.map(x => `<tr><td>${esc(x.destination)}</td><td>${num(x.count)}</td>
+        <td>${pct(x.count, total)}</td></tr>`).join('')}
+      <tr class="print-total-row"><td>Total discharges</td><td>${num(total)}</td><td></td></tr>
+      </tbody></table>`;
+  };
+
+  App.monthlyServiceTableHtml = function(r){
+    const list = r?.service_activity || [];
+    if (!list.length) return '<p class="print-note">No service contacts recorded this month.</p>';
+    const contacts = list.reduce((t, x) => t + Number(x.count || 0), 0);
+    const minutes  = list.reduce((t, x) => t + Number(x.minutes || 0), 0);
+    return `<table class="print-table"><thead><tr>
+        <th>Service type</th><th>Contacts</th><th>Minutes</th><th>Hours</th></tr></thead><tbody>${
+      list.map(x => `<tr><td>${esc(x.service)}</td><td>${num(x.count)}</td><td>${num(x.minutes)}</td>
+        <td>${x.minutes ? (Number(x.minutes) / 60).toFixed(1) : '—'}</td></tr>`).join('')}
+      <tr class="print-total-row"><td>Total</td><td>${num(contacts)}</td><td>${num(minutes)}</td>
+        <td>${minutes ? (minutes / 60).toFixed(1) : '—'}</td></tr></tbody></table>`;
+  };
+
+  // Mirrors submissionRecordSectionHtml on the quarterly, against the columns a
+  // monthly report actually carries.
+  App.monthlySubmissionRecordHtml = function(r){
+    const row = (label, value) => value
+      ? `<tr><td style="width:34%;">${esc(label)}</td><td>${esc(value)}</td></tr>` : '';
+    const rows = [
+      row('Figures generated', r?.generated_at ? this.formatDateTime(r.generated_at) : 'Not yet generated'),
+      row('Generated by', r?.generated_by || ''),
+      row('Certified by', r?.certified_by || 'Not yet certified'),
+      row('Certified', r?.certified_at ? this.formatDateTime(r.certified_at) : ''),
+      row('Submitted to City', r?.submitted_at ? this.formatDateTime(r.submitted_at) : 'Not yet submitted'),
+      row('Submitted by', r?.submitted_by || ''),
+      row('Reviewed by City', r?.reviewed_at ? this.formatDateTime(r.reviewed_at) : ''),
+      row('City review note', r?.review_note || ''),
+      row('Current status', this.mrStatusLabel(r?.status || 'draft')),
+      row('Document produced', new Date().toLocaleString())
+    ].filter(Boolean).join('');
+    return `<div class="print-section"><h2>Submission Record</h2>
+      <table class="print-table"><tbody>${rows}</tbody></table></div>`;
+  };
+
+  /* ----------------------------------------------------------- the document */
+
+  App.monthlyPrintHtml = function(month = this.monthlyMonth()){
+    const r      = this.monthlyReport(month);
+    const label  = monthLabel(month);
+    const status = r?.status || 'draft';
+    const due    = r ? this.dateOnly(r.due_date) : this.monthlyDueDate(month);
+    const occ    = Number(r?.bed_nights_occupied || 0), avail = Number(r?.bed_nights_available || 0);
+
+    const kpis = [
+      ['Bed Nights Occupied', num(r?.bed_nights_occupied), avail ? `${pct(occ, avail)} of ${num(avail)}` : 'no census'],
+      ['Fee-for-Service',     num(r?.ffs_nights_billable), money(r?.ffs_amount) + ' billable'],
+      ['Referrals Received',  num(r?.referrals_received),  `${num(r?.referrals_admitted)} admitted`],
+      ['Acknowledged in Time',num(r?.ack_within_sla),      `of ${num(r?.referrals_received)} received`],
+      ['Participants Served', num(r?.participants_served), `${num(r?.case_mgmt_contacts)} contacts`]
+    ].map(([l, v, s]) => `<div class="print-kpi"><div class="label">${esc(l)}</div>
+        <div class="value">${v}</div><div class="label">${esc(s)}</div></div>`).join('');
+
+    const draft = status === 'draft' || status === 'revision_requested'
+      ? `<div class="print-draft">Draft &mdash; not yet submitted to the City</div>` : '';
+
+    // The rule that decided what was billable belongs on the document that
+    // reports the amount, exactly as it does on the invoice itself.
+    const basis = this.ffsBasisLabel
+      ? `<p class="print-note"><strong>Billing basis in force:</strong> ${esc(this.ffsBasisLabel())}.
+         ${esc(this.ffsBasisSentence())}</p>` : '';
+
+    return `
+      <div class="print-cover">
+        <div class="print-brand">
+          <img class="print-logo" src="${LOGO}" alt="City of West Hollywood logo" />
+          <div class="print-title">${esc(this.programName())}</div>
+          <div style="font-size:13px;margin-top:4px;">Monthly Operating Report &middot; ${esc(label)}</div>
+          <div style="font-size:11px;color:#666;margin-top:6px;">City of West Hollywood &middot; Human Services Division</div>
+        </div>
+        <div class="print-meta">
+          <strong>Reporting Period</strong><br>${esc(monthPeriod(month, this))}<br><br>
+          <strong>Status</strong><br>${esc(this.mrStatusLabel(status))}<br><br>
+          <strong>Due to the City</strong><br>${this.formatDate(due)}<br><br>
+          <strong>Generated</strong><br>${new Date().toLocaleString()}
+        </div>
+      </div>
+      ${draft}
+
+      <div class="print-section print-first"><h2>Executive Summary</h2>
+        <p style="font-size:11px;color:#555;margin-bottom:8px;"><strong>Figure source:</strong> every
+          figure below is counted from the stays, absences, referrals, participant records and service
+          contacts held in the portal. Only the narrative is written by hand.</p>
+        ${this.monthlyExecutiveSummary(r, month)}</div>
+
+      <div class="print-kpis">${kpis}</div>
+
+      <div class="print-section"><h2>Beds and Occupancy</h2>
+        <table class="print-table"><thead><tr><th>Measure</th><th>Count</th><th>Note</th></tr></thead><tbody>
+          <tr><td>Beds in service</td><td>${num(r?.beds_total)}</td>
+            <td>${num(r?.reserved_men_beds)} men's reserved &middot; ${num(r?.reserved_women_beds)} women's reserved
+              &middot; ${num(r?.ffs_beds)} fee-for-service</td></tr>
+          <tr><td>Bed nights available</td><td>${num(r?.bed_nights_available)}</td><td>Across all beds in service</td></tr>
+          <tr><td>Bed nights occupied</td><td>${num(r?.bed_nights_occupied)}</td>
+            <td>${avail ? pct(occ, avail) + ' occupancy' : 'No census generated for this month'}</td></tr>
+          <tr class="print-total-row"><td>Fee-for-service nights billable</td>
+            <td>${num(r?.ffs_nights_billable)}</td><td>${money(r?.ffs_amount)}</td></tr>
+        </tbody></table>
+        <h3>Nights by bed category</h3>
+        ${this.monthlyBedTableHtml(r)}
+        ${basis}
+        <h3>Bed status changes</h3>
+        ${this.monthlyStatusTableHtml(r)}
+      </div>
+
+      <div class="print-section"><h2>Referrals and Service Levels</h2>
+        <table class="print-table"><thead><tr><th>Measure</th><th>Count</th><th>Basis</th></tr></thead><tbody>
+          <tr><td>Referrals received</td><td>${num(r?.referrals_received)}</td><td>All sources, received this month</td></tr>
+          <tr><td>Admitted</td><td>${num(r?.referrals_admitted)}</td><td>Admission date recorded this month</td></tr>
+          <tr><td>Not admitted</td><td>${num(r?.referrals_not_admitted)}</td><td>Declined or withdrawn this month</td></tr>
+          <tr><td>Open at month end</td><td>${num(r?.referrals_pending)}</td>
+            <td>Received on or before the last day with no decision and no admission</td></tr>
+          <tr class="print-total-row"><td>Acknowledged within one business day</td>
+            <td>${num(r?.ack_within_sla)} of ${num(r?.referrals_received)}</td>
+            <td>Exhibit A section 4 &middot; ${pct(r?.ack_within_sla, r?.referrals_received)}</td></tr>
+          <tr class="print-total-row"><td>Determined within two business days</td>
+            <td>${num(r?.det_within_sla)} of ${num(r?.referrals_received)}</td>
+            <td>Exhibit A section 4 &middot; ${pct(r?.det_within_sla, r?.referrals_received)}</td></tr>
+        </tbody></table>
+        <p class="print-note">Both clocks count City business days and skip the City holidays on file.
+          A documented barrier to placement stops the determination clock in the same way a decision does.</p>
+        <h3>Non-admissions, with the reason recorded</h3>
+        ${this.monthlyReasonTableHtml(r)}
+      </div>
+
+      <div class="print-section"><h2>Admissions, Discharges and Destinations</h2>
+        <table class="print-table"><thead><tr><th>Movement</th><th>Count</th></tr></thead><tbody>
+          <tr><td>Admissions</td><td>${num(r?.admissions)}</td></tr>
+          <tr><td>Discharges</td><td>${num(r?.discharges)}</td></tr>
+        </tbody></table>
+        <h3>Where people went</h3>
+        ${this.monthlyDestTableHtml(r)}
+        <p class="print-note">Destinations are read from each participant's own record, so this report
+          and the client file cannot disagree.</p>
+      </div>
+
+      <div class="print-section"><h2>Case Management Activity</h2>
+        <table class="print-table"><thead><tr><th>Measure</th><th>Count</th><th>Note</th></tr></thead><tbody>
+          <tr><td>Participants served</td><td>${num(r?.participants_served)}</td>
+            <td>Received at least one service contact this month</td></tr>
+          <tr><td>Service contacts</td><td>${num(r?.case_mgmt_contacts)}</td><td>All service records in the month</td></tr>
+          <tr class="print-total-row"><td>Minutes of service</td><td>${num(r?.case_mgmt_minutes)}</td>
+            <td>${r?.case_mgmt_minutes ? (Number(r.case_mgmt_minutes) / 60).toFixed(1) + ' hours' : '—'}</td></tr>
+        </tbody></table>
+        <h3>By service type</h3>
+        ${this.monthlyServiceTableHtml(r)}
+      </div>
+
+      <div class="print-section"><h2>Narrative</h2>
+        <h3>Program narrative</h3>
+        <p style="white-space:pre-wrap;">${esc(r?.narrative_text || 'No narrative provided.')}</p>
+        <h3>Issues needing City attention</h3>
+        <p style="white-space:pre-wrap;">${esc(r?.issues_for_city || 'None raised for this month.')}</p>
+      </div>
+
+      ${r?.certified_by ? `<div class="print-section"><h2>Certification</h2>
+        <p style="font-size:11.5px;">${esc(r.certification_text
+          || 'I certify that the figures and narrative in this report are accurate and complete to the best of my knowledge.')}</p>
+        <p style="font-size:11.5px;margin-top:10px;"><strong>${esc(r.certified_by)}</strong>${
+          r.certified_at ? ' &middot; ' + this.formatDate(this.dateOnly(r.certified_at)) : ''}</p>
+      </div>` : ''}
+
+      ${this.monthlySubmissionRecordHtml(r)}
+
+      <div class="print-footer"><img class="print-footer-logo" src="${LOGO}" alt="City of West Hollywood logo" />Prepared for City of West Hollywood Human Services Division &middot; ${esc(this.programName())} Reporting Portal</div>`;
+  };
+
+  App.printMonthly = function(month = this.monthlyMonth()){
+    if (!month) { this.toast?.('No contract month is open yet.', { error:true }); return; }
+    const target = document.getElementById('print-report');
+    if (!target) { window.print(); return; }
+    this.printAs?.(this.printFileLabel('Monthly Operating Report', monthLabel(month)));
+    target.innerHTML =
+      `<div class="print-page-header"><strong>${esc(this.programName())}</strong> &middot; Monthly Operating Report
+       &middot; ${esc(monthLabel(month))} &middot; Generated ${new Date().toLocaleDateString()}</div>`
+      + this.monthlyPrintHtml(month);
+    window.print();
+  };
+
+  /* ------------------------------------------- the button that was missing */
+
+  const previousRenderMonthly = App.renderMonthly;
+  App.renderMonthly = function(){
+    previousRenderMonthly.call(this);
+    const el = document.getElementById('view-monthly');
+    const actions = el?.querySelector('.client-actions');
+    if (!actions || el.querySelector('#mr-print')) return;
+    actions.insertAdjacentHTML('afterbegin',
+      '<button class="btn btn-ghost" id="mr-print">Print / Save PDF</button>');
+    el.querySelector('#mr-print').addEventListener('click', () => this.printMonthly());
   };
 })();
 
