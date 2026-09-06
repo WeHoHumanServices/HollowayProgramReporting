@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Check Referral Status &middot; Holloway Interim Housing Program</title>
+<title>Check Referral Status &middot; Interim Housing &amp; Shelter Programs</title>
 <style>
   :root {
     --ink: #1c2430;
@@ -76,13 +76,28 @@
   .foot { color: var(--muted); font-size: .875rem; }
   .hidden { display: none; }
   caption { text-align: left; font-weight: 600; padding-bottom: .6rem; }
+  .programs { display: flex; flex-direction: column; gap: .55rem; margin-top: .2rem; }
+  .program-btn {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    width: 100%; text-align: left; font-size: 1rem; font-weight: 600;
+    color: var(--ink); background: var(--card);
+    border: 1px solid var(--line); border-left: 4px solid var(--accent);
+    border-radius: 8px; padding: .8rem .9rem; cursor: pointer;
+  }
+  .program-btn:hover { background: #f8fafc; }
+  .program-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .program-btn .go { color: var(--accent); font-weight: 700; }
+  .linkish {
+    background: none; border: 0; padding: 0; color: var(--accent);
+    font-size: .875rem; font-weight: 600; cursor: pointer; text-decoration: underline;
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <h1>Check Referral Status</h1>
-  <p class="sub">Holloway Interim Housing Program &middot; City of West Hollywood</p>
+  <p class="sub">Interim Housing &amp; Shelter Programs &middot; City of West Hollywood</p>
 
   <div class="card">
     <label for="code">
@@ -95,6 +110,13 @@
       <button type="submit" id="submit-btn">Check status</button>
     </form>
     <div id="message" class="msg hidden" role="status" aria-live="polite"></div>
+  </div>
+
+  <div class="card hidden" id="program-card">
+    <label>Which program?
+      <span class="hint">Your code covers more than one. Each program keeps its own referrals.</span>
+    </label>
+    <div id="program-list" class="programs"></div>
   </div>
 
   <div class="card hidden" id="results-card">
@@ -110,9 +132,12 @@
       </thead>
       <tbody id="results-body"></tbody>
     </table>
+    <p class="foot" id="switch-wrap" class="hidden" style="margin:0 0 .8rem">
+      <button type="button" id="switch-program" class="linkish">&larr; Check a different program</button>
+    </p>
     <p class="foot" style="margin-bottom:0">
       Client names are shortened to first name and last initial. Questions about a specific
-      referral? Contact the Holloway team rather than replying here.
+      referral? Contact the program team rather than replying here.
     </p>
   </div>
 
@@ -130,9 +155,13 @@ const form        = document.getElementById('lookup-form');
 const codeInput   = document.getElementById('code');
 const submitBtn   = document.getElementById('submit-btn');
 const messageEl   = document.getElementById('message');
+const programCard = document.getElementById('program-card');
+const programList = document.getElementById('program-list');
 const resultsCard = document.getElementById('results-card');
 const resultsBody = document.getElementById('results-body');
 const caption     = document.getElementById('results-caption');
+const switchWrap  = document.getElementById('switch-wrap');
+const switchBtn   = document.getElementById('switch-program');
 
 const STATUS_CLASS = {
   'New':       's-new',
@@ -141,6 +170,11 @@ const STATUS_CLASS = {
   'Declined':  's-declined',
   'Withdrawn': 's-withdrawn'
 };
+
+// Held between the code step and the program step, the same way the referral
+// form holds its session.
+let currentCode = '';
+let currentPrograms = [];
 
 function showMessage(text, kind) {
   messageEl.textContent = text;
@@ -152,17 +186,41 @@ function clearMessage() {
   messageEl.className = 'msg hidden';
 }
 
+function hide(el) { el.classList.add('hidden'); }
+function show(el) { el.classList.remove('hidden'); }
+
 function formatDate(value) {
   if (!value) return '—';
-  const [y, m, d] = value.split('-').map(Number);
+  const [y, m, d] = String(value).split('-').map(Number);
   if (!y || !m || !d) return value;
   return new Date(y, m - 1, d).toLocaleDateString('en-US',
     { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function render(agencyName, referrals) {
+function renderPrograms(programs) {
+  programList.replaceChildren();
+  for (const p of programs) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'program-btn';
+
+    const name = document.createElement('span');
+    name.textContent = p.name;
+
+    const go = document.createElement('span');
+    go.className = 'go';
+    go.textContent = '\u2192';
+
+    btn.append(name, go);
+    btn.addEventListener('click', () => lookup(currentCode, p.id));
+    programList.appendChild(btn);
+  }
+  show(programCard);
+}
+
+function render(agencyName, programName, referrals) {
   resultsBody.replaceChildren();
-  caption.textContent = agencyName + ' — ' + referrals.length +
+  caption.textContent = agencyName + ' \u00b7 ' + programName + ' — ' + referrals.length +
     (referrals.length === 1 ? ' referral' : ' referrals');
 
   for (const r of referrals) {
@@ -187,24 +245,22 @@ function render(agencyName, referrals) {
     resultsBody.appendChild(tr);
   }
 
-  resultsCard.classList.remove('hidden');
+  // Only worth offering when there is somewhere else to go.
+  if (currentPrograms.length > 1) show(switchWrap); else hide(switchWrap);
+  show(resultsCard);
 }
 
-form.addEventListener('submit', async (event) => {
-  event.preventDefault();
+async function lookup(code, programId) {
   clearMessage();
-  resultsCard.classList.add('hidden');
-
-  const code = codeInput.value.trim();
-  if (!code) return;
-
+  hide(resultsCard);
   submitBtn.disabled = true;
   submitBtn.textContent = 'Checking…';
 
   try {
-    const { data, error } = await supabase.rpc(
-      'holloway_referral_status_lookup', { p_code: code }
-    );
+    const args = { p_code: code };
+    if (programId) args.p_program_id = programId;
+
+    const { data, error } = await supabase.rpc('holloway_referral_status_lookup', args);
 
     if (error) {
       showMessage('Something went wrong reaching the server. Please try again in a moment.', 'error');
@@ -214,16 +270,32 @@ form.addEventListener('submit', async (event) => {
 
     if (!data || data.ok !== true) {
       showMessage((data && data.message) ||
-        'That code was not recognised. Check it with the Holloway team and try again.', 'error');
+        'That code was not recognised. Check it with the City program monitor and try again.', 'error');
       return;
     }
+
+    currentCode = code;
+    currentPrograms = data.programs || [];
+
+    // No program asked for yet. One program means there is nothing to choose,
+    // so go straight through rather than showing a list of one.
+    if (!programId) {
+      if (currentPrograms.length === 1) { await lookup(code, currentPrograms[0].id); return; }
+      hide(resultsCard);
+      renderPrograms(currentPrograms);
+      return;
+    }
+
+    hide(programCard);
 
     if (!data.referrals || data.referrals.length === 0) {
-      showMessage('No referrals have been submitted under this access code yet.', 'info');
+      showMessage('No referrals have been submitted to ' + (data.program_name || 'this program') +
+                  ' under this access code yet.', 'info');
+      if (currentPrograms.length > 1) { renderPrograms(currentPrograms); }
       return;
     }
 
-    render(data.agency_name, data.referrals);
+    render(data.agency_name, data.program_name || '', data.referrals);
   } catch (err) {
     showMessage('Something went wrong reaching the server. Please try again in a moment.', 'error');
     console.error(err);
@@ -231,6 +303,22 @@ form.addEventListener('submit', async (event) => {
     submitBtn.disabled = false;
     submitBtn.textContent = 'Check status';
   }
+}
+
+form.addEventListener('submit', (event) => {
+  event.preventDefault();
+  hide(programCard);
+  hide(switchWrap);
+  const code = codeInput.value.trim();
+  if (!code) return;
+  lookup(code, null);
+});
+
+switchBtn.addEventListener('click', () => {
+  clearMessage();
+  hide(resultsCard);
+  hide(switchWrap);
+  renderPrograms(currentPrograms);
 });
 </script>
 </body>

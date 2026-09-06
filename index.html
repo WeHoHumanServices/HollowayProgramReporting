@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<!-- Holloway Interim Housing Program Reporting Portal v3 - Enhanced. Config-driven. See CONFIG block near top of script for tunables. -->
+<!-- City of West Hollywood Interim Housing & Shelter Reporting Portal v3 - Enhanced. Config-driven. See CONFIG block near top of script for tunables. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Holloway Interim Housing Program Reporting Portal — City of West Hollywood</title>
+<title>Interim Housing &amp; Shelter Reporting Portal — City of West Hollywood</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -516,6 +516,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .brand-program { font-family: var(--font-sans); font-size: 15px; font-weight: 650; letter-spacing: -.01em;
   line-height:1.18; max-width:34ch; }
+
+/* ---- Referral: choosing a program ---- */
+.referral-programs { display:flex; flex-direction:column; gap:10px; }
+.referral-program-btn { display:flex; align-items:center; justify-content:space-between; gap:14px;
+  width:100%; text-align:left; font:inherit; cursor:pointer; padding:15px 17px;
+  background:var(--white); border:1px solid var(--border); border-left:4px solid var(--gold);
+  border-radius:10px; transition:box-shadow .15s ease, transform .15s ease; }
+.referral-program-btn:hover { box-shadow:0 6px 18px rgba(27,47,91,.13); transform:translateY(-1px); }
+.referral-program-btn:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+.referral-program-btn[disabled] { opacity:.55; cursor:default; transform:none; box-shadow:none; }
+.referral-program-name { font-family:var(--font-sans); font-weight:650; font-size:14.5px; color:var(--navy); line-height:1.25; }
+.referral-program-go { color:var(--gold); font-size:17px; font-weight:700; }
 
 /* ---- Equity fields, case assignment and housing plan reviews ---- */
 .pr-row { display:flex; justify-content:space-between; gap:12px; padding:9px 0;
@@ -1381,14 +1393,14 @@ th.sortable:hover { color:var(--navy); }
 <body>
 <div id="loading-screen" class="loading-screen">
   <img class="loading-logo-img" src="https://www.governmentjobs.com/AgencyPages/weho/agencyImages/download/weho_white_on_blue.jpg" alt="City of West Hollywood logo" />
-  <p>Loading Holloway Interim Housing Program Reporting Portal…</p>
+  <p>Loading the Interim Housing &amp; Shelter Reporting Portal…</p>
 </div>
 
 <div id="login-screen" style="display:none;">
   <div class="login-card">
     <div class="login-header">
       <img class="login-logo-img" src="https://www.governmentjobs.com/AgencyPages/weho/agencyImages/download/weho_white_on_blue.jpg" alt="City of West Hollywood logo" />
-      <div class="login-title" id="login-title">Holloway Interim Housing Program Reporting Portal</div>
+      <div class="login-title" id="login-title">Interim Housing &amp; Shelter Reporting Portal</div>
       <div class="login-sub">City of West Hollywood · Human Services Division</div>
     </div>
     <div class="login-body">
@@ -1435,7 +1447,7 @@ th.sortable:hover { color:var(--navy); }
       </div>
       <p id="login-error" style="color:#C0392B;font-size:12px;margin:12px 0 0;"></p>
       <div class="login-footer" id="login-referral-cta" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
-        Referring someone to Holloway?
+        Referring someone to a City-funded interim housing or shelter program?
         <button type="button" class="login-link-btn" id="btn-open-referral">Submit a referral &rarr;</button>
           <button type="button" class="login-link-btn" id="btn-open-referral-status" onclick="window.location.href='referral-status.html'">Check a referral status &rarr;</button>
       </div>
@@ -1447,7 +1459,7 @@ th.sortable:hover { color:var(--navy); }
   <div class="login-card referral-card">
     <div class="login-header">
       <img class="login-logo-img" src="https://www.governmentjobs.com/AgencyPages/weho/agencyImages/download/weho_white_on_blue.jpg" alt="City of West Hollywood logo" />
-      <div class="login-title">Holloway Interim Housing Program</div>
+      <div class="login-title">Interim Housing &amp; Shelter Programs</div>
       <div class="login-sub">Partner Agency Referral</div>
     </div>
     <div class="login-body" id="referral-body"></div>
@@ -1459,7 +1471,7 @@ th.sortable:hover { color:var(--navy); }
     <div class="topbar-brand">
       <img class="weho-logo-header" src="https://www.governmentjobs.com/AgencyPages/weho/agencyImages/download/weho_white_on_blue.jpg" alt="City of West Hollywood logo" />
       <div>
-        <div class="brand-program" id="brand-program">Holloway Interim Housing Program Reporting Portal</div>
+        <div class="brand-program" id="brand-program">Interim Housing &amp; Shelter Reporting Portal</div>
         <div class="brand-sub">City of West Hollywood · Human Services</div>
       </div>
     </div>
@@ -13129,6 +13141,628 @@ const App = {
     if (error) { console.warn('extended client fields not saved', error); return result; }
     await this.loadAll();
     return result;
+  };
+})();
+
+
+(function(){
+  /* ==========================================================================
+     Referral flow for a portal with more than one program.
+
+     The public form was built when an access code implied a program and the
+     eligibility attestations were a fixed list written into this file. Neither
+     holds now: an agency may refer to more than one program, and the two
+     programs do not share eligibility terms.
+
+     So the flow becomes code, then program, then that program's own form. The
+     form is not assembled here — holloway_referral_program_form() returns the
+     program's attestations, whether it ends in a certification, and whether it
+     collects a bed request, and this renders whatever comes back. Adding a
+     third program is then data entry, not a release.
+
+     The server validates the same way, against the program stamped on the
+     session. Nothing here is load-bearing for eligibility; it exists so a
+     referring agency is told what is missing before they submit rather than
+     after.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+  const BUCKET = 'referral-attachments';
+  const todayStr = () => App.today ? App.today() : new Date().toISOString().slice(0,10);
+
+  // Split out of the single list the old form used: the first block is asked
+  // of every referral, the second only where the program ends in a signed
+  // certification.
+  const CORE_FIELDS = [
+    { id:'ref-agency',   key:'referring_agency',      label:'Referring Agency' },
+    { id:'ref-cm-name',  key:'case_manager_name',     label:'Referring Contact' },
+    { id:'ref-cm-email', key:'case_manager_email',    label:'Email', type:'email' },
+    { id:'ref-member',   key:'community_member_name', label:'Name of Community Member' }
+  ];
+  const CERT_CONTACT_FIELDS = [
+    { id:'ref-cm-phone', key:'case_manager_phone',   label:'Phone' },
+    { id:'ref-dob',      key:'date_of_birth',        label:'Date of Birth', type:'date' },
+    { id:'ref-contact',  key:'member_contact_info',  label:'Contact Information (phone number and email)' }
+  ];
+  const CERT_FIELDS = [
+    { id:'ref-signature', key:'case_manager_signature', label:'Case Manager Signature (type your full name)' },
+    { id:'ref-cert-date', key:'certification_date',     label:'Certification Date', type:'date' },
+    { id:'ref-submitted', key:'date_submitted',         label:'Date Submitted', type:'date' }
+  ];
+  // Optional on every form; the intake programs are the ones that use them.
+  const OPTIONAL_FIELDS = [
+    { id:'ref-dob-opt',     key:'date_of_birth',       label:'Date of Birth', type:'date' },
+    { id:'ref-contact-opt', key:'member_contact_info', label:'How to reach them' }
+  ];
+
+  const DESIGNATIONS = { reserved:'Reserved bed', fee_for_service:'Fee-for-service bed' };
+  const GENDERS      = { men:"Men's", women:"Women's" };
+  const AFFILIATION  = { verified:'Verified', self_attested:'Self-attested',
+                         not_affiliated:'Not affiliated', pending:'Not yet established' };
+
+  const activeFields = (st) => st.programForm?.requiresCertification
+    ? [...CORE_FIELDS, ...CERT_CONTACT_FIELDS, ...CERT_FIELDS]
+    : [...CORE_FIELDS, ...OPTIONAL_FIELDS];
+
+  const requiredFields = (st) => st.programForm?.requiresCertification
+    ? [...CORE_FIELDS, ...CERT_CONTACT_FIELDS, ...CERT_FIELDS]
+    : CORE_FIELDS;
+
+  /* ------------------------------------------------------------- the steps */
+
+  App.openReferralScreen = function(){
+    this._referral = { step:'code', token:null, agencyName:null, programs:[],
+                       programId:null, programForm:null, criteria:[],
+                       error:'', busy:false, files:{}, values:{}, crits:{} };
+    document.getElementById('loading-screen')?.style.setProperty('display','none');
+    document.getElementById('login-screen')?.style.setProperty('display','none');
+    document.getElementById('app')?.style.setProperty('display','none');
+    document.getElementById('referral-screen').style.display = 'block';
+    this.renderReferralStep();
+  };
+
+  App.renderReferralStep = function(){
+    const st = this._referral || {};
+    const body = document.getElementById('referral-body');
+    if (!body) return;
+    if      (st.step === 'code')    body.innerHTML = this.referralCodeStepHtml(st);
+    else if (st.step === 'program') body.innerHTML = this.referralProgramStepHtml(st);
+    else if (st.step === 'form')    body.innerHTML = this.referralFormStepHtml(st);
+    else                            body.innerHTML = this.referralDoneStepHtml(st);
+    this.bindReferralStep();
+  };
+
+  App.referralCodeStepHtml = function(st){
+    return `<div class="referral-step-head"><h3>Enter your agency code</h3><span class="referral-progress">Step 1 of 3</span></div>
+      <p class="field-hint" style="margin-bottom:16px;">Partner agencies are issued a code by the City&rsquo;s Human Services Division.
+        The same code covers every program your agency is approved to refer to &mdash; you choose the program next.</p>
+      <div class="field-group">
+        <label class="field-label required" for="ref-code">Agency Code</label>
+        <input id="ref-code" class="field-input referral-code-input" autocomplete="off" spellcheck="false"
+               placeholder="00000" inputmode="numeric" maxlength="12" ${st.busy?'disabled':''}>
+      </div>
+      <button class="login-submit" id="ref-code-submit" ${st.busy?'disabled':''}>${st.busy?'Checking&hellip;':'Continue &rarr;'}</button>
+      ${st.error?`<p class="referral-error">${esc(st.error)}</p>`:''}
+      <button type="button" class="login-link-btn" id="ref-back-login" style="margin-top:16px;">&larr; Back to staff sign in</button>`;
+  };
+
+  App.referralProgramStepHtml = function(st){
+    return `<div class="referral-step-head"><h3>Which program are you referring to?</h3><span class="referral-progress">Step 2 of 3</span></div>
+      <p class="field-hint" style="margin-bottom:16px;">${esc(st.agencyName || 'Your agency')} is approved to refer to the
+        programs below. Each has its own eligibility terms and its own form, so choose before you start filling anything in.</p>
+      <div class="referral-programs">
+        ${(st.programs||[]).map(p => `<button type="button" class="referral-program-btn" data-program="${esc(p.id)}"
+            ${st.busy?'disabled':''}>
+            <span class="referral-program-name">${esc(p.name)}</span>
+            <span class="referral-program-go">&rarr;</span></button>`).join('')}
+      </div>
+      ${st.busy?'<p class="field-hint" style="margin-top:14px;">Loading the form&hellip;</p>':''}
+      ${st.error?`<p class="referral-error">${esc(st.error)}</p>`:''}
+      <button type="button" class="login-link-btn" id="ref-back-code" style="margin-top:16px;">&larr; Use a different code</button>`;
+  };
+
+  App.referralFormStepHtml = function(st){
+    const pf = st.programForm || {};
+    const req = requiredFields(st).map(f => f.key);
+    const field = f => `<div class="field-group">
+      <label class="field-label ${req.includes(f.key)?'required':''}" for="${f.id}">${esc(f.label)}</label>
+      <input id="${f.id}" type="${f.type||'text'}" class="field-input" value="${esc(st.values?.[f.key] || '')}">
+    </div>`;
+
+    const crit = (c) => {
+      const showDoc = c.doc && (!c.conditional || st.caseNotesMethod === 'Documents attached');
+      const chosen = st.files[c.doc];
+      return `<div class="referral-crit" data-crit="${esc(c.key)}">
+        <label class="referral-crit-top">
+          <input type="checkbox" class="ref-crit" data-key="${esc(c.key)}" id="chk-${esc(c.key)}">
+          <span>${esc(c.label)}</span>
+        </label>
+        ${c.conditional ? `<div class="referral-file">
+            <div class="field-label" style="margin-bottom:6px;">How will this be met?</div>
+            <div class="segmented-row" id="ref-casenotes-method">
+              ${['Documents attached','Accompanied at intake'].map(v =>
+                `<button type="button" class="segment-btn ${st.caseNotesMethod===v?'active':''}" data-cn-method="${v}">${v}</button>`).join('')}
+            </div>
+          </div>` : ''}
+        ${showDoc ? `<div class="referral-file">
+            <label class="field-label" for="file-${esc(c.doc)}">${esc(c.docLabel)} <span style="color:#C0392B;">*</span></label>
+            <input type="file" id="file-${esc(c.doc)}" data-doc="${esc(c.doc)}" class="ref-file"
+                   accept=".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx">
+            ${chosen ? `<div class="referral-doc-note">Selected: ${esc(chosen.name)}</div>` : ''}
+          </div>` : ''}
+      </div>`;
+    };
+
+    const pick = (id, map, current, label) => `<div class="field-group">
+      <label class="field-label" for="${id}">${esc(label)}</label>
+      <select class="field-select" id="${id}"><option value="">&mdash;</option>
+        ${Object.entries(map).map(([v,l]) => `<option value="${esc(v)}" ${current===v?'selected':''}>${esc(l)}</option>`).join('')}
+      </select></div>`;
+
+    const contactFields = pf.requiresCertification ? CERT_CONTACT_FIELDS : OPTIONAL_FIELDS;
+
+    return `<div class="referral-step-head">
+        <h3>Referral to ${esc(pf.name || 'the program')}</h3><span class="referral-progress">Step 3 of 3</span></div>
+      <p class="field-hint" style="margin-bottom:18px;">From ${esc(st.agencyName || 'your agency')}.
+        ${st.criteria?.length
+          ? 'Every field and every criterion below is required. The form cannot be submitted until it is complete.'
+          : 'Fields marked with a red dot are required; the rest help the program reach the person sooner.'}</p>
+
+      <div class="form-section"><div class="form-section-title">Referring Agency and Contact</div>
+        <div class="client-form-grid">${CORE_FIELDS.slice(0,3).map(field).join('')}
+          ${pf.requiresCertification ? field(CERT_CONTACT_FIELDS[0]) : ''}</div></div>
+
+      <div class="form-section"><div class="form-section-title">Information About the Community Member</div>
+        <div class="client-form-grid">${field(CORE_FIELDS[3])}
+          ${contactFields.filter(f => f.key !== 'case_manager_phone').map(field).join('')}</div></div>
+
+      ${pf.collectsBedRequest ? `<div class="form-section"><div class="form-section-title">Bed Requested</div>
+        <p class="field-hint" style="margin-bottom:10px;">Optional, and the program decides in the end &mdash; but it helps them
+          answer faster.</p>
+        <div class="client-form-grid">
+          ${pick('ref-designation', DESIGNATIONS, st.values?.requested_designation, 'Bed type')}
+          ${pick('ref-gender', GENDERS, st.values?.requested_gender_category, 'Bed category')}
+          ${pick('ref-affiliation', AFFILIATION, st.values?.weho_affiliation, 'West Hollywood affiliation')}
+        </div></div>` : ''}
+
+      ${st.criteria?.length ? `<div class="form-section"><div class="form-section-title">Eligibility Criteria Checklist</div>
+        <div class="referral-criteria">${st.criteria.map(crit).join('')}</div></div>` : ''}
+
+      ${pf.requiresCertification ? `<div class="form-section"><div class="form-section-title">Referring Agency Certification</div>
+        <p class="field-hint" style="margin-bottom:12px;">I certify that the eligibility criteria above have been reviewed and
+          verified to the best of my knowledge prior to submitting this referral.</p>
+        <div class="client-form-grid">${CERT_FIELDS.map(field).join('')}</div></div>` : ''}
+
+      <div class="form-section"><div class="form-section-title">Additional Supporting Information</div>
+        <p class="field-hint" style="margin-bottom:10px;">Optional. Anything that supports housing efforts for your referral &mdash;
+          verification of income, subsidies, or other supportive services.</p>
+        <input type="file" id="file-supporting" data-doc="supporting" class="ref-file" multiple
+               accept=".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx">
+        ${st.files.supporting ? `<div class="referral-doc-note">${st.files.supporting.length||1} file(s) selected</div>` : ''}
+      </div>
+
+      <button class="login-submit" id="ref-submit" ${st.busy?'disabled':''}>${st.busy?(st.busyMsg||'Submitting&hellip;'):'Submit Referral'}</button>
+      ${st.error?`<p class="referral-error">${esc(st.error)}</p>`:''}
+      ${(st.programs||[]).length > 1
+        ? `<button type="button" class="login-link-btn" id="ref-back-program" style="margin-top:16px;">&larr; Choose a different program</button>`
+        : ''}
+      <button type="button" class="login-link-btn" id="ref-back-login" style="margin-top:10px;">Cancel and return to sign in</button>`;
+  };
+
+  App.referralDoneStepHtml = function(st){
+    return `<div class="referral-done">
+      <div class="tick">&#10003;</div>
+      <h3 style="margin:8px 0 6px;color:var(--navy);">Referral submitted</h3>
+      <p class="field-hint">${esc(st.doneMessage || 'The program team will be in touch with your agency.')}</p>
+      ${st.referralId?`<p class="field-hint" style="margin-top:10px;">Reference: <strong>${esc(String(st.referralId).slice(0,8).toUpperCase())}</strong></p>`:''}
+      <button class="login-submit" id="ref-another" style="margin-top:20px;">Submit another referral</button>
+      <button type="button" class="login-link-btn" id="ref-back-login" style="margin-top:14px;">Return to staff sign in</button>
+    </div>`;
+  };
+
+  /* ----------------------------------------------------------------- wiring */
+
+  App.bindReferralStep = function(){
+    const st = this._referral;
+    document.getElementById('ref-back-login')?.addEventListener('click', () => this.closeReferralScreen());
+    document.getElementById('ref-another')?.addEventListener('click', () => this.openReferralScreen());
+    document.getElementById('ref-back-code')?.addEventListener('click', () => {
+      this._referral = Object.assign({}, st, { step:'code', error:'', busy:false });
+      this.renderReferralStep();
+    });
+    document.getElementById('ref-back-program')?.addEventListener('click', () => {
+      this.referralCaptureForm();
+      st.step = 'program'; st.error = ''; this.renderReferralStep();
+    });
+
+    const codeInput = document.getElementById('ref-code');
+    if (codeInput){
+      codeInput.focus();
+      codeInput.addEventListener('keydown', e => { if (e.key === 'Enter') this.referralValidateCode(); });
+      document.getElementById('ref-code-submit')?.addEventListener('click', () => this.referralValidateCode());
+    }
+
+    document.querySelectorAll('[data-program]').forEach(b =>
+      b.addEventListener('click', () => this.referralChooseProgram(b.dataset.program)));
+
+    document.querySelectorAll('#ref-casenotes-method [data-cn-method]').forEach(b =>
+      b.addEventListener('click', () => {
+        st.caseNotesMethod = b.dataset.cnMethod;
+        this.referralCaptureForm();
+        this.renderReferralStep();
+      }));
+
+    document.querySelectorAll('.ref-file').forEach(inp =>
+      inp.addEventListener('change', () => {
+        const doc = inp.dataset.doc;
+        if (doc === 'supporting') st.files.supporting = [...inp.files];
+        else if (inp.files[0]) st.files[doc] = inp.files[0];
+        else delete st.files[doc];
+        this.referralCaptureForm();
+        this.renderReferralStep();
+      }));
+
+    if (st.step === 'form'){
+      (st.criteria || []).forEach(c => {
+        const el = document.getElementById('chk-' + c.key); if (el) el.checked = !!st.crits?.[c.key];
+      });
+      document.getElementById('ref-submit')?.addEventListener('click', () => this.referralSubmit());
+    }
+  };
+
+  App.referralCaptureForm = function(){
+    const st = this._referral;
+    st.values = st.values || {}; st.crits = st.crits || {};
+    activeFields(st).forEach(f => { const el = document.getElementById(f.id); if (el) st.values[f.key] = el.value; });
+    ['requested_designation:ref-designation','requested_gender_category:ref-gender','weho_affiliation:ref-affiliation']
+      .forEach(pair => { const [key, id] = pair.split(':');
+        const el = document.getElementById(id); if (el) st.values[key] = el.value; });
+    (st.criteria || []).forEach(c => {
+      const el = document.getElementById('chk-' + c.key); if (el) st.crits[c.key] = el.checked;
+    });
+  };
+
+  App.referralValidateCode = async function(){
+    const st = this._referral;
+    const code = (document.getElementById('ref-code')?.value || '').trim();
+    if (!code){ st.error = 'Enter the code your agency was issued.'; this.renderReferralStep(); return; }
+    st.busy = true; st.error = ''; this.renderReferralStep();
+    const { data, error } = await this.sb.rpc('holloway_referral_start', { p_code: code });
+    st.busy = false;
+    if (error){ st.error = 'Could not reach the referral service. Please try again.'; this.renderReferralStep(); return; }
+    if (!data?.ok){ st.error = data?.message || 'That code was not recognised.'; this.renderReferralStep(); return; }
+
+    st.token = data.token;
+    st.agencyName = data.agency_name;
+    st.programs = data.programs || [];
+    st.values = { referring_agency: data.agency_name };
+    st.crits = {}; st.files = {}; st.caseNotesMethod = null;
+
+    // A code approved for exactly one program has nothing to choose, so skip
+    // the step rather than making them click through a list of one.
+    if (st.programs.length === 1){ await this.referralChooseProgram(st.programs[0].id); return; }
+    st.step = 'program';
+    this.renderReferralStep();
+  };
+
+  App.referralChooseProgram = async function(programId){
+    const st = this._referral;
+    st.busy = true; st.error = ''; if (st.step !== 'code') this.renderReferralStep();
+    const { data, error } = await this.sb.rpc('holloway_referral_program_form', {
+      p_token: st.token, p_program_id: programId
+    });
+    st.busy = false;
+    if (error){ st.step = 'program'; st.error = 'Could not load that program&rsquo;s form. Please try again.'; this.renderReferralStep(); return; }
+    if (!data?.ok){ st.step = 'program'; st.error = data?.message || 'That program is not available for your code.'; this.renderReferralStep(); return; }
+
+    const changedProgram = st.programId && st.programId !== programId;
+    st.programId = programId;
+    st.programForm = data.program;
+    st.criteria = data.criteria || [];
+
+    // Anything that belonged to the previous program is dropped on the way
+    // out. Without this, switching from a certifying form to an intake one
+    // carried its ticked criteria and its certification date across, and the
+    // referral would arrive certified by nobody.
+    if (changedProgram){ st.crits = {}; st.caseNotesMethod = null; st.files = {}; }
+    const keys = new Set((st.criteria || []).map(c => c.key));
+    Object.keys(st.crits || {}).forEach(k => { if (!keys.has(k)) delete st.crits[k]; });
+    if (!st.programForm.requiresCertification){
+      ['case_manager_signature','certification_date','date_submitted']
+        .forEach(k => { delete st.values[k]; });
+    } else {
+      // Only the certifying form carries these, and only it fills them in.
+      st.values.certification_date = st.values.certification_date || todayStr();
+      st.values.date_submitted     = st.values.date_submitted     || todayStr();
+    }
+    st.step = 'form';
+    this.renderReferralStep();
+  };
+
+  App.referralValidationErrors = function(){
+    const st = this._referral, missing = [];
+    requiredFields(st).forEach(f => { if (!String(st.values?.[f.key] || '').trim()) missing.push(f.label); });
+    const email = String(st.values?.case_manager_email || '');
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) missing.push('a valid email address');
+
+    (st.criteria || []).forEach(c => {
+      if (c.required && !st.crits?.[c.key]) missing.push('the "' + c.label.slice(0, 42).trim() + '…" criterion');
+      if (c.conditional && !st.caseNotesMethod) missing.push('how the case notes criterion will be met');
+      if (c.doc && c.required){
+        const needed = !c.conditional || st.caseNotesMethod === 'Documents attached';
+        if (needed && !st.files?.[c.doc]) missing.push('the ' + c.doc.replace(/_/g,' ') + ' document');
+      }
+    });
+    return [...new Set(missing)];
+  };
+
+  App.referralSubmit = async function(){
+    const st = this._referral;
+    this.referralCaptureForm();
+    const missing = this.referralValidationErrors();
+    if (missing.length){
+      st.error = 'Still needed: ' + missing.slice(0,4).join('; ') + (missing.length>4 ? `; and ${missing.length-4} more.` : '.');
+      this.renderReferralStep();
+      document.querySelector('.referral-error')?.scrollIntoView({ behavior:'smooth', block:'center' });
+      return;
+    }
+
+    st.busy = true; st.busyMsg = 'Uploading files…'; st.error = ''; this.renderReferralStep();
+
+    const queue = [];
+    (st.criteria || []).forEach(c => { if (c.doc && st.files[c.doc]) queue.push({ doc_type:c.doc, file:st.files[c.doc] }); });
+    (st.files.supporting || []).forEach(f => queue.push({ doc_type:'supporting', file:f }));
+
+    const attachments = [];
+    for (const item of queue){
+      const safe = item.file.name.replace(/[^\w.\-]+/g, '_').slice(-80);
+      const path = `${st.token}/${(crypto.randomUUID ? crypto.randomUUID() : Date.now()+'-'+Math.random())}-${safe}`;
+      const up = await this.sb.storage.from(BUCKET).upload(path, item.file, {
+        upsert:false, contentType:item.file.type || undefined
+      });
+      if (up.error){
+        st.busy = false;
+        st.error = `Could not upload ${item.file.name}: ${up.error.message}`;
+        this.renderReferralStep();
+        return;
+      }
+      attachments.push({ doc_type:item.doc_type, file_path:path, file_name:item.file.name,
+                         file_size:String(item.file.size||''), mime_type:item.file.type||null });
+    }
+
+    st.busyMsg = 'Submitting…'; this.renderReferralStep();
+
+    const payload = Object.assign({}, st.values, {
+      criteria: st.crits || {},
+      case_notes_method: st.caseNotesMethod
+    });
+    const { data, error } = await this.sb.rpc('holloway_referral_submit', {
+      p_token: st.token, p_payload: payload, p_attachments: attachments
+    });
+    st.busy = false;
+
+    if (error){ st.error = 'Submission failed: ' + error.message; this.renderReferralStep(); return; }
+    if (!data?.ok){
+      st.error = data?.message || 'The referral could not be submitted.';
+      if (Array.isArray(data?.missing) && data.missing.length) st.error += ' (' + data.missing.join(', ') + ')';
+      this.renderReferralStep();
+      return;
+    }
+    st.step = 'done'; st.doneMessage = data.message; st.referralId = data.referral_id;
+    this.renderReferralStep();
+  };
+
+  /* ------------------------------- staff view of a referral's own criteria */
+
+  const previousLoadAllForCriteria = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAllForCriteria.call(this);
+    if (!this.data) this.data = {};
+    this.data.referralCriteria = [];
+    const pid = this.program?.id;
+    if (!pid || this.isAgencyFiscal?.()) return;
+    const { data, error } = await this.sb.from('holloway_referral_criteria')
+      .select('*').eq('program_id', pid).eq('active', true).order('sort_order');
+    if (error) { console.warn('referral criteria unavailable', error); return; }
+    this.data.referralCriteria = data || [];
+  };
+
+  // The detail screen listed Holloway's six criteria with a green tick against
+  // every referral, whatever program it belonged to. Show the program's own
+  // criteria and the answers actually given, and for a program with none, show
+  // what its intake collected instead.
+  const previousOpenReferralDetailForCriteria = App.openReferralDetail;
+  App.openReferralDetail = function(id){
+    previousOpenReferralDetailForCriteria.call(this, id);
+    const r = (this.data.referrals || []).find(x => x.id === id);
+    const body = document.getElementById('referral-detail-body');
+    if (!r || !body) return;
+
+    const section = [...body.querySelectorAll('.form-section')]
+      .find(s => (s.querySelector('.form-section-title')?.textContent || '').trim() === 'Eligibility Criteria');
+    if (!section) return;
+
+    const crits = this.data.referralCriteria || [];
+    const answers = r.criteria_responses || {};
+    const legacy = k => r[k] === true;
+
+    if (crits.length){
+      section.innerHTML = `<div class="form-section-title">Eligibility Criteria</div>
+        ${crits.map(c => {
+          const met = answers[c.criterion_key] === true || legacy(c.criterion_key);
+          return `<div style="display:flex;gap:9px;align-items:flex-start;margin-bottom:8px;font-size:12.5px;">
+            <span style="color:${met ? '#1E8449' : '#98241F'};font-weight:700;">${met ? '&#10003;' : '&#10007;'}</span>
+            <span>${esc(c.label)}</span></div>`;
+        }).join('')}
+        ${r.case_notes_method ? `<div class="field-hint" style="margin-top:6px;">Case notes criterion met by:
+          <strong>${esc(r.case_notes_method)}</strong></div>` : ''}`;
+    } else {
+      const row = (label, value) => `<div class="field-hint" style="margin-bottom:4px;">${esc(label)}:
+        <strong>${esc(value || '—')}</strong></div>`;
+      section.innerHTML = `<div class="form-section-title">Intake Details</div>
+        <div class="field-hint" style="margin-bottom:8px;">This program does not use an eligibility checklist on the referral
+          form, so nothing was attested to here. Eligibility is settled in the pipeline below.</div>
+        ${row('Bed requested', r.requested_designation)}
+        ${row('Bed category', r.requested_gender_category)}
+        ${row('West Hollywood affiliation', r.weho_affiliation)}`;
+    }
+  };
+})();
+
+
+(function(){
+  /* ==========================================================================
+     Granting an access code to programs.
+
+     A code used to belong to one program because there was only one. Now the
+     City decides which programs each code may refer to, and the referring
+     agency picks between them at submission. The agency row keeps a home
+     program for continuity; the grants are what actually authorise a referral.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+
+  const previousLoadAllForGrants = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAllForGrants.call(this);
+    if (!this.data) this.data = {};
+    this.data.agencyPrograms = [];
+    const pid = this.program?.id;
+    if (!pid || this.isAgencyFiscal?.()) return;
+
+    // Load agencies without filtering on their home program — an agency whose
+    // home is one program may be granted another, and filtering on home would
+    // hide it from the program it actually refers to. Row-level security still
+    // limits this to agencies linked to a program the viewer belongs to.
+    const [links, agencies] = await Promise.all([
+      this.sb.from('holloway_referral_agency_programs').select('*'),
+      this.sb.from('holloway_referral_agencies').select('*').order('agency_name')
+    ]);
+    if (links.error)    { console.warn('agency programs unavailable', links.error); return; }
+    if (agencies.error) { console.warn('referral agencies unavailable', agencies.error); return; }
+
+    this.data.agencyPrograms = links.data || [];
+    const here = new Set((links.data || [])
+      .filter(l => l.program_id === pid && l.active).map(l => l.agency_id));
+    this.data.referralAgencies = (agencies.data || []).filter(a => here.has(a.id));
+    this.data.allReferralAgencies = agencies.data || [];
+  };
+
+  App.agencyProgramIds = function(agencyId){
+    return new Set((this.data.agencyPrograms || [])
+      .filter(l => l.agency_id === agencyId && l.active).map(l => l.program_id));
+  };
+
+  App.programName = function(id){
+    return (this.availablePrograms || []).find(p => p.id === id)?.name || 'Another program';
+  };
+
+  const previousOpenReferralCodes = App.openReferralCodes;
+  App.openReferralCodes = function(){
+    previousOpenReferralCodes.call(this);
+    const body = document.getElementById('refcodes-body');
+    if (!body) return;
+    const programs = this.availablePrograms || [];
+
+    // Which programs a new code covers, in the issue form.
+    const issueSection = [...body.querySelectorAll('.form-section')]
+      .find(s => (s.querySelector('.form-section-title')?.textContent || '').trim() === 'Issue a Code');
+    const issueBtn = body.querySelector('#btn-issue-code');
+    if (issueSection && issueBtn && programs.length){
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `<div class="field-group" style="margin-top:4px;">
+        <label class="field-label">Programs this code may refer to</label>
+        <div class="reason-list">${programs.map(p => `<label class="reason-row">
+            <input type="checkbox" class="rc-program" value="${esc(p.id)}" ${p.id === this.program?.id ? 'checked' : ''}>
+            <span>${esc(p.name)}</span></label>`).join('')}</div>
+        <div class="field-hint">The agency chooses between these when they submit. A code with no program cannot be used.</div>
+      </div>`;
+      issueSection.insertBefore(wrap.firstElementChild, issueBtn);
+    }
+
+    // Which programs each existing code covers, in the table.
+    const table = body.querySelector('.client-table');
+    if (table){
+      const headRow = table.querySelector('thead tr');
+      if (headRow){
+        const th = document.createElement('th');
+        th.textContent = 'Programs';
+        headRow.insertBefore(th, headRow.children[3] || null);
+      }
+      const agencies = this.data.referralAgencies || [];
+      [...table.querySelectorAll('tbody tr')].forEach((tr, i) => {
+        const a = agencies[i];
+        if (!a) return;
+        const granted = this.agencyProgramIds(a.id);
+        const td = document.createElement('td');
+        td.innerHTML = programs.map(p => `<label class="reason-row" style="padding:2px 0;">
+            <input type="checkbox" class="rc-grant" data-agency="${esc(a.id)}" data-program="${esc(p.id)}"
+                   ${granted.has(p.id) ? 'checked' : ''}>
+            <span style="font-size:12px;">${esc(p.name)}</span></label>`).join('');
+        tr.insertBefore(td, tr.children[3] || null);
+      });
+      body.querySelectorAll('.rc-grant').forEach(cb =>
+        cb.addEventListener('change', () =>
+          this.setAgencyProgram(cb.dataset.agency, cb.dataset.program, cb.checked)));
+    }
+
+    // Rebind the issue button so it runs the grant-aware version.
+    const fresh = body.querySelector('#btn-issue-code');
+    if (fresh){
+      const clone = fresh.cloneNode(true);
+      fresh.parentNode.replaceChild(clone, fresh);
+      clone.addEventListener('click', () => this.issueReferralCodeWithPrograms());
+    }
+  };
+
+  App.setAgencyProgram = async function(agencyId, programId, on){
+    const state = document.getElementById('refcodes-state');
+    if (state) state.textContent = 'Saving…';
+    let error;
+    if (on){
+      ({ error } = await this.sb.from('holloway_referral_agency_programs')
+        .upsert({ agency_id: agencyId, program_id: programId, active: true },
+                { onConflict: 'agency_id,program_id' }));
+    } else {
+      ({ error } = await this.sb.from('holloway_referral_agency_programs')
+        .update({ active: false }).eq('agency_id', agencyId).eq('program_id', programId));
+    }
+    if (error){ if (state) state.textContent = 'Could not update: ' + error.message; return; }
+    await this.loadAll();
+    this.openReferralCodes();
+    const s2 = document.getElementById('refcodes-state');
+    if (s2) s2.textContent = on
+      ? 'Code now covers ' + this.programName(programId) + '.'
+      : 'Code no longer covers ' + this.programName(programId) + '.';
+  };
+
+  App.issueReferralCodeWithPrograms = async function(){
+    const state = document.getElementById('refcodes-state');
+    const name = (document.getElementById('rc-name')?.value || '').trim();
+    if (!name){ if (state) state.textContent = 'Enter the agency name.'; return; }
+    const chosen = [...document.querySelectorAll('.rc-program:checked')].map(c => c.value);
+    // A code with no program is not usable, and issuing one would look like it
+    // worked right up until the agency tried to submit.
+    if (!chosen.length){ if (state) state.textContent = 'Choose at least one program this code may refer to.'; return; }
+
+    if (state) state.textContent = 'Issuing…';
+    const { data, error } = await this.sb.from('holloway_referral_agencies').insert({
+      program_id: chosen[0], agency_name: name,
+      contact_name: (document.getElementById('rc-contact')?.value || '').trim() || null,
+      contact_email:(document.getElementById('rc-email')?.value || '').trim() || null,
+      contact_phone:(document.getElementById('rc-phone')?.value || '').trim() || null,
+      access_code: this.generateReferralCode(), created_by: this.user?.email || null
+    }).select().single();
+    if (error){ if (state) state.textContent = 'Could not issue code: ' + error.message; return; }
+
+    const { error: linkError } = await this.sb.from('holloway_referral_agency_programs')
+      .insert(chosen.map(pid => ({ agency_id: data.id, program_id: pid, active: true })));
+    if (linkError){ if (state) state.textContent = 'Code issued, but the programs could not be set: ' + linkError.message; return; }
+
+    await this.loadAll();
+    this.openReferralCodes();
+    const s2 = document.getElementById('refcodes-state');
+    if (s2) s2.textContent = 'Code issued for ' + chosen.length + ' program' + (chosen.length === 1 ? '' : 's') + '.';
   };
 })();
 
