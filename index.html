@@ -1768,8 +1768,8 @@ button, input, select, textarea { font-family: var(--font-ui); }
             <div class="sidebar-item" data-view="housing-followups"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg>Housing Follow-Ups</div>
             <div class="sidebar-item" data-view="incident-log"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Incident Log</div>
             <div class="sidebar-item" data-view="income"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Income Tracking</div>
-          <div class="sidebar-item" data-view="referrals"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>Referrals</div>
           </div>
+          <div class="sidebar-item" data-view="referrals"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>Referrals</div>
           <div class="sidebar-item" id="nav-review" data-view="admin-review" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Review Queue</div>
           <div class="sidebar-item" id="nav-access" data-view="access" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1"/></svg>Access Management</div>
         </div>
@@ -11001,7 +11001,7 @@ const App = {
    ============================================================ */
 (function(){
   const KEY = 'holloway.nav.clientsExpanded';
-  const CHILD_VIEWS = ['services','client-exits','housing-followups','incident-log','income'];
+  const CHILD_VIEWS = ['services','client-exits','housing-followups','incident-log','income','referrals'];
 
   const group  = document.getElementById('clients-subnav');
   const toggle = document.getElementById('clients-subnav-toggle');
@@ -11035,7 +11035,15 @@ const App = {
   const previousShowViewForNav = App.showView;
   App.showView = function(view){
     previousShowViewForNav.call(this, view);
-    parent.classList.toggle('has-active-child', CHILD_VIEWS.includes(this.view));
+    const isChild = CHILD_VIEWS.includes(this.view);
+    parent.classList.toggle('has-active-child', isChild);
+    // Keep the active client panel visible. Previously Referrals could be
+    // selected while its collapsed subgroup stayed hidden, which made the
+    // navigation feel unresponsive and made it easy to lose the active view.
+    if (isChild && group.classList.contains('is-collapsed')){
+      apply(true);
+      write(true);
+    }
   };
 })();
 
@@ -13574,13 +13582,18 @@ const App = {
         <h1 class="partner-page-title">Where are you referring?</h1>
         <p class="partner-page-intro"><strong>${esc(st.agencyName || 'Your agency')}</strong> is approved to refer to the programs below. Select a program to load its specific referral requirements and eligibility terms.</p>
         <div class="partner-programs">
-          ${(st.programs||[]).map(p => `<button type="button" class="referral-program-btn" data-program="${esc(p.id)}" ${st.busy?'disabled':''}>
-            <span class="partner-program-type">Available program</span>
-            <span class="referral-program-name">${esc(p.name)}</span>
-            <span class="partner-program-desc">Open this program&rsquo;s referral form and requirements.</span>
-            <span class="referral-program-go">&rarr;</span>
-          </button>`).join('')}
+          ${(st.programs||[]).map(p => {
+            const pid = p.id || p.program_id;
+            const pname = p.name || p.program_name || 'Program';
+            return `<button type="button" class="referral-program-btn" data-program="${esc(pid)}" ${(!pid||st.busy)?'disabled':''}>
+              <span class="partner-program-type">Available program</span>
+              <span class="referral-program-name">${esc(pname)}</span>
+              <span class="partner-program-desc">Open this program&rsquo;s referral form and requirements.</span>
+              <span class="referral-program-go">&rarr;</span>
+            </button>`;
+          }).join('')}
         </div>
+        ${!(st.programs||[]).length ? `<div class="notice amber" style="margin-top:16px;margin-bottom:0;"><div>!</div><div><strong>No programs are currently assigned to this agency code.</strong><br>This code must be granted access to a program by the City before a referral can be submitted.</div></div>` : ''}
         ${st.busy?'<p class="field-hint" style="margin-top:14px;">Loading the form&hellip;</p>':''}
         ${st.error?`<p class="referral-error">${esc(st.error)}</p>`:''}
       </section>
@@ -13720,8 +13733,16 @@ const App = {
       document.getElementById('ref-code-submit')?.addEventListener('click', () => this.referralValidateCode());
     }
 
-    document.querySelectorAll('[data-program]').forEach(b =>
-      b.addEventListener('click', () => this.referralChooseProgram(b.dataset.program)));
+    document.querySelectorAll('#referral-body [data-program]').forEach(b =>
+      b.addEventListener('click', () => {
+        const programId = b.dataset.program;
+        if (!programId){
+          st.error = 'This program is missing its referral configuration. Please contact the City program monitor.';
+          this.renderReferralStep();
+          return;
+        }
+        this.referralChooseProgram(programId);
+      }));
 
     document.querySelectorAll('#ref-casenotes-method [data-cn-method]').forEach(b =>
       b.addEventListener('click', () => {
@@ -13828,9 +13849,10 @@ const App = {
     st.values = { referring_agency: data.agency_name };
     st.crits = {}; st.files = {}; st.caseNotesMethod = null;
 
-    // A code approved for exactly one program has nothing to choose, so skip
-    // the step rather than making them click through a list of one.
-    if (st.programs.length === 1){ await this.referralChooseProgram(st.programs[0].id); return; }
+    // Always show the authorized-program step, even when there is only one.
+    // This makes the code's actual program access visible to the referrer and
+    // prevents an older single-program grant from silently bypassing the
+    // selection screen when the agency expects to refer to another program.
     st.step = 'program';
     this.renderReferralStep();
   };
