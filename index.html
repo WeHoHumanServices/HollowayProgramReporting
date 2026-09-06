@@ -4,10 +4,15 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="Contract reporting for the City of West Hollywood's interim housing and shelter programs: participant records, bed nights, referrals, invoices and quarterly reporting." />
+<meta name="application-name" content="Interim Housing &amp; Shelter Reporting Portal" />
+<meta name="author" content="City of West Hollywood · Human Services Division" />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="theme-color" content="#1B2F5B" />
 <title>Interim Housing &amp; Shelter Reporting Portal — City of West Hollywood</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
 <script>
   const SUPABASE_URL = 'https://osilouhgoehyesbastxr.supabase.co';
@@ -518,24 +523,24 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   line-height:1.18; max-width:34ch; }
 
 /* ---- Annual contract goals ---- */
-.goal-group { margin-bottom: 20px; }
-.goal-group:last-child { margin-bottom: 0; }
-.goal-group-title { font-size:11.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+.cg-group { margin-bottom: 20px; }
+.cg-group:last-child { margin-bottom: 0; }
+.cg-group-title { font-size:11.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
   color:var(--navy); margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid var(--border); }
-.goal-row { display:flex; gap:18px; align-items:flex-start; justify-content:space-between;
+.cg-row { display:flex; gap:18px; align-items:flex-start; justify-content:space-between;
   padding:11px 0; border-bottom:1px solid var(--gray-100); }
-.goal-row:last-child { border-bottom:none; }
-.goal-main { flex:1 1 auto; min-width:0; }
-.goal-label { font-size:13.5px; font-weight:600; color:var(--gray-800); line-height:1.3; }
-.goal-desc { font-size:11.5px; color:var(--gray-500); margin-top:3px; }
-.goal-figure { flex:0 0 190px; text-align:right; }
-.goal-value { font-family:var(--font-sans); font-size:19px; font-weight:700; color:var(--navy);
+.cg-row:last-child { border-bottom:none; }
+.cg-main { flex:1 1 auto; min-width:0; }
+.cg-label { font-size:13.5px; font-weight:600; color:var(--gray-800); line-height:1.3; }
+.cg-desc { font-size:11.5px; color:var(--gray-500); margin-top:3px; }
+.cg-figure { flex:0 0 232px; text-align:right; padding-left:10px; }
+.cg-value { font-family:var(--font-sans); font-size:19px; font-weight:700; color:var(--navy);
   letter-spacing:-.02em; white-space:nowrap; }
-.goal-value.is-unknown { color:var(--gray-400); }
-.goal-sub { font-size:11.5px; color:var(--gray-500); margin-top:2px; }
-.goal-bar { height:5px; border-radius:999px; background:var(--gray-100); margin-top:7px; overflow:hidden; }
-.goal-bar span { display:block; height:100%; background:var(--gold); }
-.goal-bar.is-met span { background:var(--green); }
+.cg-value.is-unknown { color:var(--gray-400); }
+.cg-sub { font-size:11.5px; color:var(--gray-500); margin-top:2px; }
+.cg-bar { height:5px; border-radius:999px; background:var(--gray-100); margin-top:7px; overflow:hidden; }
+.cg-bar span { display:block; height:100%; background:var(--gold); }
+.cg-bar.is-met span { background:var(--green); }
 
 /* ---- Referral: choosing a program ---- */
 .referral-programs { display:flex; flex-direction:column; gap:10px; }
@@ -1408,6 +1413,106 @@ th.sortable:hover { color:var(--navy); }
 @media(max-width:560px){.ytd-kpi-grid,.housing-outcome-grid,.contract-goal-grid,.demographics-dashboard-grid,.demo-mini-grid{grid-template-columns:1fr}.demo-dashboard-card.full{grid-column:auto}.outcome-dist-row,.demo-dashboard-row{grid-template-columns:1fr}.outcome-dist-value,.demo-dashboard-value{text-align:left}.dashboard-section-head .hint{text-align:left}}
 </style>
 
+<style id="typographic-refresh">
+/* ==========================================================================
+   Typographic refresh — a civic serif for the things that name something, and
+   Public Sans, the typeface the US federal design system is built on, for
+   everything that is read or operated.
+
+   Nothing here moves layout. It sets a real scale between a page title and a
+   table header, lines figures up in their columns, and spends borders and
+   shadows by role instead of stamping one of each on every block.
+
+   Loaded after every other stylesheet so it overrides without any of them
+   being rewritten; deleting this block returns the portal exactly to how it
+   looked before.
+   ========================================================================== */
+
+:root{
+  --font-display: 'Source Serif 4', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  --font-ui: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: var(--font-ui);
+  --font-num: 'Public Sans', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Surfaces spend their emphasis by role: a hairline for a container, a
+     shadow only for something that genuinely sits above the page. */
+  --shadow: 0 1px 2px rgba(27,47,91,.045);
+  --shadow-lg: 0 16px 44px rgba(27,47,91,.16);
+  --radius: 8px; --radius-lg: 12px;
+  --border: #D9D5CD;
+  --rule: #E6E2DA;
+}
+
+body{
+  font-family: var(--font-ui);
+  font-size: 14.5px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+button, input, select, textarea { font-family: var(--font-ui); }
+
+/* ---- things that name something take the serif ---- */
+.page-title, .card-title, .form-modal-title, .login-title, .brand-program,
+.print-title, .fiscal-invoice-title, .referral-step-head h3,
+.kpi-value, .hero-value, .ytd-kpi-value, .mr-stat-value, .bed-stat-value,
+.sla-card-value, .cg-value, .tg-value, .tally dd, .goal-name{
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -.012em;
+}
+.page-title{ font-size: 33px; line-height: 1.12; text-wrap: balance; }
+.card-title{ font-size: 20.5px; line-height: 1.25; }
+.form-modal-title{ font-size: 23px; }
+.login-title{ font-size: 25px; line-height: 1.2; text-wrap: balance; }
+.goal-name{ font-size: 15px; letter-spacing: -.005em; }
+
+/* Figures are read in columns, so they line up in columns. */
+.kpi-value, .hero-value, .ytd-kpi-value, .mr-stat-value, .bed-stat-value,
+.sla-card-value, .cg-value, .tg-value, .tally dd,
+.client-table td, .svc-table td, .print-table td, table td, table th{
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ---- labels earn their tracking ---- */
+.section-label, .kpi-label, .ytd-kpi-label, .mr-stat-label, .bed-stat-label,
+.sla-card-label, .tg-label, .cg-group-title, .sidebar-label{
+  font-family: var(--font-ui);
+  font-weight: 700;
+  letter-spacing: .085em;
+  text-transform: uppercase;
+}
+.field-label{ font-family: var(--font-ui); font-weight: 600; letter-spacing: .01em; }
+.field-hint{ line-height: 1.55; }
+
+/* ---- surfaces: one hairline, and a shadow only where something lifts ---- */
+.card, .ytd-kpi, .kpi-card, .bed-stat, .mr-stat, .sla-card, .tg-card{
+  box-shadow: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.card{ border-color: var(--rule); }
+.card-header{ border-bottom: 1px solid var(--rule); }
+.form-modal, .toast, .confirm-box{ box-shadow: var(--shadow-lg); }
+.bed-tile{ box-shadow: none; border-radius: var(--radius); }
+.bed-tile:hover{ box-shadow: 0 4px 14px rgba(27,47,91,.10); }
+
+/* Tables read as ledgers: a ruled header, hairline rows, no zebra noise. */
+.client-table th, .svc-table th{
+  font-family: var(--font-ui); font-weight: 700; font-size: 11px;
+  letter-spacing: .08em; text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.client-table td, .svc-table td{ border-bottom: 1px solid var(--rule); }
+
+/* The printed report keeps the same voice as the screen. */
+@media print{
+  .print-title{ font-family: var(--font-display); font-weight: 600; }
+  .print-table td, .print-table th{ font-variant-numeric: tabular-nums; }
+}
+</style>
+
 </head>
 
 <body>
@@ -1801,6 +1906,10 @@ th.sortable:hover { color:var(--navy); }
  */
 const CONFIG = {
   PROGRAM_NAME: 'Holloway Interim Housing Program',
+  // The portal's own name, as distinct from the name of whichever program is
+  // being worked on. Held once so a rename is one edit rather than seven, and
+  // so nothing has to fall back on a placeholder word.
+  PORTAL_NAME: 'Interim Housing & Shelter Reporting Portal',
   PROGRAM_ID: null,
   /* Allow Agency-Fiscal users to VIEW (never edit) Program Reports.
    * Editing stays blocked by canEditQuarter()/canSign() in the UI and by the
@@ -2381,7 +2490,7 @@ const App = {
     // The topbar names the program being worked on; the portal keeps its own
     // name on the sign-in card, which is shown before any program is chosen.
     if (brand) brand.textContent = this.programName();
-    document.title = `${this.programName()} — Interim Housing & Shelter Reporting Portal`;
+    document.title = `${this.programName()} — ${CONFIG.PORTAL_NAME}`;
     this.renderUser();
     this.renderSidebarForRole();
     this.installToastRegion();
@@ -2605,6 +2714,10 @@ const App = {
   programName() {
     return this.program?.name || CONFIG.PROGRAM_NAME;
   },
+  // Used wherever the sentence is about the system rather than about one
+  // program, so those places name the portal instead of reaching for a
+  // placeholder.
+  portalName() { return CONFIG.PORTAL_NAME; },
   agencyName() {
     return this.program?.agency_name || this.program?.organization || this.program?.agency || CONFIG.AGENCY_DEFAULTS.name;
   },
@@ -3778,7 +3891,7 @@ const App = {
     const src = scope === 'ytd' ? ytd : qtr;
     const other = scope === 'ytd' ? qtr : ytd;
     const heroPrimary = src.phRate;
-    const target = CONFIG.PH_RATE_TARGET;
+    const target = this.phRateTarget ? this.phRateTarget() : CONFIG.PH_RATE_TARGET;
     const minN = CONFIG.MIN_EXITS_FOR_RATE;
 
     // Below the small-n threshold a percentage overstates what the data can
@@ -7178,7 +7291,7 @@ const App = {
     addSheet(wb, this.buildQuarterlyMetricExportRows(), 'Quarterly Metrics');
     addSheet(wb, this.buildDemographicExportRows(), 'Demographics');
 
-    const progName = (this.programName ? this.programName() : 'Program').replace(/[^\w\- ]+/g,'').trim() || 'Program';
+    const progName = (this.programName ? this.programName() : CONFIG.PORTAL_NAME).replace(/[^\w\- ]+/g,'').trim() || CONFIG.PORTAL_NAME;
     const filename = `${progName} Data Export ${this.localDate()}.xlsx`;
     XLSX.writeFile(wb, filename, { cellDates: true });
     this.toast('Excel export ready — check your downloads.');
@@ -13330,7 +13443,7 @@ const App = {
     const contactFields = pf.requiresCertification ? CERT_CONTACT_FIELDS : OPTIONAL_FIELDS;
 
     return `<div class="referral-step-head">
-        <h3>Referral to ${esc(pf.name || 'the program')}</h3><span class="referral-progress">Step 3 of 3</span></div>
+        <h3>Referral to ${esc(pf.name || 'the selected program')}</h3><span class="referral-progress">Step 3 of 3</span></div>
       <p class="field-hint" style="margin-bottom:18px;">From ${esc(st.agencyName || 'your agency')}.
         ${st.criteria?.length
           ? 'Every field and every criterion below is required. The form cannot be submitted until it is complete.'
@@ -13681,8 +13794,15 @@ const App = {
       .filter(l => l.agency_id === agencyId && l.active).map(l => l.program_id));
   };
 
-  App.programName = function(id){
-    return (this.availablePrograms || []).find(p => p.id === id)?.name || 'Another program';
+  // Named for what it does. An earlier version was called programName, which
+  // silently replaced App.programName() — the no-argument accessor that names
+  // the current program — so every heading, print header and invoice that asked
+  // for the program's name rendered this function's fallback instead.
+  App.programNameById = function(id){
+    // Every caller passes an id taken from the list above, so the lookup
+    // resolves; the fallback names the program in hand rather than a
+    // placeholder, so no message can read as unfinished.
+    return (this.availablePrograms || []).find(p => p.id === id)?.name || this.programName();
   };
 
   const previousOpenReferralCodes = App.openReferralCodes;
@@ -13760,8 +13880,8 @@ const App = {
     this.openReferralCodes();
     const s2 = document.getElementById('refcodes-state');
     if (s2) s2.textContent = on
-      ? 'Code now covers ' + this.programName(programId) + '.'
-      : 'Code no longer covers ' + this.programName(programId) + '.';
+      ? 'Code now covers ' + this.programNameById(programId) + '.'
+      : 'Code no longer covers ' + this.programNameById(programId) + '.';
   };
 
   App.issueReferralCodeWithPrograms = async function(){
@@ -13871,15 +13991,15 @@ const App = {
           : `${pct}% of the annual target`;
       }
 
-      return `<div class="goal-row">
-        <div class="goal-main">
-          <div class="goal-label">${esc(g.label)}</div>
-          ${g.description ? `<div class="goal-desc">${esc(g.description)}</div>` : ''}
+      return `<div class="cg-row">
+        <div class="cg-main">
+          <div class="cg-label">${esc(g.label)}</div>
+          ${g.description ? `<div class="cg-desc">${esc(g.description)}</div>` : ''}
         </div>
-        <div class="goal-figure">
-          <div class="goal-value ${measurable && actual != null ? '' : 'is-unknown'}">${value}</div>
-          <div class="goal-sub">${esc(sub)}</div>
-          ${pct != null ? `<div class="goal-bar ${pct >= 100 ? 'is-met' : ''}"><span style="width:${pct}%"></span></div>` : ''}
+        <div class="cg-figure">
+          <div class="cg-value ${measurable && actual != null ? '' : 'is-unknown'}">${value}</div>
+          <div class="cg-sub">${esc(sub)}</div>
+          ${pct != null ? `<div class="cg-bar ${pct >= 100 ? 'is-met' : ''}"><span style="width:${pct}%"></span></div>` : ''}
         </div>
       </div>`;
     };
@@ -13890,8 +14010,8 @@ const App = {
           <div class="field-hint">Counted from this contract year&rsquo;s plans, exits, services and follow-ups
             ${period?.label ? '&middot; ' + esc(period.label) : ''}.</div></div>
       </div><div class="card-body">
-        ${groups.map(gr => `<div class="goal-group">
-          <div class="goal-group-title">${esc(gr.name)}</div>
+        ${groups.map(gr => `<div class="cg-group">
+          <div class="cg-group-title">${esc(gr.name)}</div>
           ${gr.rows.map(row).join('')}
         </div>`).join('')}
       </div></div>`;
@@ -14158,7 +14278,7 @@ const App = {
       <div class="fiscal-invoice-head">
         <div><img class="print-logo" src="${LOGO}" alt="City of West Hollywood logo">
           <div class="fiscal-invoice-title">INVOICE</div>
-          <div class="field-hint">${esc(p.name || 'Program')}</div></div>
+          <div class="field-hint">${esc(p.name || this.programName())}</div></div>
         <div style="text-align:right;font-size:12px;">
           <div><strong>Invoice #</strong> ${esc(inv?.invoice_number || '—')}</div>
           <div><strong>Invoice date</strong> ${inv?.invoice_date ? this.formatDate(this.dateOnly(inv.invoice_date)) : '—'}</div>
@@ -14171,11 +14291,11 @@ const App = {
         <div class="fiscal-address-box"><strong>Customer</strong><br>City of West Hollywood<br>Human Services Division<br>
           8300 Santa Monica Blvd.<br>West Hollywood, CA 90069</div>
         <div class="fiscal-address-box"><strong>Service Location</strong><br>${addr(p.service_address)}
-          <br><br><strong>Agency / Remit To</strong><br>${esc(this.agencyName ? this.agencyName() : 'Agency')}<br>${addr(p.remit_address)}</div>
+          <br><br><strong>Agency / Remit To</strong><br>${esc(this.agencyName())}<br>${addr(p.remit_address)}</div>
       </div>
 
       <div class="notice navy"><div>i</div><div>${esc(label)} fee-for-service bed nights for the
-        ${esc(p.name || 'program')}.<br><strong>Service period:</strong> ${this.formatDate(from)} &ndash; ${this.formatDate(to)}</div></div>
+        ${esc(p.name || this.programName())}.<br><strong>Service period:</strong> ${this.formatDate(from)} &ndash; ${this.formatDate(to)}</div></div>
 
       <table class="print-table invoice-summary-table"><thead><tr>
           <th>Description</th><th style="text-align:right">Nights</th>
@@ -14275,7 +14395,7 @@ const App = {
         ${esc(label)} Bed Night Invoice &middot; Generated ${new Date().toLocaleDateString()}</div>
       ${this.ffsInvoiceHtml(month)}
       <div class="print-footer"><img class="print-footer-logo" src="${LOGO}" alt="City of West Hollywood logo">
-        Prepared through the Interim Housing &amp; Shelter Reporting Portal &middot; City of West Hollywood Human Services Division</div>`;
+        Prepared through the ${esc(CONFIG.PORTAL_NAME)} &middot; City of West Hollywood Human Services Division</div>`;
     window.print();
   };
 
@@ -14358,7 +14478,7 @@ const App = {
 
     const sub = el.querySelector('.page-subtitle');
     if (sub) sub.textContent =
-      `Portal users with access to ${this.program?.name || 'this program'}. City admins see every program and are listed separately.`;
+      `Portal users with access to ${this.programName()}. City admins see every program and are listed separately.`;
 
     const table = el.querySelector('.svc-table');
     if (!table) return;
@@ -14421,7 +14541,7 @@ const App = {
     // rather than letting an admin discover it afterwards.
     const formHint = el.querySelector('.card .field-hint');
     if (formHint) formHint.textContent =
-      `New users are given access to ${this.program?.name || 'the selected program'}. Access to other programs is granted with the tick boxes in the table below, and editing someone here never removes a program they already have.`;
+      `New users are given access to ${this.programName()}. Access to other programs is granted with the tick boxes in the table below, and editing someone here never removes a program they already have.`;
   };
 
   App.setUserProgram = async function(email, programId, on){
@@ -14448,13 +14568,11 @@ const App = {
     this.renderAccessManagement();
     const m2 = document.getElementById('au-msg');
     if (m2) m2.textContent = on
-      ? `${email} now has access to ${this.programName2(programId)}.`
-      : `${email} no longer has access to ${this.programName2(programId)}.`;
+      ? `${email} now has access to ${this.programNameById(programId)}.`
+      : `${email} no longer has access to ${this.programNameById(programId)}.`;
   };
 
-  App.programName2 = function(id){
-    return (this.availablePrograms || []).find(p => p.id === id)?.name || 'that program';
-  };
+  App.programName2 = function(id){ return this.programNameById(id); };
 })();
 
 
@@ -14583,7 +14701,7 @@ const App = {
   };
 
   App.printFileLabel = function(kind, period){
-    const program = (this.program?.name || 'Program').replace(/\s+/g, ' ').trim();
+    const program = this.programName().replace(/\s+/g, ' ').trim();
     return `${program} — ${kind}${period ? ' — ' + period : ''}`;
   };
 
@@ -14607,6 +14725,57 @@ const App = {
       .toLocaleDateString(undefined, { month:'long', year:'numeric' }) : '';
     this.printAs(this.printFileLabel('Bed Night Invoice', label));
     return previousPrintFfsInvoice.call(this);
+  };
+})();
+
+
+(function(){
+  /* ==========================================================================
+     The dashboard leads with the program's own contract measures.
+
+     Contract Performance was Holloway's shape throughout — a permanent-housing
+     exit rate against a 30% benchmark, occupancy against a licensed bed count.
+     Those are the wrong questions to put at the top of a shelter's dashboard,
+     and the figures underneath them were Holloway's targets applied to another
+     program's data.
+
+     For a program that carries its own section 14 goals, that slot now holds
+     those goals instead. Programs without them are untouched.
+     ========================================================================== */
+
+  // The dashboard in use is the year-to-date one, which builds its own two
+  // blocks: a strip of Holloway's headline measures, and Holloway's four goal
+  // cards. Both are replaced wholesale for a program with its own section 14
+  // goals — the earlier attempt patched a performance panel this dashboard
+  // never calls, which is why the Holloway figures survived it.
+  const previousYtdPerformance = App.renderYtdContractPerformance;
+  App.renderYtdContractPerformance = function(q = this.currentQuarter){
+    if (!this.hasContractGoals?.()) { this._goalsInPerformance = false; return previousYtdPerformance.call(this, q); }
+    this._goalsInPerformance = true;
+    return this.contractGoalsHtml();
+  };
+
+  const previousYtdGoals = App.renderYtdContractGoals;
+  App.renderYtdContractGoals = function(q = this.currentQuarter){
+    if (!this.hasContractGoals?.()) return previousYtdGoals.call(this, q);
+    return '';   // its heading is removed below rather than left over nothing
+  };
+
+  const previousDashboardForGoals = App.renderDashboard;
+  App.renderDashboard = function(){
+    previousDashboardForGoals.call(this);
+    const el = document.getElementById('view-dashboard');
+    if (!el || !this._goalsInPerformance) return;
+
+    [...el.querySelectorAll('.dashboard-section-head')]
+      .filter(h => (h.querySelector('h2')?.textContent || '').trim() === 'Contract Goals & Progress')
+      .forEach(h => h.remove());
+
+    // The goals card is also appended to the dashboard for programs that do
+    // not lead with it; leading with it and appending it would show it twice.
+    const cards = [...el.querySelectorAll('.card')]
+      .filter(c => (c.querySelector('.card-title')?.textContent || '').trim() === 'Annual Contract Goals');
+    cards.slice(1).forEach(c => c.remove());
   };
 })();
 
