@@ -517,6 +517,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .brand-program { font-family: var(--font-sans); font-size: 15px; font-weight: 650; letter-spacing: -.01em;
   line-height:1.18; max-width:34ch; }
 
+/* ---- Annual contract goals ---- */
+.goal-group { margin-bottom: 20px; }
+.goal-group:last-child { margin-bottom: 0; }
+.goal-group-title { font-size:11.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--navy); margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+.goal-row { display:flex; gap:18px; align-items:flex-start; justify-content:space-between;
+  padding:11px 0; border-bottom:1px solid var(--gray-100); }
+.goal-row:last-child { border-bottom:none; }
+.goal-main { flex:1 1 auto; min-width:0; }
+.goal-label { font-size:13.5px; font-weight:600; color:var(--gray-800); line-height:1.3; }
+.goal-desc { font-size:11.5px; color:var(--gray-500); margin-top:3px; }
+.goal-figure { flex:0 0 190px; text-align:right; }
+.goal-value { font-family:var(--font-sans); font-size:19px; font-weight:700; color:var(--navy);
+  letter-spacing:-.02em; white-space:nowrap; }
+.goal-value.is-unknown { color:var(--gray-400); }
+.goal-sub { font-size:11.5px; color:var(--gray-500); margin-top:2px; }
+.goal-bar { height:5px; border-radius:999px; background:var(--gray-100); margin-top:7px; overflow:hidden; }
+.goal-bar span { display:block; height:100%; background:var(--gold); }
+.goal-bar.is-met span { background:var(--green); }
+
 /* ---- Referral: choosing a program ---- */
 .referral-programs { display:flex; flex-direction:column; gap:10px; }
 .referral-program-btn { display:flex; align-items:center; justify-content:space-between; gap:14px;
@@ -13763,6 +13783,122 @@ const App = {
     this.openReferralCodes();
     const s2 = document.getElementById('refcodes-state');
     if (s2) s2.textContent = 'Code issued for ' + chosen.length + ' program' + (chosen.length === 1 ? '' : 's') + '.';
+  };
+})();
+
+
+(function(){
+  /* ==========================================================================
+     Annual contract goals.
+
+     The targets are program rows; the progress against them is computed by
+     holloway_program_goal_progress() from plans, exits, services and
+     follow-ups, so the goal figures and the rest of the portal cannot drift
+     apart.
+
+     One distinction is carried all the way to the screen: a measure that has
+     been counted and came to nothing shows 0, and a measure whose underlying
+     records do not exist yet shows a dash and says why. A retention rate of
+     0% and a retention rate nobody can compute are very different things to
+     put in front of a funder, and the second must never be dressed as the
+     first. A measure with no target on file shows its count and says so,
+     rather than drawing a bar that can never be missed.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+
+  const previousLoadAllForGoals = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAllForGoals.call(this);
+    if (!this.data) this.data = {};
+    this.data.goalProgress = {};
+    const pid = this.program?.id;
+    if (!pid || this.isAgencyFiscal?.()) return;
+    if (!(this.data.programTargets || []).some(t => t.metric_group)) return;
+
+    const { data, error } = await this.sb.rpc('holloway_program_goal_progress', {
+      p_program_id: pid, p_fiscal_year: this.fiscalYear || null
+    });
+    if (error) { console.warn('goal progress unavailable', error); return; }
+    this.data.goalProgress = (data || []).reduce((m, r) => (m[r.metric_key] = r, m), {});
+  };
+
+  App.contractGoals = function(){
+    return (this.data?.programTargets || [])
+      .filter(t => t.metric_group)
+      .sort((a,b) => (a.sort_order || 0) - (b.sort_order || 0));
+  };
+
+  App.contractGoalsHtml = function(){
+    const goals = this.contractGoals();
+    if (!goals.length) return '';
+    const progress = this.data?.goalProgress || {};
+
+    const groups = [];
+    goals.forEach(g => {
+      const found = groups.find(x => x.name === g.metric_group);
+      (found || (groups[groups.push({ name: g.metric_group, rows: [] }) - 1])).rows.push(g);
+    });
+
+    const row = (g) => {
+      const p = progress[g.metric_key];
+      const target = g.target_value == null ? null : Number(g.target_value);
+      const isRate = g.kind === 'rate';
+      const measurable = p ? p.measurable !== false : false;
+      const actual = p && p.actual != null ? Number(p.actual) : null;
+
+      // Three states, deliberately distinguishable at a glance.
+      let value, sub, pct = null;
+      if (!measurable || actual == null){
+        value = target == null ? '—' : `— / ${target}${esc(g.unit || '')}`;
+        sub = p?.note || 'Not measurable yet.';
+      } else if (target == null){
+        value = `${actual}${esc(g.unit || '')}`;
+        sub = 'Baseline measure — no target on file.';
+      } else {
+        value = `${actual}${isRate ? '%' : ''} / ${target}${esc(g.unit || '')}`;
+        pct = target > 0 ? Math.min(100, Math.round((actual / target) * 100)) : null;
+        sub = isRate
+          ? (p.denominator != null ? `of ${p.denominator} follow-up${Number(p.denominator) === 1 ? '' : 's'} completed` : '')
+          : `${pct}% of the annual target`;
+      }
+
+      return `<div class="goal-row">
+        <div class="goal-main">
+          <div class="goal-label">${esc(g.label)}</div>
+          ${g.description ? `<div class="goal-desc">${esc(g.description)}</div>` : ''}
+        </div>
+        <div class="goal-figure">
+          <div class="goal-value ${measurable && actual != null ? '' : 'is-unknown'}">${value}</div>
+          <div class="goal-sub">${esc(sub)}</div>
+          ${pct != null ? `<div class="goal-bar ${pct >= 100 ? 'is-met' : ''}"><span style="width:${pct}%"></span></div>` : ''}
+        </div>
+      </div>`;
+    };
+
+    const period = this.contractPeriod;
+    return `<div class="card" style="margin-top:22px"><div class="card-header">
+        <div><h2 class="card-title">Annual Contract Goals</h2>
+          <div class="field-hint">Counted from this contract year&rsquo;s plans, exits, services and follow-ups
+            ${period?.label ? '&middot; ' + esc(period.label) : ''}.</div></div>
+      </div><div class="card-body">
+        ${groups.map(gr => `<div class="goal-group">
+          <div class="goal-group-title">${esc(gr.name)}</div>
+          ${gr.rows.map(row).join('')}
+        </div>`).join('')}
+      </div></div>`;
+  };
+
+  const previousRenderDashboardForGoals = App.renderDashboard;
+  App.renderDashboard = function(){
+    previousRenderDashboardForGoals.call(this);
+    const el = document.getElementById('view-dashboard');
+    if (!el) return;
+    const html = this.contractGoalsHtml();
+    if (!html) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = html;
+    el.appendChild(wrap.firstElementChild);
   };
 })();
 
