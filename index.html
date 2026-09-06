@@ -12247,7 +12247,7 @@ const App = {
   };
 
   const DESIGNATIONS = { reserved:'Reserved bed', fee_for_service:'Fee-for-service bed' };
-  const GENDERS      = { men:"Men's", women:"Women's" };
+  const GENDERS      = { men:'Man', women:'Woman', non_binary:'Non-binary' };
 
   /* ------------------------------------------------------------- loading */
 
@@ -12474,9 +12474,9 @@ const App = {
             ${sel('pipe-eligibility', ELIGIBILITY, r.eligibility_determination)}</div>
           <div class="field-group"><label class="field-label" for="pipe-decision">Admission decision</label>
             ${sel('pipe-decision', DECISIONS, r.admission_decision)}</div>
-          <div class="field-group"><label class="field-label" for="pipe-designation">Bed requested</label>
+          <div class="field-group"><label class="field-label" for="pipe-designation">Bed type (program assigned)</label>
             ${sel('pipe-designation', DESIGNATIONS, r.requested_designation)}</div>
-          <div class="field-group"><label class="field-label" for="pipe-gender">Bed category</label>
+          <div class="field-group"><label class="field-label" for="pipe-gender">Client gender</label>
             ${sel('pipe-gender', GENDERS, r.requested_gender_category)}</div>
           <div class="field-group"><label class="field-label" for="pipe-scheduled">Scheduled admission</label>
             <input type="date" class="field-input" id="pipe-scheduled" value="${esc(this.dateOnly(r.scheduled_admission_date) || '')}"></div>
@@ -12676,16 +12676,13 @@ const App = {
             </select></div>
         </div>
       </div>
-
-      <div class="form-section"><div class="form-section-title">Bed Requested</div>
+      <div class="form-section"><div class="form-section-title">Referral Details</div>
         <div class="client-form-grid">
-          <div class="field-group"><label class="field-label" for="logref-designation">Designation</label>
-            <select class="field-select" id="logref-designation"><option value="">—</option>
-              ${Object.entries(DESIGNATIONS).map(([v,l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('')}</select></div>
-          <div class="field-group"><label class="field-label" for="logref-gender">Category</label>
+          <div class="field-group"><label class="field-label" for="logref-gender">Client gender</label>
             <select class="field-select" id="logref-gender"><option value="">—</option>
               ${Object.entries(GENDERS).map(([v,l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('')}</select></div>
         </div>
+        <div class="field-hint" style="margin-top:8px;">Reserved vs. fee-for-service is assigned by program staff after referral review.</div>
       </div>`;
     document.getElementById('logref-state').textContent = '';
     this.openOverlay('logref');
@@ -12711,7 +12708,6 @@ const App = {
       community_member_name: name,
       date_of_birth: v('logref-dob'),
       member_contact_info: v('logref-contact'),
-      requested_designation: v('logref-designation'),
       requested_gender_category: v('logref-gender'),
       weho_affiliation: v('logref-affiliation'),
       status: 'New',
@@ -13498,7 +13494,7 @@ const App = {
   ];
 
   const DESIGNATIONS = { reserved:'Reserved bed', fee_for_service:'Fee-for-service bed' };
-  const GENDERS      = { men:"Men's", women:"Women's" };
+  const GENDERS      = { men:'Man', women:'Woman', non_binary:'Non-binary' };
   const AFFILIATION  = { verified:'Verified', self_attested:'Self-attested',
                          not_affiliated:'Not affiliated', pending:'Not yet established' };
 
@@ -13633,8 +13629,8 @@ const App = {
       </div>`;
     };
 
-    const pick = (id, map, current, label) => `<div class="field-group">
-      <label class="field-label" for="${id}">${esc(label)}</label>
+    const pick = (id, map, current, label, required=false) => `<div class="field-group">
+      <label class="field-label ${required?'required':''}" for="${id}">${esc(label)}</label>
       <select class="field-select" id="${id}"><option value="">&mdash;</option>
         ${Object.entries(map).map(([v,l]) => `<option value="${esc(v)}" ${current===v?'selected':''}>${esc(l)}</option>`).join('')}
       </select></div>`;
@@ -13654,10 +13650,11 @@ const App = {
     const sections = [];
     sections.push(section(String(n++).padStart(2,'0'),'Referring Agency & Contact','Who is making this referral?',
       `<div class="client-form-grid">${CORE_FIELDS.slice(0,3).map(field).join('')}${pf.requiresCertification ? field(CERT_CONTACT_FIELDS[0]) : ''}</div>`));
+    const intakeFields = pf.collectsBedRequest
+      ? `${pick('ref-gender', GENDERS, st.values?.requested_gender_category, 'Client gender', true)}${pick('ref-affiliation', AFFILIATION, st.values?.weho_affiliation, 'West Hollywood affiliation')}`
+      : '';
     sections.push(section(String(n++).padStart(2,'0'),'Community Member','Basic information the program needs to identify and reach the person.',
-      `<div class="client-form-grid">${field(CORE_FIELDS[3])}${contactFields.filter(f => f.key !== 'case_manager_phone').map(field).join('')}</div>`));
-    if (pf.collectsBedRequest) sections.push(section(String(n++).padStart(2,'0'),'Requested Placement','Optional preferences help the program understand the request; the program makes the final placement decision.',
-      `<div class="client-form-grid">${pick('ref-designation', DESIGNATIONS, st.values?.requested_designation, 'Bed type')}${pick('ref-gender', GENDERS, st.values?.requested_gender_category, 'Bed category')}${pick('ref-affiliation', AFFILIATION, st.values?.weho_affiliation, 'West Hollywood affiliation')}</div>`));
+      `<div class="client-form-grid">${field(CORE_FIELDS[3])}${contactFields.filter(f => f.key !== 'case_manager_phone').map(field).join('')}${intakeFields}</div>`));
     if (st.criteria?.length) sections.push(section(String(n++).padStart(2,'0'),'Eligibility & Required Documentation','Confirm each requirement and attach the documentation requested by the program.',
       `<div class="referral-criteria">${st.criteria.map(crit).join('')}</div>`));
     if (pf.requiresCertification) sections.push(section(String(n++).padStart(2,'0'),'Referring Agency Certification','Certify that the eligibility requirements above were reviewed and verified before submission.',
@@ -13782,9 +13779,12 @@ const App = {
     const st = this._referral;
     st.values = st.values || {}; st.crits = st.crits || {};
     activeFields(st).forEach(f => { const el = document.getElementById(f.id); if (el) st.values[f.key] = el.value; });
-    ['requested_designation:ref-designation','requested_gender_category:ref-gender','weho_affiliation:ref-affiliation']
+    ['requested_gender_category:ref-gender','weho_affiliation:ref-affiliation']
       .forEach(pair => { const [key, id] = pair.split(':');
         const el = document.getElementById(id); if (el) st.values[key] = el.value; });
+    // Bed type (reserved vs fee-for-service) is assigned by program staff after review,
+    // never selected by the referring agency.
+    delete st.values.requested_designation;
     (st.criteria || []).forEach(c => {
       const el = document.getElementById('chk-' + c.key); if (el) st.crits[c.key] = el.checked;
     });
@@ -13803,7 +13803,8 @@ const App = {
     const memberFields = [CORE_FIELDS[3], ...(st.programForm?.requiresCertification ? CERT_CONTACT_FIELDS.filter(f => f.key !== 'case_manager_phone') : OPTIONAL_FIELDS)];
     const states = {
       agency: allRequired(agencyFields),
-      member: allRequired(memberFields)
+      member: allRequired(memberFields) && (!st.programForm?.collectsBedRequest ||
+        !!String(document.getElementById('ref-gender')?.value || st.values?.requested_gender_category || '').trim())
     };
     if (st.criteria?.length){
       states.eligibility = (st.criteria || []).every(c => {
@@ -13896,6 +13897,8 @@ const App = {
     requiredFields(st).forEach(f => { if (!String(st.values?.[f.key] || '').trim()) missing.push(f.label); });
     const email = String(st.values?.case_manager_email || '');
     if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) missing.push('a valid email address');
+    if (st.programForm?.collectsBedRequest && !String(st.values?.requested_gender_category || '').trim())
+      missing.push('Client gender');
 
     (st.criteria || []).forEach(c => {
       if (c.required && !st.crits?.[c.key]) missing.push('the "' + c.label.slice(0, 42).trim() + '…" criterion');
@@ -13948,6 +13951,7 @@ const App = {
       criteria: st.crits || {},
       case_notes_method: st.caseNotesMethod
     });
+    delete payload.requested_designation;
     const { data, error } = await this.sb.rpc('holloway_referral_submit', {
       p_token: st.token, p_payload: payload, p_attachments: attachments
     });
@@ -14014,8 +14018,8 @@ const App = {
       section.innerHTML = `<div class="form-section-title">Intake Details</div>
         <div class="field-hint" style="margin-bottom:8px;">This program does not use an eligibility checklist on the referral
           form, so nothing was attested to here. Eligibility is settled in the pipeline below.</div>
-        ${row('Bed requested', r.requested_designation)}
-        ${row('Bed category', r.requested_gender_category)}
+        ${row('Client gender', (GENDERS[r.requested_gender_category] || r.requested_gender_category))}
+        ${r.requested_designation ? row('Bed type assigned by program', (DESIGNATIONS[r.requested_designation] || r.requested_designation)) : ''}
         ${row('West Hollywood affiliation', r.weho_affiliation)}`;
     }
   };

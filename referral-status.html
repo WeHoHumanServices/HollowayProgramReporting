@@ -147,7 +147,7 @@ function renderPrograms(programs) {
     kicker.className = 'program-kicker';
     kicker.textContent = 'Authorized program';
     const name = document.createElement('strong');
-    name.textContent = p.name;
+    name.textContent = p.name || p.program_name || 'Program';
     const desc = document.createElement('small');
     desc.textContent = 'View referrals submitted to this program.';
     copy.append(kicker, name, desc);
@@ -157,7 +157,9 @@ function renderPrograms(programs) {
     go.textContent = '\u2192';
 
     btn.append(copy, go);
-    btn.addEventListener('click', () => lookup(currentCode, p.id));
+    const pid = p.id || p.program_id;
+    btn.disabled = !pid;
+    btn.addEventListener('click', () => loadProgramStatus(pid));
     programList.appendChild(btn);
   }
   show(programCard);
@@ -212,68 +214,98 @@ function render(agencyName, programName, referrals) {
   show(resultsCard);
 }
 
-async function lookup(code, programId) {
+async function verifyCode(code) {
   clearMessage();
   hide(resultsCard);
+  hide(programCard);
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Checking…';
+  submitBtn.textContent = 'Checking\u2026';
 
   try {
-    const args = { p_code: code };
-    if (programId) args.p_program_id = programId;
-
-    const { data, error } = await supabase.rpc('holloway_referral_status_lookup', args);
-
+    // Use the same current access-code service as referral submission. This keeps
+    // program grants in one place and avoids the status page drifting from intake.
+    const { data, error } = await supabase.rpc('holloway_referral_start', { p_code: code });
     if (error) {
-      showMessage('Something went wrong reaching the server. Please try again in a moment.', 'error');
-      console.error(error);
+      console.error('Referral access lookup failed', error);
+      showMessage('We could not verify that agency code. Please try again or contact the City program monitor.', 'error');
       return;
     }
-
     if (!data || data.ok !== true) {
-      showMessage((data && data.message) ||
-        'That code was not recognised. Check it with the City program monitor and try again.', 'error');
+      showMessage((data && data.message) || 'That code was not recognised. Check it and try again.', 'error');
       return;
     }
 
     currentCode = code;
     currentPrograms = data.programs || [];
-
-    // No program asked for yet. One program means there is nothing to choose,
-    // so go straight through rather than showing a list of one.
-    if (!programId) {
-      if (currentPrograms.length === 1) { await lookup(code, currentPrograms[0].id); return; }
-      hide(resultsCard);
-      renderPrograms(currentPrograms);
+    if (!currentPrograms.length) {
+      showMessage('This agency code is valid, but no programs are currently assigned to it. Contact the City program monitor.', 'error');
       return;
     }
 
-    hide(programCard);
-
-    if (!data.referrals || data.referrals.length === 0) {
-      showMessage('No referrals have been submitted to ' + (data.program_name || 'this program') +
-                  ' under this access code yet.', 'info');
-      if (currentPrograms.length > 1) { renderPrograms(currentPrograms); }
-      return;
-    }
-
-    render(data.agency_name, data.program_name || '', data.referrals);
+    // Always show the program step, even for one program, so the agency can see
+    // exactly where it is checking referral activity.
+    renderPrograms(currentPrograms);
   } catch (err) {
-    showMessage('Something went wrong reaching the server. Please try again in a moment.', 'error');
     console.error(err);
+    showMessage('We could not verify that agency code. Please try again or contact the City program monitor.', 'error');
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = 'Check status';
   }
 }
 
+async function loadProgramStatus(programId) {
+  if (!currentCode || !programId) return;
+  clearMessage();
+  hide(resultsCard);
+
+  try {
+    const { data, error } = await supabase.rpc('holloway_referral_status_lookup', {
+      p_code: currentCode,
+      p_program_id: programId
+    });
+
+    if (error) {
+      console.error('Referral status lookup failed', error);
+      const detail = String(error.message || error.details || '');
+      if (/holloway_referral_status_lookup|PGRST202|function/i.test(detail)) {
+        showMessage('Referral status is not yet enabled on the database for this portal. Please contact the City program monitor.', 'error');
+      } else {
+        showMessage('Referral status is temporarily unavailable. Please try again or contact the City program monitor.', 'error');
+      }
+      return;
+    }
+    if (!data || data.ok !== true) {
+      showMessage((data && data.message) || 'Referral status could not be loaded for that program.', 'error');
+      return;
+    }
+
+    if (Array.isArray(data.programs) && data.programs.length) currentPrograms = data.programs;
+    hide(programCard);
+
+    const referrals = data.referrals || [];
+    if (!referrals.length) {
+      showMessage('No referrals have been submitted to ' + (data.program_name || 'this program') +
+                  ' under this agency code yet.', 'info');
+      renderPrograms(currentPrograms);
+      return;
+    }
+
+    render(data.agency_name || '', data.program_name || '', referrals);
+  } catch (err) {
+    console.error(err);
+    showMessage('Referral status is temporarily unavailable. Please try again or contact the City program monitor.', 'error');
+  }
+}
+
 form.addEventListener('submit', (event) => {
   event.preventDefault();
   hide(programCard);
+  hide(resultsCard);
   hide(switchWrap);
   const code = codeInput.value.trim();
   if (!code) return;
-  lookup(code, null);
+  verifyCode(code);
 });
 
 switchBtn.addEventListener('click', () => {
