@@ -14295,6 +14295,168 @@ const App = {
   };
 })();
 
+
+(function(){
+  /* ==========================================================================
+     Access Management, scoped to the program on screen.
+
+     The screen loaded every approved user and listed them all while its own
+     subtitle claimed to be showing the selected program's people, so Holloway
+     staff appeared under the Glendale program. It now lists that program's
+     members, and shows City admins separately because they genuinely span both
+     rather than belonging to either.
+
+     Program access is also shown per user and toggled per user, because staff
+     can be assigned to more than one program. Editing someone's details while
+     the wrong program happens to be selected must never quietly move them.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+
+  const previousLoadAllForAccess = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAllForAccess.call(this);
+    if (!this.data) this.data = {};
+    this.data.programMembers = [];
+    if (!this.isAdmin?.()) return;
+    const { data, error } = await this.sb.from('holloway_program_members').select('*');
+    if (error) { console.warn('program members unavailable', error); return; }
+    this.data.programMembers = data || [];
+  };
+
+  App.isCityAdminUser = function(u){
+    return u.access_type === 'city_admin' || u.role === 'city_admin';
+  };
+
+  App.memberProgramIds = function(email){
+    const key = String(email || '').toLowerCase();
+    return new Set((this.data.programMembers || [])
+      .filter(m => String(m.email || '').toLowerCase() === key && m.active)
+      .map(m => m.program_id));
+  };
+
+  App.usersForCurrentProgram = function(){
+    const pid = this.program?.id;
+    const all = this.data.approvedUsers || [];
+    return {
+      members: all.filter(u => !this.isCityAdminUser(u) && this.memberProgramIds(u.email).has(pid)),
+      admins:  all.filter(u => this.isCityAdminUser(u)),
+      // Accounts that exist but reach no program at all are worth surfacing:
+      // they can sign in and see nothing, which looks like a broken portal.
+      orphans: all.filter(u => !this.isCityAdminUser(u) && this.memberProgramIds(u.email).size === 0)
+    };
+  };
+
+  const previousRenderAccess = App.renderAccessManagement;
+  App.renderAccessManagement = function(){
+    previousRenderAccess.call(this);
+    const el = document.getElementById('view-access');
+    if (!el || !this.isAdmin()) return;
+
+    const programs = this.availablePrograms || [];
+    const { members, admins, orphans } = this.usersForCurrentProgram();
+
+    const sub = el.querySelector('.page-subtitle');
+    if (sub) sub.textContent =
+      `Portal users with access to ${this.program?.name || 'this program'}. City admins see every program and are listed separately.`;
+
+    const table = el.querySelector('.svc-table');
+    if (!table) return;
+
+    const accessLabel = (u) => this.isCityAdminUser(u) ? 'City Admin'
+      : (u.agency_group === 'fiscal' ? 'Agency-Fiscal'
+      : (u.agency_group === 'management' ? 'Agency Management' : 'Agency Support Staff'));
+
+    const programCell = (u) => {
+      if (this.isCityAdminUser(u))
+        return '<span class="field-hint">All programs</span>';
+      const granted = this.memberProgramIds(u.email);
+      return programs.map(p => `<label class="reason-row" style="padding:2px 0;">
+          <input type="checkbox" class="au-grant" data-email="${esc(u.email)}" data-program="${esc(p.id)}"
+                 ${granted.has(p.id) ? 'checked' : ''}>
+          <span style="font-size:12px;">${esc(p.name)}</span></label>`).join('');
+    };
+
+    const row = (u, muted) => `<tr${muted ? ' style="opacity:.72"' : ''}>
+      <td>${esc(u.email)}</td><td>${esc(u.full_name || '—')}</td><td>${esc(u.organization || '—')}</td>
+      <td>${esc(accessLabel(u))}</td>
+      <td>${programCell(u)}</td>
+      <td><span class="badge ${u.active ? 'badge-green' : 'badge-gray'}">${u.active ? 'Active' : 'Inactive'}</span></td>
+      <td><button class="btn btn-ghost btn-sm" data-edit-user="${esc(u.email)}">Edit</button></td></tr>`;
+
+    const section = (title, hint, rows) => rows.length
+      ? `<tr class="print-subhead"><td colspan="7" style="font-size:11px;font-weight:700;letter-spacing:.06em;
+           text-transform:uppercase;color:var(--navy);background:var(--gray-50);">${esc(title)}
+           <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--gray-500);">
+             &mdash; ${esc(hint)}</span></td></tr>` + rows
+      : '';
+
+    // Header gains a Programs column; the sortable headers the base render
+    // installed are left alone so sorting still works on the columns it knows.
+    const headRow = table.querySelector('thead tr');
+    if (headRow && ![...headRow.children].some(th => th.textContent.trim() === 'Programs')){
+      const th = document.createElement('th');
+      th.textContent = 'Programs';
+      headRow.insertBefore(th, headRow.children[4] || null);
+    }
+
+    const body = table.querySelector('tbody');
+    if (body){
+      body.innerHTML =
+        section(`${this.program?.name || 'This program'}`, `${members.length} user${members.length===1?'':'s'}`,
+                members.map(u => row(u, false)).join(''))
+      + section('City administrators', 'access to every program',
+                admins.map(u => row(u, false)).join(''))
+      + section('No program access', 'these accounts can sign in but will see nothing',
+                orphans.map(u => row(u, true)).join(''))
+      || `<tr><td colspan="7" class="empty-table-state">No users have access to this program yet.</td></tr>`;
+
+      body.querySelectorAll('[data-edit-user]').forEach(b =>
+        b.addEventListener('click', () => this.fillUserForm(b.dataset.editUser)));
+      body.querySelectorAll('.au-grant').forEach(cb =>
+        cb.addEventListener('change', () => this.setUserProgram(cb.dataset.email, cb.dataset.program, cb.checked)));
+    }
+
+    // The add/update form writes into whichever program is selected, so say so
+    // rather than letting an admin discover it afterwards.
+    const formHint = el.querySelector('.card .field-hint');
+    if (formHint) formHint.textContent =
+      `New users are given access to ${this.program?.name || 'the selected program'}. Access to other programs is granted with the tick boxes in the table below, and editing someone here never removes a program they already have.`;
+  };
+
+  App.setUserProgram = async function(email, programId, on){
+    const msg = document.getElementById('au-msg');
+    if (msg) msg.textContent = 'Saving…';
+    const key = String(email || '').toLowerCase();
+    const existing = (this.data.programMembers || [])
+      .find(m => String(m.email||'').toLowerCase() === key && m.program_id === programId);
+    const group = existing?.agency_group
+      || (this.data.approvedUsers || []).find(u => String(u.email||'').toLowerCase() === key)?.agency_group
+      || 'support';
+
+    let error;
+    if (on){
+      ({ error } = await this.sb.from('holloway_program_members')
+        .upsert({ email: key, program_id: programId, agency_group: group, active: true },
+                { onConflict: 'email,program_id' }));
+    } else {
+      ({ error } = await this.sb.from('holloway_program_members')
+        .update({ active: false }).eq('email', key).eq('program_id', programId));
+    }
+    if (error){ if (msg) msg.textContent = 'Could not update access: ' + error.message; return; }
+    await this.loadAll();
+    this.renderAccessManagement();
+    const m2 = document.getElementById('au-msg');
+    if (m2) m2.textContent = on
+      ? `${email} now has access to ${this.programName2(programId)}.`
+      : `${email} no longer has access to ${this.programName2(programId)}.`;
+  };
+
+  App.programName2 = function(id){
+    return (this.availablePrograms || []).find(p => p.id === id)?.name || 'that program';
+  };
+})();
+
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 </body>
