@@ -2255,6 +2255,11 @@ const ContractPeriods = {
       ffsAnnualCap: row.ffs_annual_cap ?? null,
       reservedBeds: row.reserved_beds ?? null,
       ffsBeds: row.ffs_beds ?? null,
+      // Which rule makes a fee-for-service night billable. The contract says
+      // "beyond the ten reserved beds" without saying whether the ten are ten
+      // people or ten specific beds, so the reading is contract data rather
+      // than something settled in code.
+      ffsBillingBasis: row.ffs_billing_basis || 'total_census',
       quarters: this.deriveQuarters(start, end)
     };
   },
@@ -15021,6 +15026,103 @@ const App = {
     if (!p?.note) return html;
     return html.replace('Baseline measure — no target on file.',
       this.escape('Baseline measure · ' + p.note));
+  };
+})();
+
+
+
+(function(){
+  /* ==========================================================================
+     Which rule made a fee-for-service night billable, said out loud.
+
+     Exhibit A bills fee-for-service beds for "eligible participants beyond the
+     ten reserved beds", and never says whether the ten are ten people or ten
+     specific beds. It matters, because the ten are not interchangeable: five
+     are the men's side and five the women's. Six men and three women is nine
+     people with the men's side full and two women's beds nobody can use.
+
+     Three readings, held on the contract period as ffs_billing_basis:
+
+       total_census        nine is fewer than ten, so nothing is billable.
+                           The most conservative of the three, and what is in
+                           force until the City says otherwise.
+       gender_availability the sixth man is billable, because every bed on his
+                           side was taken. What the City bought was five and
+                           five, not ten.
+       designation         whoever is in a fee-for-service bed is billable,
+                           with no census test at all.
+
+     The census function judges every night by whichever is set and writes the
+     reason onto the night itself. This is the part that puts the rule where a
+     person can read it: on the census card, and on the face of the invoice,
+     because a figure that cannot be explained cannot be defended at audit.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+
+  const BASIS = {
+    total_census: {
+      short: 'Total daily census',
+      line: n => `Fee-for-service bed nights &mdash; eligible participants beyond the ${n} reserved beds`,
+      sentence: n => `A night is billable only when the daily census rose above the ${n} reserved beds, `
+        + `whichever beds those participants were in.`
+    },
+    gender_availability: {
+      short: 'Reserved beds available to the participant',
+      line: () => 'Fee-for-service bed nights &mdash; eligible participants beyond the reserved beds available to them',
+      sentence: n => `A night is billable when every reserved bed on that participant's side was already taken, `
+        + `whatever the total census was. The ${n} reserved beds are held as separate men's and women's `
+        + `sides, so a bed on the other side was never available to them.`
+    },
+    designation: {
+      short: 'Bed designation',
+      line: () => 'Fee-for-service bed nights &mdash; eligible participants in fee-for-service beds',
+      sentence: () => 'Every occupied fee-for-service bed is billable, with no census test.'
+    }
+  };
+
+  App.ffsBillingBasis = function(){
+    const b = this.contractPeriod?.ffsBillingBasis || 'total_census';
+    return BASIS[b] ? b : 'total_census';
+  };
+  App.ffsReservedBeds = function(){
+    return this.contractPeriod?.reservedBeds
+      ?? (this.data?.beds || []).filter(b => b.designation === 'reserved' && b.active).length
+      ?? 10;
+  };
+  App.ffsBasisLabel    = function(){ return BASIS[this.ffsBillingBasis()].short; };
+  App.ffsBasisSentence = function(){ return BASIS[this.ffsBillingBasis()].sentence(this.ffsReservedBeds()); };
+  App.ffsBasisLine     = function(){ return BASIS[this.ffsBillingBasis()].line(this.ffsReservedBeds()); };
+
+  /* -------------------------------------------------------- the census card */
+
+  const previousCensusSummary = App.censusSummaryHtml;
+  App.censusSummaryHtml = function(){
+    const html = previousCensusSummary.call(this);
+    const note = `<div class="field-hint" style="margin-top:12px;padding-top:11px;border-top:1px solid var(--rule,#E6E2DA);">`
+      + `<strong>Billing rule in force:</strong> ${esc(this.ffsBasisLabel())}. ${esc(this.ffsBasisSentence())}`
+      + ` Each night below carries the reason it was or was not billed.</div>`;
+    return html.replace('<p class="bed-msg" id="census-msg"></p>', note + '<p class="bed-msg" id="census-msg"></p>');
+  };
+
+  /* ------------------------------------------------------------ the invoice */
+
+  const previousFfsInvoiceHtml = App.ffsInvoiceHtml;
+  App.ffsInvoiceHtml = function(month = this.ffsMonth()){
+    let html = previousFfsInvoiceHtml.call(this, month);
+
+    // The summary line describes what was billed, so it has to describe the
+    // rule that decided it rather than one of the three readings by name.
+    html = html.replace(
+      'Fee-for-service bed nights &mdash; eligible participants beyond the ten reserved beds',
+      this.ffsBasisLine());
+
+    // And the invoice says which rule, in a form an auditor can check against
+    // the participant-level detail printed below it.
+    const footnote = `<p class="field-hint" style="margin:8px 0 0;">`
+      + `<strong>Billing basis:</strong> ${esc(this.ffsBasisLabel())}. ${esc(this.ffsBasisSentence())}</p>`;
+    return html.replace('</tbody></table>\n\n      <div class="fiscal-cert">',
+                        '</tbody></table>' + footnote + '\n\n      <div class="fiscal-cert">');
   };
 })();
 
