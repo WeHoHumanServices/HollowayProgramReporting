@@ -1534,6 +1534,7 @@ th.sortable:hover { color:var(--navy); }
         <div class="sidebar-section">
           <div class="sidebar-label">Fiscal</div>
           <div class="sidebar-item" id="nav-fiscal" data-view="fiscal" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h3M14 12h3M7 16h3M14 16h3"/></svg>Fiscal Reporting</div>
+          <div class="sidebar-item" id="nav-ffs" data-view="ffs" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/><path d="M16 17l2 2 4-4"/></svg>Bed Night Invoice</div>
         </div>
       </nav>
     </aside>
@@ -1550,6 +1551,7 @@ th.sortable:hover { color:var(--navy); }
       <section id="view-referrals" class="view-section"></section>
       <section id="view-quarter" class="view-section"></section>
       <section id="view-monthly" class="view-section"></section>
+      <section id="view-ffs" class="view-section"></section>
       <section id="view-fiscal" class="view-section"></section>
       <section id="view-admin-review" class="view-section"></section>
       <section id="view-access" class="view-section"></section>
@@ -2132,6 +2134,12 @@ const ContractPeriods = {
       start,
       end,
       bedCapacity: row.bed_capacity ?? null,
+      // Fee-for-service terms travel with the period so the invoice reads the
+      // contract year's own rate and cap rather than a constant.
+      ffsRate: row.ffs_rate ?? null,
+      ffsAnnualCap: row.ffs_annual_cap ?? null,
+      reservedBeds: row.reserved_beds ?? null,
+      ffsBeds: row.ffs_beds ?? null,
       quarters: this.deriveQuarters(start, end)
     };
   },
@@ -13899,6 +13907,391 @@ const App = {
     const wrap = document.createElement('div');
     wrap.innerHTML = html;
     el.appendChild(wrap.firstElementChild);
+  };
+})();
+
+
+(function(){
+  /* ==========================================================================
+     Fee-for-service bed night invoice.
+
+     Exhibit A section 3.2 defines the billable unit and 13.2 requires
+     participant-level census detail supporting every night billed. So the
+     invoice takes its lines from the census rather than from typed totals: the
+     nights are the ones the generator already marked billable under the
+     contract rules, and the detail table under the invoice is the evidence.
+
+     Submitting locks those nights. Section 13.2 reserves the City's right to
+     claw back unsupported charges, which only means anything if what was
+     billed stops changing once it is billed.
+
+     The layout deliberately matches Holloway's invoice — same classes, same
+     print path — because a reviewer should not have to learn a second one.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+  const LOGO = 'https://www.governmentjobs.com/AgencyPages/weho/agencyImages/download/weho_white_on_blue.jpg';
+
+  const FFS_STATUS = {
+    draft:              { label:'Draft',              badge:'badge-amber' },
+    submitted:          { label:'Submitted to City',  badge:'badge-navy'  },
+    revision_requested: { label:'Revisions requested',badge:'badge-red'   },
+    paid:               { label:'Paid',               badge:'badge-green' },
+    void:               { label:'Void',               badge:'badge-gray'  }
+  };
+
+  /* ------------------------------------------------------------- loading */
+
+  const previousLoadAllForFfs = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAllForFfs.call(this);
+    if (!this.data) this.data = {};
+    this.data.ffsInvoices = [];
+    const pid = this.program?.id;
+    if (!pid || !this.programHas('has_ffs_invoice') || this.isAgencyFiscal?.()) return;
+    const { data, error } = await this.sb.from('holloway_ffs_invoices')
+      .select('*').eq('program_id', pid).order('invoice_month', { ascending:false });
+    if (error) { console.warn('bed night invoices unavailable', error); return; }
+    this.data.ffsInvoices = data || [];
+  };
+
+  App.ffsMonth = function(){
+    if (this._ffsMonth) return this._ffsMonth;
+    const months = this.monthlyMonths ? this.monthlyMonths() : [];
+    return months.length ? months[0].value : null;
+  };
+
+  App.ffsInvoice = function(month){
+    return (this.data.ffsInvoices || []).find(i => this.dateOnly(i.invoice_month) === month) || null;
+  };
+
+  App.ffsLocked = function(inv){
+    return !!inv && ['submitted','paid'].includes(inv.status) && !this.isAdmin();
+  };
+
+  App.ffsMoney = function(n){
+    return this.fiscalMoney ? this.fiscalMoney(Number(n || 0))
+      : '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits:2, maximumFractionDigits:2 });
+  };
+
+  // The nights behind this month, straight from the census. This is the
+  // evidence section 13.2 asks for, so it is rendered from the same rows the
+  // total was computed from rather than from anything re-entered.
+  App.ffsNightsFor = function(month){
+    const end = this.monthEnd(month);
+    return (this.data.bedNights || [])
+      .filter(n => n.service_date >= month && n.service_date <= end && n.billable)
+      .sort((a,b) => a.service_date.localeCompare(b.service_date)
+                  || String(a.client_id||'').localeCompare(String(b.client_id||'')));
+  };
+
+  App.ffsParticipantRows = function(month){
+    const nights = this.ffsNightsFor(month);
+    const byClient = new Map();
+    nights.forEach(n => {
+      const key = n.client_id || '(bed unassigned)';
+      const row = byClient.get(key) || { client_id: key, nights: 0, dates: [], amount: 0 };
+      row.nights += 1;
+      row.dates.push(n.service_date);
+      row.amount += Number(n.rate || 0);
+      byClient.set(key, row);
+    });
+    return [...byClient.values()].sort((a,b) => a.client_id.localeCompare(b.client_id));
+  };
+
+  // "3, 4, 5, 9" rather than nineteen separate rows — the dates still have to
+  // be readable on a printed page.
+  App.ffsDateRanges = function(dates){
+    if (!dates.length) return '';
+    const days = dates.map(d => Number(d.slice(8,10))).sort((a,b) => a-b);
+    const parts = [];
+    let start = days[0], prev = days[0];
+    for (let i = 1; i <= days.length; i++){
+      const d = days[i];
+      if (d !== prev + 1){
+        parts.push(start === prev ? String(start) : `${start}–${prev}`);
+        start = d;
+      }
+      prev = d;
+    }
+    return parts.join(', ');
+  };
+
+  /* ---------------------------------------------------------------- view */
+
+  App.renderFfsInvoice = function(){
+    const el = document.getElementById('view-ffs');
+    if (!el) return;
+    if (!this.programHas('has_ffs_invoice')) { el.innerHTML = ''; return; }
+
+    const months = this.monthlyMonths ? this.monthlyMonths() : [];
+    const month = this.ffsMonth();
+    if (!month){
+      el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Bed Night Invoice</h1>
+        <div class="page-subtitle">No contract month is open yet for this program.</div></div></div>`;
+      return;
+    }
+
+    const inv = this.ffsInvoice(month);
+    const status = inv?.status || 'draft';
+    const badge = FFS_STATUS[status] || FFS_STATUS.draft;
+    const locked = this.ffsLocked(inv);
+    const canEdit = !locked && (this.canEditQuarter?.() || this.isAdmin());
+
+    const ytd = (this.data.ffsInvoices || [])
+      .filter(i => i.fiscal_year === (inv?.fiscal_year || this.fiscalYear)
+                && ['draft','submitted','paid'].includes(i.status))
+      .reduce((t,i) => t + Number(i.amount || 0), 0);
+    const cap = this.contractPeriod?.ffsAnnualCap ?? null;
+
+    el.innerHTML = `<div class="page-header">
+        <div><h1 class="page-title">Bed Night Invoice</h1>
+          <div class="page-subtitle">Fee-for-service bed nights at the contract rate, taken from the month&rsquo;s census
+            &mdash; Exhibit&nbsp;A sections&nbsp;3.2 and&nbsp;13.2.</div></div>
+        <span class="badge ${badge.badge}">${esc(badge.label)}</span>
+      </div>
+
+      <div class="mr-head">
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+          <div><label class="field-label" for="ffs-month">Invoice month</label>
+            <select class="field-select" id="ffs-month" style="min-width:190px">
+              ${months.map(m => `<option value="${m.value}" ${m.value===month?'selected':''}>${esc(m.label)}</option>`).join('')}
+            </select></div>
+        </div>
+        <div class="client-actions">
+          ${canEdit ? `<button class="btn btn-ghost" id="ffs-generate">Generate from Census</button>` : ''}
+          ${canEdit ? `<button class="btn btn-gold" id="ffs-save">Save Invoice Details</button>` : ''}
+          ${canEdit && !this.isAdmin?.() ? `<button class="btn btn-primary" id="ffs-submit">Certify and Submit</button>` : ''}
+          <button class="btn btn-ghost" id="ffs-print">Print / Save Invoice PDF</button>
+        </div>
+      </div>
+
+      ${locked ? `<div class="mr-locked">Submitted to the City on ${this.formatDate(this.dateOnly(inv.submitted_at))}.
+        The ${inv.nights_billed} bed night${inv.nights_billed===1?'':'s'} behind it are locked and will not change if the
+        census is regenerated.</div>` : ''}
+
+      <div class="card" style="margin-top:16px"><div class="card-header">
+          <div><h2 class="card-title">Invoice Details</h2>
+            <div class="field-hint">The number, PO and vendor are the City&rsquo;s; everything below the line comes from the census.</div></div>
+        </div><div class="card-body">
+          <div class="client-form-grid">
+            <div class="field-group"><label class="field-label" for="ffs-number">Invoice number</label>
+              <input type="text" class="field-input" id="ffs-number" ${canEdit?'':'disabled'}
+                     value="${esc(inv?.invoice_number || '')}" placeholder="310-26-1126"></div>
+            <div class="field-group"><label class="field-label" for="ffs-date">Invoice date</label>
+              <input type="date" class="field-input" id="ffs-date" ${canEdit?'':'disabled'}
+                     value="${esc(this.dateOnly(inv?.invoice_date) || '')}"></div>
+            <div class="field-group"><label class="field-label" for="ffs-po">PO number</label>
+              <input type="text" class="field-input" id="ffs-po" ${canEdit?'':'disabled'}
+                     value="${esc(inv?.po_number || '')}"></div>
+            <div class="field-group"><label class="field-label" for="ffs-vendor">Vendor number</label>
+              <input type="text" class="field-input" id="ffs-vendor" ${canEdit?'':'disabled'}
+                     value="${esc(inv?.vendor_number || '')}"></div>
+          </div>
+          <div class="mr-grid" style="margin-top:8px">
+            <div class="mr-stat"><div class="mr-stat-label">Billable nights</div>
+              <div class="mr-stat-value">${inv?.nights_billed ?? '—'}</div>
+              <div class="mr-stat-sub">of ${inv?.nights_occupied ?? '—'} occupied</div></div>
+            <div class="mr-stat"><div class="mr-stat-label">Participants</div>
+              <div class="mr-stat-value">${inv?.participants ?? '—'}</div>
+              <div class="mr-stat-sub">in fee-for-service beds</div></div>
+            <div class="mr-stat"><div class="mr-stat-label">Rate</div>
+              <div class="mr-stat-value">${inv?.rate ? this.ffsMoney(inv.rate) : '—'}</div>
+              <div class="mr-stat-sub">per bed night</div></div>
+            <div class="mr-stat"><div class="mr-stat-label">Amount due</div>
+              <div class="mr-stat-value">${this.ffsMoney(inv?.amount)}</div>
+              <div class="mr-stat-sub">${ytd ? this.ffsMoney(ytd) + ' billed this contract year' : 'first invoice this year'}</div></div>
+          </div>
+          <div class="field-hint" style="margin-top:10px">${cap == null
+            ? 'No annual fee-for-service cap is on file, so cumulative spend is shown without one. An unenforced limit should not look like a satisfied one.'
+            : 'Annual cap ' + this.ffsMoney(cap) + '.'}</div>
+          ${inv?.generated_at ? `<div class="mr-generated">Lines generated from the census
+            ${this.formatDate(this.dateOnly(inv.generated_at))}${inv.generated_by ? ' by ' + esc(inv.generated_by) : ''}.</div>`
+            : '<div class="mr-empty" style="margin-top:8px">Nothing generated for this month yet.</div>'}
+          ${canEdit && !this.isAdmin?.() ? `
+            <div class="field-group" style="margin-top:14px"><label class="field-label" for="ffs-certifier">Certified by</label>
+              <input type="text" class="field-input" id="ffs-certifier"
+                     value="${esc(inv?.certified_by || this.profile?.full_name || '')}" placeholder="Your name"></div>` : ''}
+          <p class="mr-msg" id="ffs-msg"></p>
+        </div></div>
+
+      <div class="card" style="margin-top:22px"><div class="card-header">
+          <div><h2 class="card-title">Invoice Preview</h2>
+            <div class="field-hint">This is what prints, including the participant-level detail section&nbsp;13.2 requires.</div></div>
+        </div><div class="card-body">${this.ffsInvoiceHtml(month)}</div></div>`;
+
+    el.querySelector('#ffs-month')?.addEventListener('change', e => {
+      this._ffsMonth = e.target.value; this.renderFfsInvoice();
+    });
+    el.querySelector('#ffs-generate')?.addEventListener('click', () => this.generateFfsInvoice());
+    el.querySelector('#ffs-save')?.addEventListener('click', () => this.saveFfsInvoice());
+    el.querySelector('#ffs-submit')?.addEventListener('click', () => this.submitFfsInvoice());
+    el.querySelector('#ffs-print')?.addEventListener('click', () => this.printFfsInvoice());
+  };
+
+  /* ------------------------------------------------------------- the page */
+
+  App.ffsInvoiceHtml = function(month = this.ffsMonth()){
+    const inv = this.ffsInvoice(month);
+    const rows = this.ffsParticipantRows(month);
+    const from = month, to = this.monthEnd(month);
+    const label = new Date(month + 'T00:00:00').toLocaleDateString(undefined, { month:'long', year:'numeric' });
+    const p = this.program || {};
+    const addr = (t) => esc(t || '').split('\n').join('<br>');
+
+    const detail = rows.length ? `<table class="print-table"><thead><tr>
+        <th>Participant</th><th>Service dates</th><th style="text-align:right">Nights</th>
+        <th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td>${esc(r.client_id)}</td>
+        <td>${esc(label.split(' ')[0])} ${esc(this.ffsDateRanges(r.dates))}</td>
+        <td style="text-align:right">${r.nights}</td>
+        <td style="text-align:right">${this.ffsMoney(r.amount / (r.nights || 1))}</td>
+        <td style="text-align:right">${this.ffsMoney(r.amount)}</td></tr>`).join('')}
+        <tr class="print-total-row"><td><strong>Total</strong></td><td></td>
+          <td style="text-align:right"><strong>${rows.reduce((t,r)=>t+r.nights,0)}</strong></td><td></td>
+          <td style="text-align:right"><strong>${this.ffsMoney(rows.reduce((t,r)=>t+r.amount,0))}</strong></td></tr>
+      </tbody></table>`
+      : '<div class="mr-empty">No billable bed nights in this month. Generate the census on the Bed Board first.</div>';
+
+    return `<div class="fiscal-invoice" id="ffs-invoice">
+      <div class="fiscal-invoice-head">
+        <div><img class="print-logo" src="${LOGO}" alt="City of West Hollywood logo">
+          <div class="fiscal-invoice-title">INVOICE</div>
+          <div class="field-hint">${esc(p.name || 'Program')}</div></div>
+        <div style="text-align:right;font-size:12px;">
+          <div><strong>Invoice #</strong> ${esc(inv?.invoice_number || '—')}</div>
+          <div><strong>Invoice date</strong> ${inv?.invoice_date ? this.formatDate(this.dateOnly(inv.invoice_date)) : '—'}</div>
+          <div><strong>PO #</strong> ${esc(inv?.po_number || '—')}</div>
+          <div><strong>Vendor #</strong> ${esc(inv?.vendor_number || '—')}</div>
+        </div>
+      </div>
+
+      <div class="fiscal-address-grid">
+        <div class="fiscal-address-box"><strong>Customer</strong><br>City of West Hollywood<br>Human Services Division<br>
+          8300 Santa Monica Blvd.<br>West Hollywood, CA 90069</div>
+        <div class="fiscal-address-box"><strong>Service Location</strong><br>${addr(p.service_address)}
+          <br><br><strong>Agency / Remit To</strong><br>${esc(this.agencyName ? this.agencyName() : 'Agency')}<br>${addr(p.remit_address)}</div>
+      </div>
+
+      <div class="notice navy"><div>i</div><div>${esc(label)} fee-for-service bed nights for the
+        ${esc(p.name || 'program')}.<br><strong>Service period:</strong> ${this.formatDate(from)} &ndash; ${this.formatDate(to)}</div></div>
+
+      <table class="print-table invoice-summary-table"><thead><tr>
+          <th>Description</th><th style="text-align:right">Nights</th>
+          <th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead>
+        <tbody>
+          <tr><td>Fee-for-service bed nights &mdash; eligible participants beyond the ten reserved beds</td>
+            <td style="text-align:right">${inv?.nights_billed ?? 0}</td>
+            <td style="text-align:right">${this.ffsMoney(inv?.rate)}</td>
+            <td style="text-align:right">${this.ffsMoney(inv?.amount)}</td></tr>
+          <tr class="print-total-row"><td><strong>Total Amount Due</strong></td><td></td><td></td>
+            <td style="text-align:right"><strong>${this.ffsMoney(inv?.amount)}</strong></td></tr>
+        </tbody></table>
+
+      <div class="fiscal-cert"><strong>Certification</strong><br>
+        ${esc(inv?.certification_text || 'I certify that the bed nights invoiced were delivered during the service period shown, are eligible under the agreement, and are supported by the participant-level census detail submitted with this invoice.')}
+        ${inv?.certified_by ? `<div style="margin-top:8px"><strong>Certified/submitted by:</strong> ${esc(inv.certified_by)}
+          ${inv.submitted_at ? ' &middot; ' + this.formatDate(this.dateOnly(inv.submitted_at)) : ''}</div>` : ''}</div>
+
+      <div style="margin-top:26px">
+        <h2 style="color:var(--navy);font-size:15px;border-bottom:2px solid var(--gold);padding-bottom:6px">
+          Participant-Level Census Detail</h2>
+        <p class="field-hint" style="margin:8px 0 4px">Every night billed above, by participant, as required by
+          Exhibit&nbsp;A section&nbsp;13.2. Participants are shown by their programme identifier; no names appear on an invoice.</p>
+        ${detail}
+      </div>
+    </div>`;
+  };
+
+  /* ------------------------------------------------------------- actions */
+
+  App.ffsMsg = function(text, kind){
+    const el = document.getElementById('ffs-msg');
+    if (el) { el.textContent = text; el.className = 'mr-msg' + (kind ? ' ' + kind : ''); }
+  };
+
+  App.generateFfsInvoice = async function(){
+    const month = this.ffsMonth();
+    this.ffsMsg('Generating from the census…');
+    const { data, error } = await this.sb.rpc('holloway_generate_ffs_invoice', {
+      p_program_id: this.program.id, p_month: month
+    });
+    if (error) { this.ffsMsg('Could not generate: ' + error.message, 'err'); return; }
+    await this.loadAll();
+    this.renderFfsInvoice();
+    const nights = data?.nights_billed ?? 0;
+    this.ffsMsg(`${nights} billable bed night${nights===1?'':'s'} totalling ${this.ffsMoney(data?.amount)}.`
+      + (data?.cap_state === 'over_cap' ? ' This month takes the year past the annual cap.' : ''),
+      data?.cap_state === 'over_cap' ? 'err' : 'ok');
+  };
+
+  App.saveFfsInvoice = async function(){
+    const month = this.ffsMonth();
+    const v = x => { const el = document.getElementById(x); const s = el ? String(el.value).trim() : ''; return s === '' ? null : s; };
+    const payload = {
+      invoice_number: v('ffs-number'), invoice_date: v('ffs-date'),
+      po_number: v('ffs-po'), vendor_number: v('ffs-vendor')
+    };
+    this.ffsMsg('Saving…');
+    let error;
+    if (this.ffsInvoice(month)) {
+      ({ error } = await this.sb.from('holloway_ffs_invoices').update(payload)
+        .eq('program_id', this.program.id).eq('invoice_month', month));
+    } else {
+      ({ error } = await this.sb.from('holloway_ffs_invoices')
+        .insert(Object.assign({ program_id: this.program.id, invoice_month: month,
+                                fiscal_year: this.fiscalYear, status: 'draft' }, payload)));
+    }
+    if (error) { this.ffsMsg('Could not save: ' + error.message, 'err'); return; }
+    await this.loadAll();
+    this.renderFfsInvoice();
+    this.ffsMsg('Saved.', 'ok');
+  };
+
+  App.submitFfsInvoice = async function(){
+    const month = this.ffsMonth();
+    const certifier = document.getElementById('ffs-certifier')?.value?.trim() || '';
+    // Save the header fields first, so submitting never fails on a number the
+    // person has typed but not yet saved.
+    await this.saveFfsInvoice();
+    this.ffsMsg('Submitting…');
+    const { data, error } = await this.sb.rpc('holloway_submit_ffs_invoice', {
+      p_program_id: this.program.id, p_month: month, p_certified_by: certifier
+    });
+    if (error) { this.ffsMsg('Could not submit: ' + error.message, 'err'); return; }
+    if (!data?.ok) { this.ffsMsg(data?.message || 'The invoice could not be submitted.', 'err'); return; }
+    await this.loadAll();
+    this.renderFfsInvoice();
+    this.ffsMsg(`Submitted. ${data.nights_locked} bed night${data.nights_locked===1?'':'s'} are now locked.`, 'ok');
+  };
+
+  App.printFfsInvoice = function(){
+    const month = this.ffsMonth();
+    const target = document.getElementById('print-report');
+    if (!target) { window.print(); return; }
+    const label = new Date(month + 'T00:00:00').toLocaleDateString(undefined, { month:'long', year:'numeric' });
+    target.innerHTML = `<div class="print-page-header"><strong>${esc(this.program?.name || '')}</strong> &middot;
+        ${esc(label)} Bed Night Invoice &middot; Generated ${new Date().toLocaleDateString()}</div>
+      ${this.ffsInvoiceHtml(month)}
+      <div class="print-footer"><img class="print-footer-logo" src="${LOGO}" alt="City of West Hollywood logo">
+        Prepared through the Interim Housing &amp; Shelter Reporting Portal &middot; City of West Hollywood Human Services Division</div>`;
+    window.print();
+  };
+
+  /* ------------------------------------------------------------ plumbing */
+
+  const previousShowViewForFfs = App.showView;
+  App.showView = function(view){
+    previousShowViewForFfs.call(this, view);
+    if (view === 'ffs') this.renderFfsInvoice();
+  };
+
+  const previousSidebarForFfs = App.renderSidebarForRole;
+  App.renderSidebarForRole = function(){
+    previousSidebarForFfs.call(this);
+    const nav = document.getElementById('nav-ffs');
+    if (nav && !this.isAgencyFiscal?.()) nav.style.display = this.programHas('has_ffs_invoice') ? 'flex' : 'none';
   };
 })();
 
