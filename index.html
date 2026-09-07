@@ -14890,8 +14890,20 @@ const App = {
 
   /* ----------------------------------------------------- 2. goals in the report */
 
+  // Whether this program's dashboard uses the grouped Annual Contract Goals
+  // card instead of the built-in year-to-date panel.
+  //
+  // This used to be inferred from whether any target carried a metric_group,
+  // which turned out to be far too quiet a signal: giving Holloway's single
+  // Permanent Housing Exit Rate target a group — an entirely reasonable edit —
+  // replaced Holloway's whole YTD dashboard with a one-row card and suppressed
+  // its own goal grid. The decision now sits on the program, beside the other
+  // has_* flags, where changing it is deliberate. The old heuristic survives
+  // only for a deployment whose programs table predates the column.
   App.hasContractGoals = function(){
-    return (this.contractGoals ? this.contractGoals() : []).length > 0;
+    const grouped = (this.contractGoals ? this.contractGoals() : []).length > 0;
+    const flag = this.program?.has_contract_goals_card;
+    return typeof flag === 'boolean' ? (flag && grouped) : grouped;
   };
 
   // One shape for both consumers: the report card and the printed table.
@@ -15710,6 +15722,172 @@ const App = {
     actions.insertAdjacentHTML('afterbegin',
       '<button class="btn btn-ghost" id="mr-print">Print / Save PDF</button>');
     el.querySelector('#mr-print').addEventListener('click', () => this.printMonthly());
+  };
+})();
+
+
+
+(function(){
+  /* ==========================================================================
+     Referral Pipeline — bringing the screen up to the rest of the portal.
+
+     Nothing here changes what the pipeline does or what it counts. Five things
+     were making it read as the rough one:
+
+       1. The filters were five loose ghost buttons with the active one turned
+          gold. Every other filter in the portal is a segmented control, and
+          that is what these are now.
+
+       2. Every column was free to size itself, so "City of West Hollywood"
+          broke across three lines, the "Community Member" heading wrapped, and
+          rows ended up at three different heights. The table now has a column
+          plan.
+
+       3. The two service-level columns said "Acknowledge on time",
+          "Acknowledge due 9/8/2026" and "Acknowledge 2 business days overdue" —
+          three different sentence shapes stacked in one column, under a heading
+          that already said Acknowledgement. The badge now carries the verb and
+          the detail as separate spans, so the table can show just the detail
+          while the detail panel — where the two badges sit together with no
+          headings — still shows both.
+
+       4. Nothing was aligned to a baseline; cells floated to vertical centre at
+          different heights.
+
+       5. The holiday footnote was a long grey run-on under the table.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+
+  const st = document.createElement('style');
+  st.textContent = `
+    /* ---- the service level badges ---------------------------------------- */
+    .sla-badge { display:inline-flex; align-items:baseline; gap:4px; padding:3px 9px; }
+    .sla-detail { display:inline-block; }
+    /* In the table the column heading already names the step, so the verb is
+       redundant; in the detail panel the two badges sit alone and need it. */
+    .pipe-table .sla-verb { display:none; }
+    .pipe-table .sla-detail::first-letter { text-transform:uppercase; }
+    .pipe-table .sla-badge { min-width:132px; justify-content:center; }
+
+    /* ---- the column plan -------------------------------------------------- */
+    .pipe-table { table-layout:fixed; width:100%; }
+    .pipe-table th, .pipe-table td { vertical-align:top; }
+    .pipe-table td { padding-top:11px; padding-bottom:11px; }
+    .pipe-table th { white-space:nowrap; }
+    .pipe-col-received   { width:96px; }
+    .pipe-col-member     { width:auto; min-width:150px; }
+    .pipe-col-source     { width:190px; }
+    .pipe-col-stage      { width:112px; }
+    .pipe-col-clock      { width:158px; }
+    .pipe-col-admission  { width:116px; }
+    .pipe-col-actions    { width:86px; }
+    .pipe-table td:first-child { white-space:nowrap; color:var(--gray-600); }
+    /* The source name and the agency beneath it are both block, so the <br>
+       the row template puts between them would open an empty line. */
+    .pipe-table td br { display:none; }
+    .pipe-table .pipe-source { display:block; white-space:normal; line-height:1.35; }
+    .pipe-table td .field-hint { display:block; line-height:1.35; margin-top:2px; }
+    .pipe-table .pipe-stage  { display:inline-block; line-height:1.3; }
+    .pipe-table .client-actions { justify-content:flex-end; }
+    .pipe-dash { color:var(--gray-300); }
+
+    /* ---- the filter, as a segmented control ------------------------------- */
+    .pipe-filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:14px 0 12px; }
+    .pipe-filters .segment-btn { display:inline-flex; align-items:center; gap:7px; }
+    .pipe-count {
+      display:inline-block; min-width:19px; padding:1px 6px; border-radius:999px;
+      background:var(--gray-100); color:var(--gray-600); font-size:11px; font-weight:800;
+      font-variant-numeric:tabular-nums; line-height:1.5;
+    }
+    .segment-btn.active .pipe-count { background:rgba(255,255,255,.20); color:#fff; }
+    .segment-btn.is-alert:not(.active) { border-color:#F0C3C1; color:#98241F; }
+    .segment-btn.is-alert:not(.active) .pipe-count { background:#FBEAEA; color:#98241F; }
+
+    /* ---- the footnote ----------------------------------------------------- */
+    .pipe-holiday-note {
+      margin-top:14px; padding:9px 12px; border-left:2px solid var(--border);
+      background:var(--gray-50, #FAFAF8); border-radius:0 var(--radius) var(--radius) 0;
+      font-size:11.5px; line-height:1.55; color:var(--gray-500);
+    }
+  `;
+  document.head.appendChild(st);
+
+  /* ------------------------------------------------------- the badge markup */
+
+  // The verb and the detail travel as separate spans so that where the badge
+  // appears decides how much of it is shown, rather than the badge guessing.
+  App.slaBadge = function(state, due, daysLate, label){
+    const detail = {
+      met:       'on time',
+      met_late:  `${daysLate} business day${daysLate === 1 ? '' : 's'} late`,
+      open:      `due ${this.formatDate(due)}`,
+      due_today: 'due today',
+      overdue:   `${daysLate} business day${daysLate === 1 ? '' : 's'} overdue`
+    }[state] || '—';
+    // The space between the two spans keeps the text content — and anything
+    // reading it aloud — as "Acknowledge on time" rather than running the two
+    // halves together. A flex container ignores whitespace-only nodes, so it
+    // costs nothing visually.
+    return `<span class="sla-badge sla-${esc(state)}">`
+      + `<span class="sla-verb">${esc(label)}</span> `
+      + `<span class="sla-detail">${esc(detail)}</span></span>`;
+  };
+
+  /* -------------------------------------------------------- the screen ---- */
+
+  const COLS = ['received','member','source','stage','clock','clock','admission','actions'];
+
+  const previousRenderReferralsForPolish = App.renderReferrals;
+  App.renderReferrals = function(){
+    previousRenderReferralsForPolish.call(this);
+
+    const el = document.getElementById('view-referrals');
+    // Only the pipeline view has the service-level strip; the plain referral
+    // list a program without the pipeline gets is left exactly as it was.
+    if (!el || !el.querySelector('.sla-strip')) return;
+
+    // ---- the table gets a column plan --------------------------------------
+    const table = el.querySelector('.client-table');
+    if (table && !table.classList.contains('pipe-table')){
+      table.classList.add('pipe-table');
+      const heads = [...table.querySelectorAll('thead th')];
+      if (heads.length === COLS.length){
+        heads.forEach((th, i) => th.classList.add('pipe-col-' + COLS[i]));
+        heads[1].textContent = 'Participant';   // fits the column without wrapping
+      }
+      table.querySelectorAll('tbody td').forEach(td => {
+        if (td.textContent.trim() === '—' && !td.querySelector('.sla-badge')){
+          td.innerHTML = '<span class="pipe-dash">—</span>';
+        }
+      });
+    }
+
+    // ---- the filters become the portal's segmented control ------------------
+    const buttons = [...el.querySelectorAll('[data-pipe-filter]')];
+    const row = buttons[0]?.parentElement;
+    if (row && buttons.length){
+      const current = this._pipeFilter;
+      const seg = document.createElement('div');
+      seg.className = 'pipe-filters segmented-row';
+      buttons.forEach(b => {
+        const label = b.dataset.pipeFilter;
+        // The counts were baked into the button text; read them back out
+        // rather than recomputing and risking a different answer.
+        const count = (b.textContent.match(/\((\d+)\)\s*$/) || [,''])[1];
+        const alert = label === 'Overdue' && Number(count) > 0;
+        seg.insertAdjacentHTML('beforeend',
+          `<button type="button" class="segment-btn${current === label ? ' active' : ''}`
+          + `${alert ? ' is-alert' : ''}" data-pipe-filter="${esc(label)}">`
+          + `${esc(label)}<span class="pipe-count">${esc(count)}</span></button>`);
+      });
+      row.replaceWith(seg);
+      seg.querySelectorAll('[data-pipe-filter]').forEach(b =>
+        b.addEventListener('click', () => {
+          this._pipeFilter = b.dataset.pipeFilter;
+          this.renderReferrals();
+        }));
+    }
   };
 })();
 
