@@ -1641,6 +1641,30 @@ button, input, select, textarea { font-family: var(--font-ui); }
 }
 </style>
 
+<style>
+/* ------------------------------------------------------------------
+   Record-level management on service contacts and case notes.
+   Service contacts and case notes can now be opened, corrected and
+   removed from the row itself, so a mis-keyed entry is fixed where it
+   is read rather than left standing in the quarterly tallies.
+   ------------------------------------------------------------------ */
+.recent-service-list{display:flex;flex-direction:column;gap:0;max-height:340px;overflow-y:auto;margin-bottom:10px;padding-right:2px}
+.recent-service-actions{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.recent-service-actions .btn-sm{padding:3px 9px;font-size:11px}
+.svc-row-actions,.cn-row-actions{white-space:nowrap}
+.svc-row-actions .btn-sm,.cn-row-actions .btn-sm{padding:3px 9px;font-size:11px;margin-right:5px}
+.svc-row-actions .btn-sm:last-child,.cn-row-actions .btn-sm:last-child{margin-right:0}
+.svc-note-cell{max-width:320px}
+.cn-nowrap{white-space:nowrap;vertical-align:top}
+/* Case notes are written in a G / I / R / P structure with blank lines
+   between the parts. Rendering them in a plain cell collapsed every
+   break into one run-on paragraph, so a note staff had just written did
+   not look like the note they wrote. */
+.case-note-table td{vertical-align:top}
+.cn-note-cell{white-space:pre-wrap;max-width:520px;line-height:1.5}
+.btn.btn-danger[data-armed="1"]{box-shadow:0 0 0 3px rgba(200,40,40,.18)}
+</style>
+
 </head>
 
 <body>
@@ -1934,6 +1958,7 @@ button, input, select, textarea { font-family: var(--font-ui); }
     <div class="form-footer">
       <div class="save-state" id="service-save-state">Not saved this session</div>
       <div style="display:flex;gap:10px;">
+        <button class="btn btn-danger" id="btn-delete-service" style="display:none;">Delete Service</button>
         <button class="btn btn-ghost" data-close="service">Close</button>
         <button class="btn btn-gold" id="btn-save-service">Save Service</button>
       </div>
@@ -6822,8 +6847,12 @@ const App = {
     const status=this.simpleClientStatus(c);
     const selectedReasons=this.clientExitReasons(c);
     const progress=c.housing_plan_status || 'Intake Complete';
-    const services=(this.data.clientServices||[]).filter(s=>s.client_id===id).slice(0,5);
-    const recent=services.map(s=>`<div class="recent-service-row"><div><strong>${this.escape(s.service_type||'Service')}</strong><br><span class="field-hint">${this.formatDate(s.service_date)}</span></div><span class="field-hint">${Number(s.duration_minutes||0)} min</span></div>`).join('') || '<div class="field-hint">No services recorded yet.</div>';
+    // Every contact on file, newest first — this panel used to cap at five with
+    // no way to see the rest, so a client with a full history looked like one
+    // with five visits and a freshly-logged contact could sit out of sight.
+    const services=(this.data.clientServices||[]).filter(s=>s.client_id===id)
+      .sort((a,b)=>String(this.dateOnly(b.service_date)||'').localeCompare(String(this.dateOnly(a.service_date)||'')));
+    const recent=services.map(s=>`<div class="recent-service-row"><div><strong>${this.escape(this.serviceLabel(s))}</strong>${s.is_group_session?' <span class="badge badge-navy group-pill">Group</span>':''}<br><span class="field-hint">${this.formatDate(s.service_date)}${s.staff_name?' · '+this.escape(s.staff_name):''}</span></div><div class="recent-service-actions"><span class="field-hint">${Number(s.duration_minutes||0)} min</span><button type="button" class="btn btn-ghost btn-sm" data-edit-service="${this.escape(s.id)}">Edit</button><button type="button" class="btn btn-ghost btn-sm" data-del-service="${this.escape(s.id)}">Delete</button></div></div>`).join('') || '<div class="field-hint">No services recorded yet.</div>';
     const updates=(this.data.clientUpdates||[]).filter(u=>u.client_id===id).sort((a,b)=>(b.quarter||'').localeCompare(a.quarter||'')).slice(0,5);
     const recentUpdates=updates.map(u=>`<div class="recent-service-row"><div><strong>${this.escape(u.quarter||'—')}</strong><br><span class="field-hint">${this.escape(u.income_change||'—')}</span></div><span class="field-hint">${u.income_at_update!=null?'$'+u.income_at_update:''}</span></div>`).join('') || '<div class="field-hint">No income/benefits updates recorded yet.</div>';
     document.getElementById('client-title').textContent = id ? `Client Profile · ${this.escape(this.clientDisplayId(c))}` : 'New Client Intake';
@@ -6832,7 +6861,7 @@ const App = {
       <div class="form-section"><div class="form-section-title">Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Client Name <span class="field-hint">Agency use only</span></label><input id="cf-client-name" class="field-input" value="${this.escape(c.client_name||'')}"></div><div class="field-group"><label class="field-label">Age</label><input id="cf-age" type="number" class="field-input" value="${c.age||''}"></div><div class="field-group"><label class="field-label">Gender Identity</label><select id="cf-gender" class="field-select"><option></option>${opt(this.hmisGenderOptions(), c.gender)}</select><div id="cf-gender-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify gender identity</label><input id="cf-gender-other" class="field-input" value="${this.escape(c.gender_other||'')}"></div><div class="field-hint">Transgender experience is captured separately below and is not treated as a gender.</div></div><div class="field-group"><label class="field-label">Transgender Experience</label><select id="cf-transgender-status" class="field-select"><option></option>${opt(['Yes','No','Questioning','Client doesn’t know','Client prefers not to answer','Data not collected'], c.transgender_status)}</select></div><div class="field-group"><label class="field-label">Race / Ethnicity</label><select id="cf-race" class="field-select"><option></option>${opt(this.hmisRaceEthnicityOptions(), c.race_ethnicity)}</select><div id="cf-race-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify race/ethnicity</label><input id="cf-race-other" class="field-input" value="${this.escape(c.race_ethnicity_other||'')}"></div></div><div class="field-group"><label class="field-label">Primary Language</label><select id="cf-primary-language" class="field-select"><option></option>${opt(['English','Spanish','Russian','Farsi','Other'], c.primary_language||c.household_language||c.language)}</select><div id="cf-primary-language-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify language</label><input id="cf-primary-language-other" class="field-input" value="${this.escape(c.primary_language_other||'')}"></div></div>${this.yesNoSegment('cf-veteran','Veteran Status',c.veteran)}${this.yesNoSegment('cf-disability','Disability Status',c.disability)}</div><details style="margin-top:12px;"><summary class="field-label" style="cursor:pointer;">Additional Information</summary><div class="client-form-grid" style="margin-top:12px;"><div class="field-group"><label class="field-label">Income at Entry</label><input id="cf-income-entry" type="number" class="field-input" value="${c.income_at_entry||''}"></div></div></details></div>
       <div class="form-section"><div class="form-section-title">Housing & Case Management</div><div class="housing-progress">${this.housingProgressOptions().map(v=>`<button type="button" class="hp-step ${progress===v?'active':''}" data-housing-progress="${this.escape(v)}">○ ${this.escape(v)}</button>`).join('')}</div><input type="hidden" id="cf-housing-plan" value="${this.escape(progress)}"><div class="client-form-grid" style="margin-top:14px;"><div class="field-group"><label class="field-label">Expected Exit Date</label><input id="cf-expected-exit" type="date" class="field-input" value="${this.dateOnly(c.expected_exit_date)}"></div><div class="field-group full"><label class="field-label">Intake Milestones</label><div class="field-hint" style="margin-bottom:8px;">Tick each item once it is complete. The date defaults to the intake date — change it if the item was finished later. Leave unticked if it has not happened yet.</div><div class="reason-list">${this.intakeMilestoneDefs().map(m=>{const val=this.dateOnly(c[m.col]);return `<label class="reason-row" style="display:flex;align-items:center;gap:10px;"><input type="checkbox" class="cf-milestone-check" data-milestone="${m.id}" ${val?'checked':''}><span style="flex:1;">${this.escape(m.label)}</span><input id="${m.id}" type="date" class="field-input cf-milestone-date" style="max-width:172px;" value="${val}" ${val?'':'disabled'}></label>`}).join('')}</div><button type="button" class="btn btn-ghost btn-sm" id="cf-milestones-all" style="margin-top:8px;">Mark all three complete at intake date</button></div></div></div>
       <div id="cf-exit-section" class="form-section exit-section ${status==='Exited'?'':'is-hidden'}"><div class="form-section-title">Exit Information</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Exit Date</label><input id="cf-exit-date" type="date" class="field-input" value="${this.dateOnly(c.exit_date)}"></div><div class="field-group"><label class="field-label">Exit Destination</label><select id="cf-exit-type" class="field-select"><option></option>${opt(this.exitDestinationOptions(), c.exit_destination_type)}</select><div id="cf-exit-type-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please describe exit destination</label><input id="cf-exit-type-other" class="field-input" value="${this.escape(c.exit_destination_other||'')}"></div></div><div class="field-group full"><label class="field-label">Reason for Exit</label><div class="field-hint" style="margin-bottom:7px;">Select every reason that applies.</div><div class="reason-list" id="cf-exit-reason-list">${this.exitReasonOptions().map((r,i)=>`<label class="reason-row"><input type="checkbox" class="cf-exit-reason" id="cf-exit-reason-${i}" value="${this.escape(r)}" ${selectedReasons.includes(r)?'checked':''}><span>${this.escape(r)}</span></label>`).join('')}</div><div id="cf-exit-reason-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required" for="cf-exit-reason-other">Please specify reason for exit</label><input id="cf-exit-reason-other" class="field-input" value="${this.escape(c.exit_reason_other||'')}"></div></div><div class="field-group"><label class="field-label">Specific Destination / Notes</label><input id="cf-exit-destination" class="field-input" value="${this.escape(c.exit_destination||'')}"></div><div class="field-group"><label class="field-label">Income at Exit</label><input id="cf-income-exit" type="number" class="field-input" value="${c.income_at_exit||''}"></div><div class="field-group full"><label class="field-label">Outcome Notes</label><textarea id="cf-exit-notes" class="field-textarea">${this.escape(c.exit_notes||'')}</textarea></div></div></div>
-      <div class="form-section"><div class="form-section-title">Recent Services</div>${recent}<button class="btn btn-ghost btn-sm" id="cf-add-service" ${id?'':'disabled'}>+ Add Service</button><div class="field-hint" style="margin-top:6px;">Save the client before adding services.</div></div><div class="form-section"><div class="form-section-title">Income / Benefits Updates</div>${recentUpdates}<button class="btn btn-ghost btn-sm" id="cf-add-update" ${id?'':'disabled'}>+ Add Update</button><div class="field-hint" style="margin-top:6px;">Save the client before adding an update. One update per quarter.</div></div><div id="cf-quality" class="data-quality-list"></div>
+      <div class="form-section"><div class="form-section-title">Service Contacts</div><div class="field-hint" style="margin-bottom:8px;">${services.length} contact${services.length===1?'':'s'} on file. Service contacts feed the quarterly service tallies; case notes do not.</div><div class="recent-service-list">${recent}</div><button class="btn btn-ghost btn-sm" id="cf-add-service" ${id?'':'disabled'}>+ Add Service</button><div class="field-hint" style="margin-top:6px;">Save the client before adding services.</div></div><div class="form-section"><div class="form-section-title">Income / Benefits Updates</div>${recentUpdates}<button class="btn btn-ghost btn-sm" id="cf-add-update" ${id?'':'disabled'}>+ Add Update</button><div class="field-hint" style="margin-top:6px;">Save the client before adding an update. One update per quarter.</div></div><div id="cf-quality" class="data-quality-list"></div>
     </div>${this.reportingSummaryHtml({...c,housing_plan_status:progress})}</div>`;
     this.openOverlay('client');
     const isOtherValue=(v)=>String(v||'').toLowerCase().includes('other') || String(v||'').toLowerCase().includes('different identity') || String(v||'').toLowerCase().includes('additional race');
@@ -6861,7 +6890,11 @@ const App = {
     document.querySelectorAll('[data-status]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-status]').forEach(x=>x.classList.remove('active')); b.classList.add('active'); document.getElementById('cf-status').value=b.dataset.status; document.getElementById('cf-exit-section').classList.toggle('is-hidden', b.dataset.status!=='Exited'); refresh();}));
     document.querySelectorAll('[data-segment-group]').forEach(g=>g.querySelectorAll('.segment-btn').forEach(b=>b.addEventListener('click',()=>{g.querySelectorAll('.segment-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active'); document.getElementById(g.dataset.segmentGroup).value=b.dataset.value;})));
     document.querySelectorAll('[data-housing-progress]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-housing-progress]').forEach(x=>x.classList.remove('active')); b.classList.add('active'); document.getElementById('cf-housing-plan').value=b.dataset.housingProgress;}));
-    document.getElementById('cf-add-service')?.addEventListener('click',()=>{ this.closeForm('client'); this.openServiceForm(null,id); });
+    document.getElementById('cf-add-service')?.addEventListener('click',()=>{ this.closeForm('client'); this.openServiceForm(null,id); this._serviceReturnClientId=id; });
+    // Edit and delete for a contact already on the record. The return marker is
+    // set after the call because openServiceForm clears it on open.
+    document.getElementById('client-body')?.querySelectorAll('[data-edit-service]').forEach(b=>b.addEventListener('click',()=>{ this.closeForm('client'); this.openServiceForm(b.dataset.editService,id); this._serviceReturnClientId=id; }));
+    document.getElementById('client-body')?.querySelectorAll('[data-del-service]').forEach(b=>b.addEventListener('click',()=>{ this._serviceReturnClientId=id; this.deleteService(b.dataset.delService,b); }));
     document.getElementById('cf-add-update')?.addEventListener('click',()=>{ this.closeForm('client'); this.openClientUpdateForm(id); });
     ['cf-hmis-id','cf-entry-date','cf-expected-exit','cf-exit-date','cf-exit-type'].forEach(i=>document.getElementById(i)?.addEventListener('input',refresh));
     refresh();
@@ -6975,6 +7008,10 @@ const App = {
   // blank form defaulting to the first service type in the list.
   App.openServiceForm = function(id=null,clientId=null,presetType=null,presetName=null) {
     this.currentServiceId=id;
+    // Callers that opened this form from inside a client profile set
+    // _serviceReturnClientId immediately after calling, so save/delete can put
+    // the user back on the record they were reading instead of a list view.
+    this._serviceReturnClientId=null;
     const s=id ? (this.data.clientServices||[]).find(x=>x.id===id)||{} : {client_id:clientId||''};
     if (presetType && !id) s.service_type = presetType;
     // presetName pre-fills the staff-defined name when a previously-used
@@ -7049,6 +7086,21 @@ const App = {
     });
     document.querySelectorAll('.sf-attendee').forEach(cb => cb.addEventListener('change', refreshCount));
     toggle();
+
+    // Editing an existing contact is a different job from logging a new one:
+    // the heading says so, and Delete is only offered on a row that exists.
+    const titleEl = document.getElementById('service-title');
+    if (titleEl) titleEl.textContent = editing ? 'Edit Service Contact' : 'Service Entry';
+    const delBtn = document.getElementById('btn-delete-service');
+    if (delBtn){
+      delBtn.style.display = editing ? '' : 'none';
+      delBtn.dataset.armed = '';
+      delBtn.textContent = 'Delete Service';
+      delBtn.classList.add('btn-danger');
+      delBtn.onclick = () => this.deleteService(id, delBtn);
+    }
+    const stateEl = document.getElementById('service-save-state');
+    if (stateEl) stateEl.textContent = editing ? 'Editing an existing contact.' : 'Not saved this session';
   };
 
   // Columns added by the on-site-services migration. Until that migration is
@@ -7132,7 +7184,10 @@ const App = {
     state.textContent = 'Saved.';
     await this.loadAll();
     this.closeForm('service');
-    this.showView(this.view || 'services');
+    const backTo = this._serviceReturnClientId;
+    this._serviceReturnClientId = null;
+    if (backTo) this.openClientForm(backTo);
+    else this.showView(this.view || 'services');
     // toast() sets textContent, so the label is inserted as text, not markup.
     const label = this.serviceLabel(rows[0]);
     this.toast(rows.length > 1
@@ -7141,6 +7196,70 @@ const App = {
     if (degraded) {
       this.toast('Saved — but the service name and group flag were not stored. The database migration has not been applied yet.', { error:true });
     }
+  };
+
+  /* ---------------------------------------------------------------------
+     Removing a record. Service contacts feed the quarterly tallies and case
+     notes are the case-management history, so neither should vanish on a
+     stray click: the first press arms the button and the second carries it
+     out. The armed state lapses on its own so a button left half-pressed
+     does not stay dangerous.
+     --------------------------------------------------------------------- */
+  App.armDelete = function(btn, label){
+    if (!btn) return true;                       // programmatic call — nothing to arm
+    if (btn.dataset.armed === '1') return true;  // already armed: this press is the confirmation
+    btn.dataset.armed = '1';
+    btn._armLabel = btn.textContent;
+    btn.textContent = label || 'Confirm delete';
+    btn.classList.add('btn-danger');
+    clearTimeout(btn._armTimer);
+    btn._armTimer = setTimeout(() => {
+      if (!btn.isConnected) return;
+      btn.dataset.armed = '';
+      btn.textContent = btn._armLabel || 'Delete';
+      if (btn.id !== 'btn-delete-service') btn.classList.remove('btn-danger');
+    }, 6000);
+    return false;
+  };
+
+  App.deleteService = async function(id, btn){
+    const s = (this.data.clientServices||[]).find(x => x.id === id);
+    if (!s){ this.toast('That service contact is no longer on file.', { error:true }); return; }
+    if (!this.armDelete(btn, 'Confirm delete')) return;
+
+    const state = document.getElementById('service-save-state');
+    if (state) state.textContent = 'Deleting…';
+    const { error } = await this.sb.from('holloway_client_services')
+      .delete().eq('program_id', this.program.id).eq('id', id);
+    if (error){
+      if (state) state.textContent = 'Delete failed: ' + error.message;
+      this.toast('Delete failed: ' + error.message, { error:true });
+      return;
+    }
+
+    const backTo = this._serviceReturnClientId || null;
+    this._serviceReturnClientId = null;
+    this.currentServiceId = null;
+    await this.loadAll();
+    // Deleting from a list row leaves this modal closed already; only close it
+    // when the delete came from inside the open form.
+    if (document.getElementById('modal-service')?.classList.contains('open')) this.closeForm('service');
+    this.toast(`${this.serviceLabel(s)} contact of ${this.formatDate(s.service_date)} deleted.`);
+    if (backTo) this.openClientForm(backTo);
+    else this.showView(this.view || 'services');
+  };
+
+  App.deleteCaseNote = async function(noteId, clientId, btn){
+    const n = (this.data.caseNotes||[]).find(x => x.id === noteId);
+    if (!n){ this.toast('That case note is no longer on file.', { error:true }); return; }
+    if (!this.armDelete(btn, 'Confirm delete')) return;
+
+    const { error } = await this.sb.from('holloway_case_notes')
+      .delete().eq('program_id', this.program.id).eq('id', noteId);
+    if (error){ this.toast('Delete failed: ' + error.message, { error:true }); return; }
+    await this.loadAll();
+    this.toast(`Case note of ${this.formatDate(this.dateOnly(n.note_date))} deleted.`);
+    if (clientId) this.openClientForm(clientId);
   };
 
   // Quarterly income/benefits status check for an active client — feeds the
@@ -7203,7 +7322,7 @@ const App = {
       <div class="form-modal-header"><div><h2 class="form-modal-title" id="case-note-title">Case Note</h2><div class="form-modal-meta">Operational case management note — not used for program report calculations</div></div><button class="form-close-btn" data-close-case-note="1">✕</button></div>
       <div class="form-gold-bar"></div>
       <div class="form-body" id="case-note-body"></div>
-      <div class="form-footer"><div class="save-state" id="case-note-save-state">Not saved this session</div><div style="display:flex;gap:10px;"><button class="btn btn-ghost" data-close-case-note="1">Close</button><button class="btn btn-gold" id="btn-save-case-note">Save Case Note</button></div></div>
+      <div class="form-footer"><div class="save-state" id="case-note-save-state">Not saved this session</div><div style="display:flex;gap:10px;"><button class="btn btn-danger" id="btn-delete-case-note" style="display:none;">Delete Note</button><button class="btn btn-ghost" data-close-case-note="1">Close</button><button class="btn btn-gold" id="btn-save-case-note">Save Case Note</button></div></div>
     </div>`;
     document.body.appendChild(modal);
     modal.querySelectorAll('[data-close-case-note]').forEach(b=>b.addEventListener('click',()=>this.closeCaseNoteForm()));
@@ -7236,7 +7355,7 @@ const App = {
     return `<div class="form-section" id="client-case-notes-section"><div class="form-section-title">Case Notes</div>
       <div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg></div><div><strong>Case notes are retained historically.</strong> They support case management documentation only and are not used in program report calculations.</div></div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;"><div class="field-hint">${rows.length} note${rows.length===1?'':'s'} on file</div><button class="btn btn-gold btn-sm" id="btn-add-case-note" type="button">+ Add Case Note</button></div>
-      ${rows.length ? `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Date</th><th>Staff</th><th>Note</th><th>Actions</th></tr></thead><tbody>${rows.map(n=>`<tr><td>${this.formatDate(this.dateOnly(n.note_date))}</td><td>${this.escape(n.staff_name||'—')}</td><td>${this.escape(n.note||'')}</td><td><button class="btn btn-ghost btn-sm" data-edit-case-note="${this.escape(n.id)}" type="button">Edit</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="notice amber"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>No case notes have been added for this client yet.</div></div>`}
+      ${rows.length ? `<div class="client-table-wrap"><table class="client-table case-note-table"><thead><tr><th>Note Date</th><th>Entered</th><th>Staff</th><th>Note</th><th>Actions</th></tr></thead><tbody>${rows.map(n=>`<tr><td class="cn-nowrap">${this.formatDate(this.dateOnly(n.note_date))}</td><td class="cn-nowrap"><span class="field-hint">${n.created_at?this.formatDate(this.dateOnly(n.created_at)):'—'}</span></td><td>${this.escape(n.staff_name||'—')}</td><td class="cn-note-cell">${this.escape(n.note||'')}</td><td class="cn-row-actions"><button class="btn btn-ghost btn-sm" data-edit-case-note="${this.escape(n.id)}" type="button">Edit</button><button class="btn btn-ghost btn-sm" data-del-case-note="${this.escape(n.id)}" type="button">Delete</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="notice amber"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>No case notes have been added for this client yet.</div></div>`}
     </div>`;
   };
 
@@ -7251,6 +7370,7 @@ const App = {
     else body.insertAdjacentHTML('beforeend', caseNotesHtml);
     body.querySelector('#btn-add-case-note')?.addEventListener('click',()=>this.openCaseNoteForm(null,id));
     body.querySelectorAll('[data-edit-case-note]').forEach(btn=>btn.addEventListener('click',()=>this.openCaseNoteForm(btn.dataset.editCaseNote,id)));
+    body.querySelectorAll('[data-del-case-note]').forEach(btn=>btn.addEventListener('click',()=>this.deleteCaseNote(btn.dataset.delCaseNote,id,btn)));
   };
 
   App.openCaseNoteForm = function(noteId=null, clientId=null){
@@ -7264,7 +7384,25 @@ const App = {
       <div class="field-group"><label class="field-label">Staff</label><input id="cn-staff" class="field-input" value="${this.escape(n.staff_name||this.user?.email||'')}"></div>
       <div class="field-group full"><label class="field-label required">Case Note</label><textarea id="cn-note" class="field-textarea" style="min-height:150px;">${this.escape(n.note||'')}</textarea><div class="field-hint">Case notes are saved to the client history only. They are not used in quarterly metrics or printed program-report calculations.</div></div>
     </div></div>`;
-    document.getElementById('case-note-save-state').textContent='Not saved this session';
+    document.getElementById('case-note-save-state').textContent = noteId
+      ? `Editing a note dated ${this.formatDate(this.dateOnly(n.note_date))}.`
+      : 'Not saved this session';
+    // Delete is offered only on a note that already exists.
+    const cnDel = document.getElementById('btn-delete-case-note');
+    if (cnDel){
+      cnDel.style.display = noteId ? '' : 'none';
+      cnDel.dataset.armed = '';
+      cnDel.textContent = 'Delete Note';
+      cnDel.classList.add('btn-danger');
+      cnDel.onclick = () => {
+        // First press arms the button while the form is still open; the second
+        // closes the form and carries the delete out.
+        if (!this.armDelete(cnDel, 'Confirm delete')) return;
+        const back = n.client_id || clientId || this.currentClientId || null;
+        this.closeCaseNoteForm();
+        this.deleteCaseNote(noteId, back, null);
+      };
+    }
     document.getElementById('modal-case-note').classList.add('open');
   };
 
@@ -7783,18 +7921,22 @@ const App = {
       const label = this.serviceLabel(s);
       const showsParent = label !== (s.service_type||'');
       const typeCell = `<td>${this.escape(label)}${s.is_group_session?' <span class="badge badge-navy group-pill">Group</span>':''}${showsParent?`<br><span class="field-hint">${this.escape(s.service_type||'')}</span>`:''}</td>`;
-      return `<tr><td>${this.formatDate(s.service_date)}</td><td>${this.escape(c.id||'—')}</td><td>${this.escape(this.isAdmin()?'Agency-visible only':(c.client_name||'—'))}</td>${typeCell}<td>${s.duration_minutes||0}</td><td>${this.escape(s.staff_name||'—')}</td><td>${this.escape(s.notes||'')}</td></tr>`;
-    }).join('') || '<tr><td colspan="7" class="empty-table-state">No services entered for this quarter.</td></tr>';
+      return `<tr><td>${this.formatDate(s.service_date)}</td><td>${this.escape(c.id||'—')}</td><td>${this.escape(this.isAdmin()?'Agency-visible only':(c.client_name||'—'))}</td>${typeCell}<td>${s.duration_minutes||0}</td><td>${this.escape(s.staff_name||'—')}</td><td class="svc-note-cell">${this.escape(s.notes||'')}</td><td class="svc-row-actions"><button type="button" class="btn btn-ghost btn-sm" data-edit-service="${this.escape(s.id)}">Edit</button><button type="button" class="btn btn-ghost btn-sm" data-del-service="${this.escape(s.id)}">Delete</button></td></tr>`;
+    }).join('') || '<tr><td colspan="8" class="empty-table-state">No services entered for this quarter.</td></tr>';
     // Tally by parent type, not by the staff-defined name, so a custom on-site
     // offering rolls up under On-Site Participation instead of inflating the
     // distinct-service-type count by one for every name someone invents.
     const byType={}; services.forEach(s=>{const k=this.serviceGroupKey(s); byType[k]=(byType[k]||0)+1});
     const onsite=services.filter(s=>this.isGroupSessionType(s.service_type));
     const sessionCount=new Set(onsite.map(s=>s.group_session_id||s.id)).size;
-    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Services</h1><div class="page-subtitle">Individual service contacts generate service tallies automatically.</div></div><button class="btn btn-gold" id="btn-new-service">+ Add Service</button></div>${this.renderQuarterButtons()}<div class="generated-metric-grid"><div class="generated-metric"><div class="label">Service Contacts</div><div class="value">${services.length}</div></div><div class="generated-metric"><div class="label">Clients Engaged</div><div class="value">${new Set(services.map(s=>s.client_id)).size}</div></div><div class="generated-metric"><div class="label">Minutes</div><div class="value">${services.reduce((a,b)=>a+Number(b.duration_minutes||0),0)}</div></div><div class="generated-metric"><div class="label">Service Types</div><div class="value">${Object.keys(byType).length}</div></div><div class="generated-metric"><div class="label">On-Site Participation</div><div class="value">${onsite.length}</div><div class="field-hint">${sessionCount} session${sessionCount===1?'':'s'} · ${new Set(onsite.map(s=>s.client_id)).size} resident${new Set(onsite.map(s=>s.client_id)).size===1?'':'s'}</div></div></div><div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._servicesSort,'date','Date')}${this.sortableHeader(this._servicesSort,'clientId','Client ID')}${this.sortableHeader(this._servicesSort,'name','Name')}${this.sortableHeader(this._servicesSort,'type','Service Type')}${this.sortableHeader(this._servicesSort,'minutes','Minutes')}${this.sortableHeader(this._servicesSort,'staff','Staff')}<th>Notes</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Services</h1><div class="page-subtitle">Individual service contacts generate service tallies automatically.</div></div><button class="btn btn-gold" id="btn-new-service">+ Add Service</button></div>${this.renderQuarterButtons()}<div class="generated-metric-grid"><div class="generated-metric"><div class="label">Service Contacts</div><div class="value">${services.length}</div></div><div class="generated-metric"><div class="label">Clients Engaged</div><div class="value">${new Set(services.map(s=>s.client_id)).size}</div></div><div class="generated-metric"><div class="label">Minutes</div><div class="value">${services.reduce((a,b)=>a+Number(b.duration_minutes||0),0)}</div></div><div class="generated-metric"><div class="label">Service Types</div><div class="value">${Object.keys(byType).length}</div></div><div class="generated-metric"><div class="label">On-Site Participation</div><div class="value">${onsite.length}</div><div class="field-hint">${sessionCount} session${sessionCount===1?'':'s'} · ${new Set(onsite.map(s=>s.client_id)).size} resident${new Set(onsite.map(s=>s.client_id)).size===1?'':'s'}</div></div></div><div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._servicesSort,'date','Date')}${this.sortableHeader(this._servicesSort,'clientId','Client ID')}${this.sortableHeader(this._servicesSort,'name','Name')}${this.sortableHeader(this._servicesSort,'type','Service Type')}${this.sortableHeader(this._servicesSort,'minutes','Minutes')}${this.sortableHeader(this._servicesSort,'staff','Staff')}<th>Notes</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     this.bindQuarterButtons(el);
     this.wireSortableHeaders(el, this._servicesSort, ()=>this.renderServices());
     el.querySelector('#btn-new-service').addEventListener('click',()=>this.openServiceForm());
+    // A logged contact can now be opened, corrected, or removed. openServiceForm
+    // has always supported editing; until now nothing ever passed it a row id.
+    el.querySelectorAll('[data-edit-service]').forEach(b=>b.addEventListener('click',()=>this.openServiceForm(b.dataset.editService)));
+    el.querySelectorAll('[data-del-service]').forEach(b=>b.addEventListener('click',()=>this.deleteService(b.dataset.delService,b)));
     const header=el.querySelector('.page-header');
     // Names staff have already used for On-Site Service — Other become chips of
     // their own, so a recurring offering is one click and is spelled the same
