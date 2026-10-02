@@ -3058,11 +3058,11 @@ const App = {
       ? this.sb.from('quarterly_reports').select('program_id,fiscal_year,quarter,income_increase,income_maintained,satisfaction_satisfied,satisfaction_total').eq('program_id', pid).eq('fiscal_year', this.fiscalYear)
       : this.sb.from('quarterly_reports').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear);
     const clientsQ = fiscalOnly
-      ? this.sb.from('holloway_clients').select('id,program_id,fiscal_year,entry_date,exit_date,exit_destination_type,age,gender,gender_other,transgender_status,race_ethnicity,race_ethnicity_other,primary_language,veteran,disability,chronic_homeless,hiv_aids_status,substance_use_disorder,immigration_or_asylum,sexual_orientation,general_case_manager,general_cm_assigned_on,retention_case_manager,retention_cm_assigned_on,housing_plan_completed').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('entry_date', { ascending: false })
-      : this.sb.from('holloway_clients').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('entry_date', { ascending: false });
+      ? this.sb.from('holloway_clients').select('id,program_id,fiscal_year,entry_date,exit_date,exit_destination_type,age,gender,gender_other,transgender_status,race_ethnicity,race_ethnicity_other,primary_language,veteran,disability,chronic_homeless,hiv_aids_status,substance_use_disorder,immigration_or_asylum,sexual_orientation,general_case_manager,general_cm_assigned_on,retention_case_manager,retention_cm_assigned_on,housing_plan_completed').eq('program_id', pid).or(this.clientYearFilter()).order('entry_date', { ascending: false })
+      : this.sb.from('holloway_clients').select('*').eq('program_id', pid).or(this.clientYearFilter()).order('entry_date', { ascending: false });
     const servicesQ = fiscalOnly
-      ? this.sb.from('holloway_client_services').select('client_id,service_date').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('service_date', { ascending: false })
-      : this.sb.from('holloway_client_services').select('*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear).order('service_date', { ascending: false });
+      ? this.sb.from('holloway_client_services').select('client_id,service_date').eq('program_id', pid).or(this.datedYearFilter('service_date')).order('service_date', { ascending: false })
+      : this.sb.from('holloway_client_services').select('*').eq('program_id', pid).or(this.datedYearFilter('service_date')).order('service_date', { ascending: false });
 
     const [reports, rosters, bundles, exits, approved, activity, clients, clientServices, clientUpdates] = await Promise.all([
       reportsQ,
@@ -3352,6 +3352,27 @@ const App = {
   fyStart() { return this.contractPeriod?.start || CONFIG.FALLBACK_CONTRACT.start; },
   fyEnd()   { return this.contractPeriod?.end   || CONFIG.FALLBACK_CONTRACT.end; },
   fyLabel() { return this.contractPeriod?.label || ContractPeriods.deriveLabel(this.fiscalYear, this.fyStart(), this.fyEnd()); },
+  /* Year carryover. A client belongs to a contract year when their stay
+     overlaps it — entered on or before the year's last day and either still
+     enrolled or exited on or after its first day — not only when the record
+     was created in that year. Residents enrolled on 9/30 therefore open the
+     next year on the census instead of the year starting at zero, and the
+     prior year's figures are unchanged. The fiscal_year tag still catches a
+     record with no entry date yet. */
+  clientYearFilter() {
+    const s = this.fyStart(), e = this.fyEnd(), fy = this.fiscalYear;
+    return `fiscal_year.eq.${fy},and(entry_date.lte.${e},or(exit_date.is.null,exit_date.gte.${s}))`;
+  },
+  // Dated activity (services) belongs to the year its date falls in.
+  datedYearFilter(col) {
+    const s = this.fyStart(), e = this.fyEnd(), fy = this.fiscalYear;
+    return `and(${col}.gte.${s},${col}.lte.${e}),and(${col}.is.null,fiscal_year.eq.${fy})`;
+  },
+  // Enrolled before this contract year began and still enrolled on its first day.
+  isCarriedOverClient(c) {
+    const entry = this.dateOnly(c?.entry_date), exit = this.dateOnly(c?.exit_date), s = this.fyStart();
+    return !!entry && entry < s && (!exit || exit >= s);
+  },
   quarterKeys() { return Object.keys(this.quarters); },
   lastQuarterKey() { const k = this.quarterKeys(); return k[k.length-1] || 'Q1'; },
 
@@ -6226,7 +6247,7 @@ const App = {
     const pid = this.program?.id;
     if (!pid) { this.data.housingFollowUps = []; return; }
     const { data, error } = await this.sb.from('holloway_housing_followups')
-      .select(this.isAgencyFiscal?.() ? 'client_id,followup_type,due_date,status,housing_status' : '*').eq('program_id', pid).eq('fiscal_year', this.fiscalYear)
+      .select(this.isAgencyFiscal?.() ? 'client_id,followup_type,due_date,status,housing_status' : '*').eq('program_id', pid)
       .order('due_date', { ascending: true });
     if (error) { console.warn('housing followups', error); this.data.housingFollowUps = []; }
     else this.data.housingFollowUps = data || [];
@@ -6242,7 +6263,7 @@ const App = {
   App.today = function(){ return this.localDate(); };
   App.daysUntil = function(dateStr){ const a=new Date(this.today()+'T00:00:00'), b=new Date(dateStr+'T00:00:00'); return Math.ceil((b-a)/86400000); };
   App.activeClientsNow = function(){ return (this.data.clients||[]).filter(c=>this.clientStatus(c)==='Active'); };
-  App.phExitClients = function(){ return (this.data.clients||[]).filter(c=>c.exit_date && this.isPermanentExit(c)); };
+  App.phExitClients = function(){ return (this.followUpClients?this.followUpClients():(this.data.clients||[])).filter(c=>c.exit_date && this.isPermanentExit(c)); };
   App.followUpKey = function(clientId, type){ return clientId+'::'+type; };
   App.followUpsForClient = function(clientId){ return (this.data.housingFollowUps||[]).filter(f=>f.client_id===clientId); };
   App.expectedFollowUps = function(){
@@ -6341,7 +6362,7 @@ const App = {
   
   App.openFollowUpForm = function(clientId,type){
     this.currentFollowUp={clientId,type};
-    const c=(this.data.clients||[]).find(x=>x.id===clientId)||{};
+    const c=(this.followUpClients?this.followUpClients():(this.data.clients||[])).find(x=>x.id===clientId)||{};
     const existing=(this.data.housingFollowUps||[]).find(f=>f.client_id===clientId && f.followup_type===type)||{};
     const months=type==='12-month'?12:6;
     const due=existing.due_date || this.addMonthsDate(this.dateOnly(c.exit_date), months);
@@ -6351,7 +6372,7 @@ const App = {
   };
 
   App.saveFollowUp = async function(){
-    const cur=this.currentFollowUp||{}; const c=(this.data.clients||[]).find(x=>x.id===cur.clientId)||{};
+    const cur=this.currentFollowUp||{}; const c=(this.followUpClients?this.followUpClients():(this.data.clients||[])).find(x=>x.id===cur.clientId)||{};
     const existing=(this.data.housingFollowUps||[]).find(f=>f.client_id===cur.clientId && f.followup_type===cur.type)||{};
     const payload={ id: existing.id || (crypto.randomUUID?crypto.randomUUID():'fu_'+Date.now()), program_id:this.program.id, fiscal_year:this.fiscalYear, client_id:cur.clientId, followup_type:cur.type, due_date:document.getElementById('fu-due').value||null, completed_date:document.getElementById('fu-completed').value||null, housing_status:document.getElementById('fu-status').value||null, stable_at_followup:document.getElementById('fu-stable').value||null, contact_method:document.getElementById('fu-method').value||null, notes:document.getElementById('fu-notes').value.trim()||null, status:'completed', updated_by:this.user?.email||null, updated_at:new Date().toISOString() };
     if(!payload.housing_status){ document.getElementById('followup-save-state').textContent='Housing status is required.'; return; }
@@ -6914,7 +6935,7 @@ const App = {
       // Supabase has a NOT NULL hmis_unique_id column; keep it aligned with the HMIS ID used as the record id.
       hmis_unique_id:hmis,
       program_id:this.program.id,
-      fiscal_year:this.fiscalYear,
+      fiscal_year:((this.currentClientId && (this.data.clients||[]).find(x=>x.id===this.currentClientId)?.fiscal_year) || this.fiscalYear),
       entry_date:document.getElementById('cf-entry-date').value || null,
       room_assignment:document.getElementById('cf-room-number').value.trim() || null,
       age:Number(document.getElementById('cf-age').value||0)||null,
@@ -7335,10 +7356,12 @@ const App = {
     if(!this.data) this.data={};
     const pid=this.program?.id;
     if(!pid || this.isAgencyFiscal?.()){ this.data.caseNotes=[]; return; }
+    const noteClientIds=(this.data.clients||[]).map(c=>c.id).filter(Boolean);
+    if(!noteClientIds.length){ this.data.caseNotes=[]; return; }
     const {data,error}=await this.sb.from('holloway_case_notes')
       .select('*')
       .eq('program_id',pid)
-      .eq('fiscal_year',this.fiscalYear)
+      .in('client_id',noteClientIds)
       .order('note_date',{ascending:false})
       .order('created_at',{ascending:false});
     if(error){ console.warn('case notes unavailable', error); this.data.caseNotes=[]; }
@@ -7511,7 +7534,7 @@ const App = {
   App.buildFollowUpExportRows = function(){
     const rows = this.expectedFollowUps ? this.expectedFollowUps() : (this.data.housingFollowUps||[]);
     return rows.map(f => {
-      const c = f.client || (this.data.clients||[]).find(x=>x.id===f.client_id) || {};
+      const c = f.client || (this.followUpClients?this.followUpClients():(this.data.clients||[])).find(x=>x.id===f.client_id) || {};
       return {
         'HMIS ID': this.clientDisplayId(c),
         'Follow-Up Type': f.followup_type || '',
@@ -7646,10 +7669,12 @@ const App = {
     if(!this.data) this.data={};
     const pid=this.program?.id;
     if(!pid || this.isAgencyFiscal?.()){ this.data.clientIncidents=[]; return; }
+    const incClientIds=(this.data.clients||[]).map(c=>c.id).filter(Boolean);
+    if(!incClientIds.length){ this.data.clientIncidents=[]; return; }
     const {data,error}=await this.sb.from('holloway_client_incidents')
       .select('*')
       .eq('program_id',pid)
-      .eq('fiscal_year',this.fiscalYear)
+      .in('client_id',incClientIds)
       .order('incident_date',{ascending:false});
     if(error){ console.warn('client incidents unavailable', error); this.data.clientIncidents=[]; }
     else this.data.clientIncidents=data||[];
@@ -15264,7 +15289,7 @@ const App = {
   };
 
   App.stableExitClients = function(){
-    return (this.data?.clients || []).filter(c =>
+    return (this.followUpClients ? this.followUpClients() : (this.data?.clients || [])).filter(c =>
       c.exit_date && !this.isPermanentExit(c)
       && STABLE_EXIT_CLASSES.includes(c.exit_housing_stability || ''));
   };
@@ -15355,7 +15380,7 @@ const App = {
     previousOpenFollowUpForm.call(this, clientId, type);
     if (!isDayType(type)) return;
 
-    const c = (this.data.clients || []).find(x => x.id === clientId) || {};
+    const c = (this.followUpClients ? this.followUpClients() : (this.data.clients || [])).find(x => x.id === clientId) || {};
     const existing = (this.data.housingFollowUps || [])
       .find(f => f.client_id === clientId && f.followup_type === type) || {};
     const days = DAY_TYPES.find(([t]) => t === type)[1];
@@ -16030,6 +16055,165 @@ const App = {
           this.renderReferrals();
         }));
     }
+  };
+})();
+
+/* ============================================================
+   Contract-year carryover
+   ------------------------------------------------------------
+   The year's client list is loaded by stay overlap (see
+   clientYearFilter), so residents enrolled at the end of one
+   contract year open the next one on the census. This module
+   adds what that alone does not cover:
+
+   1. Prior-year exits whose 30/90-day and 6/12-month follow-ups
+      fall due in this year, so those checks are not lost when the
+      year turns over.
+   2. A Program to Date strip on the dashboard: opening census,
+      new intakes, persons served, permanent exits and bed nights
+      since the program opened, plus stays past 90 days counted
+      from the original entry date.
+   3. A "Carried over" tag on the client list.
+   4. The incident log stays a contract-year log; a carried-over
+      client's earlier incidents and case notes stay on their file.
+   ============================================================ */
+(function(){
+  const FISCAL_COLS = 'id,program_id,fiscal_year,entry_date,exit_date,exit_destination_type,age,gender,gender_other,transgender_status,race_ethnicity,race_ethnicity_other,primary_language,veteran,disability,chronic_homeless,hiv_aids_status,substance_use_disorder,immigration_or_asylum,sexual_orientation,general_case_manager,general_cm_assigned_on,retention_case_manager,retention_cm_assigned_on,housing_plan_completed';
+
+  const previousLoadAll = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAll.call(this);
+    if (!this.data) this.data = {};
+    this.data.allClients = null;
+    this.data.priorExitClients = [];
+    const pid = this.program?.id;
+    if (!pid) return;
+    const fiscalOnly = this.isAgencyFiscal?.();
+    const { data, error } = await this.sb.from('holloway_clients')
+      .select(fiscalOnly ? FISCAL_COLS : '*').eq('program_id', pid);
+    if (error) { console.warn('program history unavailable', error); return; }
+    this.data.allClients = data || [];
+
+    // Follow-ups reach out twelve months past exit, so look back thirteen.
+    const yearStart = this.fyStart();
+    const lookback = this.addMonthsDate ? this.addMonthsDate(yearStart, -13) : null;
+    const inView = new Set((this.data.clients || []).map(c => c.id));
+    const prior = this.data.allClients.filter(c => {
+      const exit = this.dateOnly(c.exit_date);
+      return !inView.has(c.id) && exit && exit < yearStart && (!lookback || exit >= lookback);
+    });
+    if (prior.length && !fiscalOnly) {
+      const { data: identity } = await this.sb.from('holloway_client_identity')
+        .select('client_id,client_name').eq('program_id', pid).in('client_id', prior.map(c => c.id));
+      const names = new Map((identity || []).map(r => [r.client_id, r.client_name]));
+      prior.forEach(c => { c.client_name = names.get(c.id) || c.client_name || null; });
+    }
+    this.data.priorExitClients = prior;
+  };
+
+  App.followUpClients = function(){
+    const seen = new Set();
+    return [...(this.data?.clients || []), ...(this.data?.priorExitClients || [])]
+      .filter(c => c && !seen.has(c.id) && seen.add(c.id));
+  };
+
+  // The year's work list: everything still open, plus checks completed (or
+  // due) inside this contract year. Completed checks from earlier years stay
+  // in the record and in confirmed retention, but drop off the list.
+  const previousExpected = App.expectedFollowUps;
+  App.expectedFollowUps = function(){
+    const rows = previousExpected.call(this);
+    const s = this.fyStart(), e = this.fyEnd();
+    return rows.filter(f => {
+      if (this.followUpStatus(f) !== 'complete') return true;
+      const d = this.dateOnly(f.completed_date) || this.dateOnly(f.due_date);
+      return !d || (d >= s && d <= e);
+    });
+  };
+
+  // ---- Program to Date --------------------------------------------------
+  App.programToDate = function(){
+    const all = this.data?.allClients;
+    if (!all || !all.length) return null;
+    const today = this.localDate();
+    const s = this.fyStart();
+    const through = this.dateMin(today, this.fyEnd());
+    const entries = all.map(c => this.dateOnly(c.entry_date)).filter(Boolean).sort();
+    const opened = entries[0] || null;
+    const enteredByToday = all.filter(c => { const d = this.dateOnly(c.entry_date); return d && d <= today; });
+    const phExits = all.filter(c => { const d = this.dateOnly(c.exit_date); return d && d <= today && this.isPermanentExit(c); });
+    const bedNights = opened ? all.reduce((sum, c) => sum + Number(this.clientBedNights(c, opened, today) || 0), 0) : 0;
+    const view = this.data.clients || [];
+    const carried = view.filter(c => this.isCarriedOverClient(c));
+    const newIntakes = view.filter(c => { const d = this.dateOnly(c.entry_date); return d && d >= s && d <= through; });
+    const active = view.filter(c => this.clientStatus(c) === 'Active');
+    const longStays = active.filter(c => this.daysInclusive(this.dateOnly(c.entry_date), today) > 90);
+    return { opened, served: enteredByToday.length, phExits: phExits.length, bedNights,
+             carried: carried.length, newIntakes: newIntakes.length, longStays: longStays.length, active: active.length };
+  };
+
+  App.renderProgramToDate = function(){
+    const p = this.programToDate();
+    if (!p) return '';
+    const since = p.opened ? ContractPeriods.longDate(ContractPeriods.parse(p.opened)) : 'opening';
+    const stats = [
+      ['Carried Over', p.carried, `Enrolled on ${ContractPeriods.longDate(ContractPeriods.parse(this.fyStart()))}`],
+      ['New Intakes', p.newIntakes, 'Entered this contract year'],
+      ['Persons Served', p.served, `Since ${since}`],
+      ['Exits to Permanent Housing', p.phExits, `Since ${since}`],
+      ['Bed Nights Provided', p.bedNights.toLocaleString(), `Since ${since}`],
+      ['Stays Past 90 Days', p.longStays, `Of ${p.active} enrolled, counted from original entry`]
+    ];
+    return `<div class="dashboard-section-head"><h2>Program to Date</h2><div class="hint">Carries across contract years. Year-to-date figures above include carried-over residents as persons served; intakes count only new entries.</div></div>
+      <div class="housing-outcome-grid">${stats.map(([label, value, sub]) => `<div class="outcome-stat"><div class="label">${this.escape(label)}</div><div class="value">${value}</div><div class="sub">${this.escape(sub)}</div></div>`).join('')}</div>`;
+  };
+
+  const previousRenderDashboard = App.renderDashboard;
+  App.renderDashboard = function(){
+    previousRenderDashboard.call(this);
+    const el = document.getElementById('view-dashboard');
+    if (!el || el.querySelector('[data-program-to-date]')) return;
+    const html = this.renderProgramToDate();
+    if (!html) return;
+    const holder = document.createElement('div');
+    holder.dataset.programToDate = '1';
+    holder.innerHTML = html;
+    // Sits after the contract-goals block, before housing outcomes.
+    const heads = [...el.querySelectorAll('.dashboard-section-head')];
+    const outcomes = heads.find(h => /Housing Outcomes/i.test(h.textContent));
+    if (outcomes) outcomes.parentNode.insertBefore(holder, outcomes);
+    else el.appendChild(holder);
+  };
+
+  // ---- Client list tag --------------------------------------------------
+  const previousRenderClients = App.renderClients;
+  App.renderClients = function(){
+    previousRenderClients.call(this);
+    const el = document.getElementById('view-clients');
+    if (!el) return;
+    const byId = new Map((this.data.clients || []).map(c => [c.id, c]));
+    el.querySelectorAll('[data-edit-client]').forEach(b => {
+      const c = byId.get(b.dataset.editClient);
+      const cell = b.closest('tr')?.querySelector('td');
+      if (!c || !cell || cell.querySelector('[data-carried]') || !this.isCarriedOverClient(c)) return;
+      const tag = document.createElement('span');
+      tag.className = 'badge badge-navy';
+      tag.dataset.carried = '1';
+      tag.style.marginLeft = '6px';
+      tag.textContent = 'Carried over';
+      tag.title = `Enrolled since ${this.formatDate(this.dateOnly(c.entry_date))}`;
+      cell.appendChild(tag);
+    });
+  };
+
+  // ---- Incident log: contract-year view ---------------------------------
+  const previousRenderIncidentLog = App.renderIncidentLog;
+  App.renderIncidentLog = function(){
+    const all = this.data.clientIncidents || [];
+    const s = this.fyStart(), e = this.fyEnd();
+    this.data.clientIncidents = all.filter(i => { const d = this.dateOnly(i.incident_date); return !d || (d >= s && d <= e); });
+    try { return previousRenderIncidentLog.call(this); }
+    finally { this.data.clientIncidents = all; }
   };
 })();
 
