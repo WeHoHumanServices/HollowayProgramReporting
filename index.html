@@ -9208,11 +9208,11 @@ const App = {
    ============================================================ */
 (function(){
   const STATE_NOTICE = {
-    accepted: { cls: 'green', title: 'Accepted', body: 'This quarter is locked. Agency users can no longer edit the report, roster, or exit detail.' },
-    revision_requested: { cls: 'amber', title: 'Revisions requested', body: 'The bundle is reopened to agency users. It will return here once resubmitted.' },
-    voided: { cls: 'red', title: 'Voided', body: 'The submission has been voided. The audit record is retained.' },
-    submitted: { cls: 'navy', title: 'Awaiting City review', body: 'Submitted by the agency and ready for review.' },
-    resubmitted: { cls: 'navy', title: 'Awaiting City review', body: 'Resubmitted by the agency after a revision request.' }
+    accepted: { cls: 'green', icon: '✓', title: 'Accepted', body: 'Locked. Agency users can’t edit the report, roster or exit detail.' },
+    revision_requested: { cls: 'amber', icon: '!', title: 'Revisions requested', body: 'Reopened for the agency. It returns here when resubmitted.' },
+    voided: { cls: 'red', icon: '×', title: 'Voided', body: 'The audit record is kept.' },
+    submitted: { cls: 'navy', icon: 'i', title: 'Awaiting City review', body: 'Submitted by the agency.' },
+    resubmitted: { cls: 'navy', icon: 'i', title: 'Awaiting City review', body: 'Resubmitted after a revision request.' }
   };
 
   App.reviewStateNoticeHtml = function(q){
@@ -9225,7 +9225,7 @@ const App = {
     const byYou = b.reviewed_by && this.profile?.id && b.reviewed_by === this.profile.id;
     const detail = [when ? when : '', byYou ? 'by you' : ''].filter(Boolean).join(' · ');
     return `<div class="notice ${meta.cls}" style="margin-bottom:14px;">
-      <div><strong>${this.escape(meta.title)}${detail ? ' — ' + this.escape(detail) : ''}</strong><br>${this.escape(meta.body)}</div>
+      <div>${meta.icon}</div><div><strong>${this.escape(meta.title)}${detail ? ' — ' + this.escape(detail) : ''}</strong><br>${this.escape(meta.body)}</div>
     </div>`;
   };
 
