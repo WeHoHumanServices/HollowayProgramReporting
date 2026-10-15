@@ -16223,9 +16223,13 @@ const App = {
   // (Holloway_Budget_Mod_FY27.xlsx): Ascencia enters a +/– change per line with
   // a reason; Revised = Approved + Change; the revised grand total must equal
   // the approved total; the completed request goes to the City for approval.
+  //
   // Data: holloway_fiscal_budget_versions / _version_lines / _version_log /
-  //       _version_meta, holloway_fiscal_year_meta, _version_compare (view).
-  // Writes only through RPCs: _save_draft, _set_header, _submit, _withdraw, _review.
+  //   _version_meta / _rules / _line_adjustments / _line_comments / _signoffs /
+  //   _attachments / _notifications, holloway_fiscal_year_meta, _version_compare (view).
+  // Writes go only through RPCs: _save_draft, _set_header, _submit_certified,
+  //   _withdraw, _adjust, _approve, _return, _add_comment, _add_attachment.
+  //   Rules are written by City admins directly (RLS).
   // =====================================================================
   (function(){
     const BM_OPEN = ['draft','submitted','returned'];
@@ -16237,15 +16241,18 @@ const App = {
       {cat:'Program', title:'PROGRAM EXPENSES', total:'TOTAL PROGRAM COSTS'},
       {cat:'Administrative', title:'ADMINISTRATIVE', total:'TOTAL ADMINISTRATIVE'}
     ];
-    const C = {head:'#4472C4', section:'#1F3864', sub:'#D9E2F3', total:'#2F5496', input:'#FFF2CC'};
+    const C = {head:'#4472C4', section:'#1F3864', sub:'#D9E2F3', total:'#2F5496', input:'#FFF2CC', city:'#E4F1FB'};
+    const CERT_TEXT = agency => `I certify that this budget modification request is accurate, reflects the actual and anticipated costs of operating the program, and is submitted on behalf of ${agency}.`;
+    const EXCELJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
 
-    // Inject form styles once.
     if(!document.getElementById('bm-styles')){
       const st=document.createElement('style'); st.id='bm-styles';
       st.textContent=`
         .bm-form{width:100%;border-collapse:collapse;font-size:12.5px}
         .bm-form th{background:${C.head};color:#fff;font-weight:700;padding:8px 10px;text-align:center;vertical-align:middle;border:1px solid #fff;line-height:1.25}
         .bm-form th:first-child{text-align:left}
+        .bm-scroll{max-height:72vh;overflow:auto;border:1px solid var(--border);border-radius:14px}
+        .bm-scroll .bm-form thead th{position:sticky;top:0;z-index:2}
         .bm-form td{padding:5px 10px;border-bottom:1px solid #E3E7EE;vertical-align:middle}
         .bm-form td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
         .bm-form tr.bm-section td{background:${C.section};color:#fff;font-weight:700;letter-spacing:.02em}
@@ -16255,30 +16262,53 @@ const App = {
         .bm-form tr.bm-grand td{background:${C.section};color:#fff;font-weight:800;font-size:13px}
         .bm-form tr.bm-balance td{font-weight:700;padding-top:10px;border-bottom:0}
         .bm-form td.bm-in{background:${C.input};padding:3px 6px}
-        .bm-form td.bm-in input{width:100%;border:1px solid #E6D9A8;background:#FFFBEA;border-radius:6px;padding:5px 7px;font:inherit}
-        .bm-form td.bm-in input.num{text-align:right}
-        .bm-form td.bm-in input:focus{outline:2px solid ${C.head};outline-offset:0;background:#fff}
-        .bm-form tr.bm-changed td:not(.bm-in){background:#FBFCFE}
+        .bm-form td.bm-in input,.bm-form td.bm-adj input{width:100%;border:1px solid #E6D9A8;background:#FFFBEA;border-radius:6px;padding:5px 7px;font:inherit}
+        .bm-form td.bm-adj{background:${C.city};padding:3px 6px}
+        .bm-form td.bm-adj input{border-color:#A9CBE8;background:#F4FAFF}
+        .bm-form td.bm-in input.num,.bm-form td.bm-adj input.num{text-align:right}
+        .bm-form td input:focus{outline:2px solid ${C.head};outline-offset:0;background:#fff}
+        .bm-form td.bm-in input:disabled{background:#EEF0F3;border-color:#D6DAE0;color:#7A8594;cursor:not-allowed}
+        .bm-form tr.bm-changed td:not(.bm-in):not(.bm-adj){background:#FBFCFE}
         .bm-form tr.bm-changed td:first-child{box-shadow:inset 3px 0 0 ${C.head}}
+        .bm-form tr.bm-thread td{background:#F7F9FC;padding:10px 14px}
         .bm-neg{color:#B42318}
         .bm-form tr.bm-total .bm-neg,.bm-form tr.bm-grand .bm-neg{color:#FFD1CB}
+        .bm-cbtn{border:1px solid var(--border);background:#fff;border-radius:999px;font-size:11px;padding:2px 8px;cursor:pointer;color:var(--navy);white-space:nowrap}
+        .bm-cbtn.has{border-color:${C.head};background:#EEF3FC;font-weight:700}
+        .bm-comment{border-left:3px solid #C9D3E3;padding:4px 10px;margin:0 0 8px;font-size:12.5px}
+        .bm-comment.city{border-color:${C.total}} .bm-comment.agency{border-color:#C9A227}
         .bm-cover{display:grid;grid-template-columns:max-content 1fr max-content 1.6fr;gap:7px 14px;font-size:13px;align-items:center}
         .bm-cover .k{font-weight:700;color:${C.section}}
         .bm-cover input{border:1px solid #E6D9A8;background:#FFFBEA;border-radius:6px;padding:5px 8px;font:inherit;max-width:240px}
         .bm-title{font-size:18px;font-weight:800;color:${C.section};letter-spacing:.02em}
         .bm-howto{font-size:13px;margin-top:12px}
-        .bm-howto summary{cursor:pointer;font-weight:700;color:${C.section}}
+        .bm-howto summary,.bm-details summary{cursor:pointer;font-weight:700;color:${C.section}}
         .bm-howto ol{margin:8px 0 0 18px;padding:0;line-height:1.55}
         .bm-legend{display:inline-block;width:14px;height:14px;background:${C.input};border:1px solid #E6D9A8;vertical-align:-2px;margin-right:6px;border-radius:3px}
+        .bm-legend.city{background:${C.city};border-color:#A9CBE8}
         .bm-toolbar{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
         .bm-seg{display:inline-flex;border:1px solid var(--border);border-radius:999px;padding:3px;background:#F4F6F8;gap:2px}
         .bm-seg button{border:0;background:transparent;color:var(--navy);border-radius:999px;padding:6px 13px;font-weight:700;font-size:12px;cursor:pointer}
         .bm-seg button.active{background:${C.section};color:#fff}
         .bm-toolbar .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-600,#5B6573);margin-right:6px}
+        .bm-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:14px 0}
+        .bm-tile{border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:#fff}
+        .bm-tile .t{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#5B6573}
+        .bm-tile .v{font-size:20px;font-weight:800;color:${C.section};margin-top:2px;font-variant-numeric:tabular-nums}
+        .bm-tile .s{font-size:12px;color:#5B6573;margin-top:2px}
+        .bm-sign{border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-top:14px;background:#FAFBFD}
+        .bm-sign input[type=text]{border:1px solid var(--border);border-radius:8px;padding:6px 9px;font:inherit;min-width:240px}
+        .bm-files li{font-size:12.5px;margin:4px 0}
+        .bm-noticebar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+        .bm-rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:10px}
+        .bm-rules label{font-size:12px;font-weight:700;color:${C.section};display:block;margin-bottom:4px}
+        .bm-rules input{width:100%;border:1px solid var(--border);border-radius:8px;padding:6px 9px;font:inherit}
+        .bm-lockgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:4px 14px;font-size:12.5px;margin-top:6px}
         @media (max-width:760px){.bm-cover{grid-template-columns:max-content 1fr}}`;
       document.head.appendChild(st);
     }
 
+    // ---------------------------------------------------------------- data
     const baseLoad = App.loadFiscalData;
     App.loadFiscalData = async function(preferredYear=null){
       await baseLoad.call(this, preferredYear);
@@ -16286,39 +16316,58 @@ const App = {
     };
 
     App.loadBudgetVersions = async function(){
-      this.budgetMods = {versions:[], lines:{}, log:[], compare:{}, meta:{}, yearMeta:{}, ready:false, error:null};
+      this.budgetMods = {versions:[], lines:{}, log:[], compare:{}, meta:{}, yearMeta:{}, rules:null, settings:null, types:{}, adjustments:{}, comments:{}, signoffs:{}, attachments:{}, ready:false, error:null};
       if(!this.program?.id || !this.canViewFiscal?.() || !this.fiscalBudgetYear) return;
-      const pid=this.program.id, fy=this.fiscalBudgetYear;
-      const [vRes,ymRes]=await Promise.all([
+      const pid=this.program.id, fy=this.fiscalBudgetYear, B=this.budgetMods;
+      const [vRes,ymRes,ruRes,rsRes]=await Promise.all([
         this.sb.from('holloway_fiscal_budget_versions').select('*').eq('program_id',pid).eq('fiscal_year',fy).order('version_no',{ascending:false}),
-        this.sb.from('holloway_fiscal_year_meta').select('*').eq('program_id',pid).eq('fiscal_year',fy)
+        this.sb.from('holloway_fiscal_year_meta').select('*').eq('program_id',pid).eq('fiscal_year',fy),
+        this.sb.from('holloway_fiscal_budget_rules').select('*').eq('program_id',pid).eq('fiscal_year',fy),
+        this.sb.from('holloway_fiscal_budget_rule_settings').select('*').eq('program_id',pid).eq('fiscal_year',fy)
       ]);
-      if(vRes.error){ this.budgetMods.error=vRes.error; return; }
-      this.budgetMods.yearMeta=(ymRes.data||[])[0]||{};
+      if(vRes.error){ B.error=vRes.error; return; }
+      B.yearMeta=(ymRes.data||[])[0]||{};
+      B.rules=(ruRes.data||[])[0]||null;
+      B.settings=(rsRes?.data||[])[0]||null;
       const versions=vRes.data||[]; const ids=versions.map(v=>v.id);
-      this.budgetMods.versions=versions;
+      B.versions=versions;
       if(ids.length){
-        const [lRes,gRes,cRes,mRes]=await Promise.all([
-          this.sb.from('holloway_fiscal_budget_version_lines').select('*').in('version_id',ids).order('sort_order'),
-          this.sb.from('holloway_fiscal_budget_version_log').select('*').in('version_id',ids).order('created_at',{ascending:false}),
-          this.sb.from('holloway_fiscal_budget_version_compare').select('*').in('version_id',ids).order('sort_order'),
-          this.sb.from('holloway_fiscal_budget_version_meta').select('*').in('version_id',ids)
+        const q=t=>this.sb.from(t).select('*').in('version_id',ids);
+        const [lRes,gRes,cRes,mRes,aRes,kRes,sRes,fRes,tRes]=await Promise.all([
+          q('holloway_fiscal_budget_version_lines').order('sort_order'),
+          q('holloway_fiscal_budget_version_log').order('created_at',{ascending:false}),
+          q('holloway_fiscal_budget_version_compare').order('sort_order'),
+          q('holloway_fiscal_budget_version_meta'),
+          q('holloway_fiscal_budget_line_adjustments'),
+          q('holloway_fiscal_budget_line_comments').order('created_at',{ascending:true}),
+          q('holloway_fiscal_budget_signoffs').order('signed_at',{ascending:true}),
+          q('holloway_fiscal_budget_attachments').order('uploaded_at',{ascending:true}),
+          q('holloway_fiscal_budget_request_types')
         ]);
-        const err=[lRes,gRes,cRes].find(r=>r.error); if(err){ this.budgetMods.error=err.error; return; }
-        (lRes.data||[]).forEach(l=>{(this.budgetMods.lines[l.version_id] ||= []).push(l);});
-        (cRes.data||[]).forEach(c=>{(this.budgetMods.compare[c.version_id] ||= []).push(c);});
-        (mRes.data||[]).forEach(m=>{this.budgetMods.meta[m.version_id]=m;});
-        this.budgetMods.log=gRes.data||[];
+        const err=[lRes,gRes,cRes].find(r=>r.error); if(err){ B.error=err.error; return; }
+        const group=(rows,key='version_id')=>{ const o={}; (rows||[]).forEach(r=>{(o[r[key]] ||= []).push(r);}); return o; };
+        B.lines=group(lRes.data); B.compare=group(cRes.data); B.log=gRes.data||[];
+        (mRes.data||[]).forEach(m=>{B.meta[m.version_id]=m;});
+        (tRes?.data||[]).forEach(t=>{B.types[t.version_id]=t.request_type;});
+        B.adjustments=group(aRes.data); B.comments=group(kRes.data); B.signoffs=group(sRes.data); B.attachments=group(fRes.data);
       }
-      this.budgetMods.ready=true;
+      B.ready=true;
       const open=this.bmOpenVersion();
       if(!this.bmDraft || this.bmDraft.versionId!==(open?.id||null) || !this._bmDirty) this.bmSeedDraft(open);
+      if(!open || open.status!=='submitted') this.bmAdj=null;
     };
 
+    // ------------------------------------------------------------- helpers
     App.bmCurrentVersion = function(){ return (this.budgetMods?.versions||[]).find(v=>v.status==='approved')||null; };
     App.bmOpenVersion = function(){ return (this.budgetMods?.versions||[]).find(v=>BM_OPEN.includes(v.status))||null; };
     App.bmCanDraft = function(){ return this.isAdmin() || this.canEditFiscal?.(); };
     App.bmMeta = function(v){ return (v && this.budgetMods?.meta?.[v.id]) || {}; };
+    App.bmRules = function(){ const r=this.budgetMods?.rules||{}, x=this.budgetMods?.settings||{}; return {flag_pct:Number(r.flag_pct??25), flag_min_amount:Number(r.flag_min_amount??5000), flag_any_amount:x.flag_any_amount==null?(x.program_id?null:10000):Number(x.flag_any_amount), indirect_cap_pct:r.indirect_cap_pct==null?null:Number(r.indirect_cap_pct), locked:r.locked_line_codes||[], second_threshold:r.second_approval_threshold==null?null:Number(r.second_approval_threshold), city_emails:r.city_notify_emails||[], deadline:x.routine_deadline||null}; };
+    App.bmRequestType = function(v){ return (v && this.budgetMods?.types?.[v.id]) || 'routine'; };
+    App.bmPastDeadline = function(){ const d=this.bmRules().deadline; return !!d && this.localDate()>this.dateOnly(d); };
+    App.bmDeadlineText = function(){ const d=this.bmRules().deadline; if(!d) return ''; const days=Math.round((new Date(this.dateOnly(d)+'T12:00:00')-new Date(this.localDate()+'T12:00:00'))/864e5);
+      const when=new Date(this.dateOnly(d)+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+      return days>=0?`Routine budget modifications are due by <strong>${when}</strong> (${days} day${days===1?'':'s'} left). After that, only close-out modifications can be submitted.`:`The routine modification deadline (${when}) has passed. Only close-out modifications can be submitted; the City may disallow them.`; };
     App.bmRequestNo = function(v){
       if(!v) return '';
       const m=this.bmMeta(v); if(m.request_no) return m.request_no;
@@ -16330,6 +16379,15 @@ const App = {
       const out={}; (this.fiscal?.actuals||[]).forEach(a=>{ if(a.id || a.updated_at) out[a.line_code]=(out[a.line_code]||0)+Number(a.amount||0); });
       return out;
     };
+    // Months of posted actuals = fiscal months from the start of the year through the latest month with saved actuals.
+    App.bmPace = function(){
+      const months=(this.fiscalMonths?.()||[]).map(m=>m.key);
+      const posted=new Set((this.fiscal?.actuals||[]).filter(a=>(a.id||a.updated_at)&&Number(a.amount||0)!==0).map(a=>this.dateOnly(a.invoice_month)));
+      let last=-1; months.forEach((k,i)=>{ if(posted.has(this.dateOnly(k))) last=i; });
+      const n=last+1, total=months.length||12;
+      const fmt=k=>new Date(this.dateOnly(k)+'T12:00:00').toLocaleString('en-US',{month:'short'});
+      return {months:n, total, label:n?`${fmt(months[0])}–${fmt(months[last])}`:'', factor:n?total/n:0};
+    };
     App.bmApprovedTotal = function(){ return (this.fiscal?.budgetLines||[]).reduce((s,b)=>s+Number(b.approved_budget||0),0); };
     App.bmMoney = function(v,{blankZero=false,dashZero=false}={}){
       const n=Math.round(Number(v||0));
@@ -16339,40 +16397,50 @@ const App = {
     };
     App.bmPlain = function(v){ return this.bmMoney(v).replace(/<[^>]+>/g,''); };
     App.bmFyShort = function(){ const m=String(this.fiscalBudgetYear||'').match(/(\d{2})$/); return m?'FY'+m[1]:'FY'; };
+    App.bmFyLabel = function(){ return String(this.fiscalBudgetYear||'').replace(/^FY/,'FY '); };
     App.bmFyLong = function(){
-      const y=this.fiscalYearRecord?.()||{}; const fy=String(this.fiscalBudgetYear||'').replace(/^FY/,'FY ');
+      const y=this.fiscalYearRecord?.()||{};
       const fmt=d=>d?new Date(this.dateOnly(d)+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'';
-      return y.start_date?`${fy} (${fmt(y.start_date)} – ${fmt(y.end_date)})`:fy;
+      return y.start_date?`${this.bmFyLabel()} (${fmt(y.start_date)} – ${fmt(y.end_date)})`:this.bmFyLabel();
     };
+    App.bmAgency = function(){ return this.agencyName?.()||'Ascencia'; };
+    App.bmMyName = function(){ return this.profile?.full_name || this.profile?.name || this.profile?.display_name || ''; };
+    App.bmAhtfShare = function(code){ const b=(this.fiscal?.budgetLines||[]).find(x=>x.line_code===code); const raw=b?.ahtf_percent; return (raw===null||raw===undefined||raw==='')?null:Number(raw); };
 
-    // ---------- draft model: a +/– change per line, as on the form ----------
+    // ---------------------------------------------------------- draft model
     App.bmSeedDraft = function(open){
       const src = open ? (this.budgetMods.lines[open.id]||[]) : [];
       const bySrc = Object.fromEntries(src.map(l=>[l.line_code,l]));
       const lines = {};
       (this.fiscal?.budgetLines||[]).forEach(b=>{ const s=bySrc[b.line_code]; lines[b.line_code]={change: s? Math.round(Number(s.approved_budget)-Number(b.approved_budget)) : 0, note:s?.change_note||''}; });
-      const m=this.bmMeta(open);
+      const m=this.bmMeta(open), prev=this.bmDraft && this.bmDraft.versionId===(open?.id||null) ? this.bmDraft : (this.bmDraft && !this.bmDraft.versionId && open ? this.bmDraft : null);
       this.bmDraft = {versionId:open?.id||null, started:!!open, lines, comments:open?.justification||'', isAmendment:!!open?.is_amendment,
-        preparedBy: m.prepared_by || this.profile?.full_name || this.profile?.name || this.profile?.email || '',
-        datePrepared: m.date_prepared || this.localDate()};
+        preparedBy: m.prepared_by || this.bmMyName() || this.profile?.email || '', datePrepared: m.date_prepared || this.localDate(),
+        certify:!!prev?.certify, signer:prev?.signer ?? this.bmMyName(), requestType: open ? this.bmRequestType(open) : (prev?.requestType || (this.bmPastDeadline()?'closeout':'routine'))};
       this._bmDirty=false;
     };
     App.bmRevised = function(code){ const b=(this.fiscal.budgetLines||[]).find(x=>x.line_code===code); return Number(b?.approved_budget||0)+Number(this.bmDraft?.lines[code]?.change||0); };
 
     App.bmIssues = function(){
       const d=this.bmDraft; if(!d) return {blocking:[],warnings:[]};
-      const spent=this.bmSpentByLine(); const blocking=[], warnings=[];
+      const spent=this.bmSpentByLine(), rules=this.bmRules(); const blocking=[], warnings=[];
       const cur=this.bmApprovedTotal();
       const net=Object.values(d.lines).reduce((s,l)=>s+Number(l.change||0),0);
       if(Math.round(net)!==0 && !d.isAmendment) blocking.push(`Out of balance by ${this.bmPlain(net)}. Increases and decreases must net to zero so the Revised Grand Total stays ${this.bmPlain(cur)}.`);
+      let admin=0, total=0;
       (this.fiscal.budgetLines||[]).forEach(b=>{
         const ch=Number(d.lines[b.line_code]?.change||0), rev=Number(b.approved_budget||0)+ch, s=spent[b.line_code]||0;
+        total+=rev; if(b.category==='Administrative') admin+=rev;
         if(rev<0) blocking.push(`${b.line_name}: the decrease is larger than the approved budget.`);
         else if(rev<s-0.004) blocking.push(`${b.line_name}: revised budget ${this.bmPlain(rev)} is below the ${this.bmPlain(s)} already spent.`);
+        if(ch!==0 && rules.locked.includes(b.line_code) && !d.isAmendment) blocking.push(`${b.line_name} is locked by contract and can only change through a contract amendment.`);
         if(ch!==0 && !(d.lines[b.line_code]?.note||'').trim()) warnings.push(`${b.line_name}: add a reason for this change.`);
       });
+      if(rules.indirect_cap_pct!=null && total>0 && admin/total*100>rules.indirect_cap_pct) blocking.push(`Administrative/indirect costs would be ${(admin/total*100).toFixed(1)}% of the budget, above the ${rules.indirect_cap_pct}% cap.`);
       if(!Object.values(d.lines).some(l=>Number(l.change||0)!==0)) blocking.push('Enter at least one requested change.');
       if(!String(d.preparedBy||'').trim()) warnings.push('Add who prepared this request.');
+      if(d.requestType!=='closeout' && this.bmPastDeadline()) blocking.push('The routine modification deadline has passed. Select "Close-out modification" to submit.');
+      if(!String(d.comments||'').trim()) warnings.push('Add a budget modification narrative summarizing what is changing and why.');
       return {blocking,warnings};
     };
 
@@ -16383,29 +16451,79 @@ const App = {
         change_note:(d.lines[b.line_code]?.note||'').trim()||null}));
     };
 
-    // ---------- the form table ----------
-    // rows: [{line_code,line_name,category,subcategory,approved,change,revised,note,spent,flags}]
-    App.bmFormTableHtml = function(rows, {editable=false, compare=false, onlyChanged=false}={}){
+    // ---------------------------------------------------------- row models
+    App.bmRowFlags = function(r){
+      const rules=this.bmRules(), pace=this.bmPace(), f=[];
+      const ch=Math.round(r.change), pct=r.approved?Math.abs(ch)/r.approved*100:(ch?100:0);
+      if(ch!==0 && ((pct>rules.flag_pct && Math.abs(ch)>=rules.flag_min_amount) || (rules.flag_any_amount!=null && Math.abs(ch)>=rules.flag_any_amount))) f.push(`<span class="badge badge-amber" title="Change over ${rules.flag_pct}% and at least ${this.bmPlain(rules.flag_min_amount)}${rules.flag_any_amount!=null?`, or any change of ${this.bmPlain(rules.flag_any_amount)} or more`:''}">Large change</span>`);
+      if(ch!==0 && r.category==='Administrative') f.push('<span class="badge badge-navy" title="Handbook: the indirect cost allocation basis and rate must be approved by the City in advance. Time dedicated to the project is a direct cost and belongs on a salary line, not in the indirect pool.">Indirect: confirm allocation basis</span>');
+      if(ch>0 && r.subcategory==='Salaries') f.push('<span class="badge badge-navy" title="Handbook: no retroactive salary adjustment without written City approval. Confirm whether this increase covers months already worked.">Salary increase: retroactive?</span>');
+      if(ch!==0 && /equipment/i.test(r.line_name||'')) f.push('<span class="badge badge-gray" title="Handbook: the City limits equipment to $500 or less per unit.">$500/unit equipment limit</span>');
+      if(r.revised<r.spent-0.004) f.push('<span class="badge badge-red">Below spent</span>');
+      if(pace.months && ch>0 && r.spent<=0) f.push('<span class="badge badge-gray" title="Nothing has been spent on this line yet this year">No spending yet</span>');
+      else if(pace.months && ch>0 && r.projected<r.approved) f.push(`<span class="badge badge-navy" title="At the current pace this line is projected to spend ${this.bmPlain(r.projected)}, less than its current budget">Pace below budget</span>`);
+      if(pace.months && ch<0 && r.projected>r.revised+0.5) f.push(`<span class="badge badge-red" title="At the current pace this line is projected to spend ${this.bmPlain(r.projected)}, more than the revised budget">Pace above revised</span>`);
+      if(r.adjusted) f.push(`<span class="badge badge-navy" title="Requested ${this.bmPlain(r.adjusted.requested)}">City adjusted</span>`);
+      if(r.locked && ch!==0) f.push('<span class="badge badge-red">Locked line</span>');
+      if(ch!==0 && !String(r.note||'').trim()) f.push('<span class="badge badge-gray">No reason given</span>');
+      return f;
+    };
+    App.bmDraftRows = function(){
+      const d=this.bmDraft, spent=this.bmSpentByLine(), pace=this.bmPace(), locked=this.bmRules().locked;
+      return (this.fiscal.budgetLines||[]).map(b=>{ const ch=Number(d.lines[b.line_code]?.change||0), sp=spent[b.line_code]||0;
+        return {line_code:b.line_code,line_name:b.line_name,category:b.category,subcategory:b.subcategory,approved:Number(b.approved_budget||0),change:ch,revised:Number(b.approved_budget||0)+ch,note:d.lines[b.line_code]?.note||'',spent:sp,projected:sp*pace.factor,locked:locked.includes(b.line_code)}; });
+    };
+    App.bmVersionRows = function(versionId){
+      const pace=this.bmPace(), locked=this.bmRules().locked;
+      const adj=Object.fromEntries((this.budgetMods.adjustments[versionId]||[]).filter(a=>Math.round(a.requested_amount)!==Math.round(a.adjusted_amount)).map(a=>[a.line_code,{requested:Number(a.requested_amount),adjusted:Number(a.adjusted_amount),note:a.note,by:a.adjusted_by}]));
+      const comments=this.budgetMods.comments[versionId]||[];
+      return (this.budgetMods.compare[versionId]||[]).map(r=>{
+        const sub=((this.budgetMods.lines[versionId]||[]).find(l=>l.line_code===r.line_code)||{}).subcategory || (this.fiscal.budgetLines||[]).find(b=>b.line_code===r.line_code)?.subcategory;
+        const row={line_code:r.line_code,line_name:r.line_name,category:r.category,subcategory:sub,approved:Number(r.prior_budget||0),change:Number(r.change||0),revised:Number(r.new_budget||0),note:r.change_note||'',spent:Number(r.spent_to_date||0),
+          adjusted:adj[r.line_code]||null, locked:locked.includes(r.line_code), comments:comments.filter(c=>c.line_code===r.line_code).length};
+        row.projected=row.spent*pace.factor;
+        row.flags=this.bmRowFlags(row);
+        return row;
+      });
+    };
+
+    // ------------------------------------------------------------ form table
+    // opts: editable (Ascencia draft), cityEdit (City adjusting), compare (complete columns),
+    //       onlyChanged, versionId (enables comment threads)
+    App.bmFormTableHtml = function(rows, {editable=false, cityEdit=false, compare=false, onlyChanged=false, versionId=null, scroll=true}={}){
       const sum=(rs,k)=>rs.reduce((s,r)=>s+Number(r[k]||0),0);
-      const ncol = compare ? 7 : 5;
+      const ncol = compare ? 8 : 5;
       const pct=(ch,base)=>{ if(Math.round(ch)===0) return ''; if(!base) return '<span class="field-hint">new</span>'; const p=ch/base*100; return `<span class="${p<0?'bm-neg':''}">${p>0?'+':''}${p.toFixed(1)}%</span>`; };
-      const spentCell=(spent,revised)=>`<td class="num">${this.bmMoney(spent,{dashZero:true})}${revised>0&&spent>0?`<div class="field-hint" style="font-weight:400">${Math.round(spent/revised*100)}% of revised</div>`:''}</td>`;
-      const isChanged=r=>Math.round(r.change)!==0;
+      const ofRev=(v,rev,light)=>rev>0&&v>0?`<div class="${light?'':'field-hint'}" style="font-weight:400;${light?'font-size:11px;opacity:.8':''}">${Math.round(v/rev*100)}% of revised</div>`:'';
+      const isChanged=r=>Math.round(r.change)!==0 || (cityEdit && this.bmAdj && Math.round(this.bmAdj[r.line_code]??r.revised)!==Math.round(r.revised));
+      const threads=this.bmThreads||{}, canComment=versionId && this.budgetMods.versions.some(v=>v.id===versionId && BM_OPEN.includes(v.status)) && (this.isAdmin()||this.canEditFiscal?.());
+      const thread=r=>{
+        const key=versionId+'|'+r.line_code; if(!threads[key]) return '';
+        const list=(this.budgetMods.comments[versionId]||[]).filter(c=>c.line_code===r.line_code);
+        const items=list.map(c=>`<div class="bm-comment ${c.author_side}"><strong>${c.author_side==='city'?'City':this.escape(this.bmAgency())}</strong> <span class="field-hint">${this.escape(c.author_email||'')} · ${this.escape(this.formatDateTime(c.created_at))}</span><div>${this.escape(c.body)}</div></div>`).join('')||'<div class="field-hint" style="margin-bottom:8px">No comments on this line yet.</div>';
+        const form=canComment?`<div style="display:flex;gap:8px;align-items:flex-start"><textarea class="field-textarea" rows="2" style="flex:1" data-bm-cbody="${this.escape(r.line_code)}" placeholder="Ask a question or add context about ${this.escape(r.line_name)}"></textarea><button class="btn btn-primary btn-sm" data-bm-cpost="${this.escape(r.line_code)}">Post</button></div>`:'';
+        return `<tr class="bm-thread"><td colspan="${ncol}">${items}${form}</td></tr>`;
+      };
       const row=r=>{
         const changed=isChanged(r);
         if(onlyChanged && !changed) return '';
+        const lockedInput = editable && r.locked && !this.bmDraft?.isAmendment;
         const changeCell = editable
-          ? `<td class="bm-in"><input class="num" type="number" step="1" inputmode="numeric" data-bm-change="${this.escape(r.line_code)}" value="${changed?Math.round(r.change):''}" aria-label="Requested change for ${this.escape(r.line_name)}"></td>`
-          : `<td class="num">${this.bmMoney(r.change,{blankZero:true})}</td>`;
+          ? `<td class="bm-in"><input class="num" type="number" step="1" inputmode="numeric" data-bm-change="${this.escape(r.line_code)}" value="${Math.round(r.change)?Math.round(r.change):''}" ${lockedInput?'disabled title="Locked by contract"':''} aria-label="Requested change for ${this.escape(r.line_name)}"></td>`
+          : `<td class="num">${this.bmMoney(r.adjusted? r.adjusted.requested-r.approved : r.change,{blankZero:true})}${r.adjusted?'<div class="field-hint" style="font-weight:400">requested</div>':''}</td>`;
+        const revCell = cityEdit
+          ? `<td class="bm-adj"><input class="num" type="number" step="1" min="0" data-bm-adj="${this.escape(r.line_code)}" value="${Math.round(this.bmAdj?.[r.line_code]??r.revised)}" aria-label="City-approved amount for ${this.escape(r.line_name)}"></td>`
+          : `<td class="num" data-bm-revised="${this.escape(r.line_code)}">${this.bmMoney(r.revised,{dashZero:true})}${r.adjusted?`<div class="field-hint" style="font-weight:400">City adjusted</div>`:''}</td>`;
+        const cbtn = versionId ? ` <button type="button" class="bm-cbtn ${r.comments?'has':''}" data-bm-thread="${this.escape(r.line_code)}" title="Comments">💬${r.comments?' '+r.comments:''}</button>` : '';
         const reasonCell = editable
-          ? `<td class="bm-in"><input data-bm-note="${this.escape(r.line_code)}" value="${this.escape(r.note||'')}" aria-label="Reason for ${this.escape(r.line_name)}"></td>`
-          : `<td>${this.escape(r.note||'')}${(r.flags||[]).length?`<div style="margin-top:${r.note?4:0}px">${r.flags.join(' ')}</div>`:''}</td>`;
-        const extra = compare ? `<td class="num">${pct(r.change,r.approved)}</td>${spentCell(r.spent,r.revised)}` : '';
-        return `<tr class="${changed?'bm-changed':''}"><td>${this.escape(r.line_name)}</td><td class="num">${this.bmMoney(r.approved)}</td>${changeCell}<td class="num" data-bm-revised="${this.escape(r.line_code)}">${this.bmMoney(r.revised,{dashZero:true})}</td>${extra}${reasonCell}</tr>`;
+          ? `<td class="bm-in"><div style="display:flex;gap:6px;align-items:center"><input data-bm-note="${this.escape(r.line_code)}" value="${this.escape(r.note||'')}" aria-label="Reason for ${this.escape(r.line_name)}">${cbtn}</div></td>`
+          : `<td><div style="display:flex;justify-content:space-between;gap:6px;align-items:flex-start"><div>${this.escape(r.note||'')}${r.adjusted?.note?`<div class="field-hint">City: ${this.escape(r.adjusted.note)}</div>`:''}</div>${cbtn}</div>${cityEdit?`<input class="field-input" style="margin-top:4px;font-size:12px;padding:4px 7px;${(Math.round(this.bmAdj?.[r.line_code]??r.revised)!==Math.round(this.bmAdjBase?.[r.line_code]??r.revised)||this.bmAdjNotes?.[r.line_code])?'':'display:none'}" data-bm-adjnote="${this.escape(r.line_code)}" placeholder="City note for this adjustment (optional)" value="${this.escape(this.bmAdjNotes?.[r.line_code]||'')}">`:''}${(r.flags||[]).length?`<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${r.flags.join('')}</div>`:''}</td>`;
+        const extra = compare ? `<td class="num">${pct(r.change,r.approved)}</td><td class="num">${this.bmMoney(r.spent,{dashZero:true})}${ofRev(r.spent,r.revised)}</td><td class="num">${this.bmMoney(r.projected,{dashZero:true})}${ofRev(r.projected,r.revised)}</td>` : '';
+        return `<tr class="${changed?'bm-changed':''}"><td>${this.escape(r.line_name)}${r.locked?' <span title="Locked by contract">🔒</span>':''}</td><td class="num">${this.bmMoney(r.approved)}</td>${changeCell}${revCell}${extra}${reasonCell}</tr>${thread(r)}`;
       };
       const totalRow=(cls,label,rs,key)=>{
-        const ch=sum(rs,'change'), ap=sum(rs,'approved'), rv=sum(rs,'revised'), sp=sum(rs,'spent');
-        const extra = compare ? `<td class="num">${pct(ch,ap)}</td><td class="num">${this.bmMoney(sp,{dashZero:true})}${rv>0&&sp>0?`<div style="font-weight:400;font-size:11px;opacity:.8">${Math.round(sp/rv*100)}% of revised</div>`:''}</td>` : '';
+        const ch=sum(rs,'change'), ap=sum(rs,'approved'), rv=sum(rs,'revised'), sp=sum(rs,'spent'), pj=sum(rs,'projected');
+        const extra = compare ? `<td class="num">${pct(ch,ap)}</td><td class="num">${this.bmMoney(sp,{dashZero:true})}${ofRev(sp,rv,true)}</td><td class="num">${this.bmMoney(pj,{dashZero:true})}${ofRev(pj,rv,true)}</td>` : '';
         return `<tr class="${cls}"><td>${label}</td><td class="num">${this.bmMoney(ap)}</td><td class="num" data-bm-tchange="${key}">${this.bmMoney(ch,{dashZero:true})}</td><td class="num" data-bm-trevised="${key}">${this.bmMoney(rv)}</td>${extra}<td></td></tr>`;
       };
       let body='';
@@ -16424,27 +16542,49 @@ const App = {
       const target=sum(rows,'approved'), diff=sum(rows,'revised')-target;
       body+=`<tr class="bm-balance"><td colspan="3">Balance Check: Revised Grand Total must equal ${this.bmMoney(target)}</td><td class="num" id="bm-balance-diff">${this.bmMoney(diff)}</td><td colspan="${ncol-4}" id="bm-balance-msg">${Math.round(diff)===0?'<span style="color:#1A5735">✓ Balanced</span>':'<span class="bm-neg">⚠ Out of balance — adjust requested changes</span>'}</td></tr>`;
       const cols = compare
-        ? '<col style="width:27%"><col style="width:10%"><col style="width:11%"><col style="width:10%"><col style="width:8%"><col style="width:11%"><col>'
+        ? '<col style="width:23%"><col style="width:9%"><col style="width:10%"><col style="width:9%"><col style="width:7%"><col style="width:9%"><col style="width:9%"><col>'
         : '<col style="width:34%"><col style="width:12%"><col style="width:13%"><col style="width:12%"><col>';
-      const extraHead = compare ? '<th>% Change</th><th>Spent to Date<br><span style="font-weight:400">(posted actuals)</span></th>' : '';
-      return `<div class="client-table-wrap"><table class="bm-form"><colgroup>${cols}</colgroup><thead><tr><th>Position / Expense Category</th><th>${this.bmFyShort()} Approved<br>Budget</th><th>Requested Change<br>(Ascencia, +/–)</th><th>Revised Budget</th>${extraHead}<th>Reason for Change (Ascencia)</th></tr></thead><tbody>${body}</tbody></table></div>`;
+      const pace=this.bmPace();
+      const extraHead = compare ? `<th>% Change</th><th>Spent to Date<br><span style="font-weight:400">(posted actuals)</span></th><th>Projected<br>Year-End<br><span style="font-weight:400">(at current pace)</span></th>` : '';
+      const table=`<table class="bm-form"><colgroup>${cols}</colgroup><thead><tr><th>Position / Expense Category</th><th>${this.bmFyShort()} Approved<br>Budget</th><th>Requested Change<br>(Ascencia, +/–)</th><th>${cityEdit?'City-Approved<br>Amount':'Revised Budget'}</th>${extraHead}<th>Reason for Change (Ascencia)</th></tr></thead><tbody>${body}</tbody></table>`;
+      const paceNote = compare ? `<div class="field-hint" style="margin-top:6px">${pace.months?`Projected year-end = spent to date ÷ ${pace.months} month${pace.months>1?'s':''} of posted actuals (${pace.label}) × ${pace.total}. Early in the year, billing lags can understate the pace.`:'No actuals have been posted yet, so year-end projections are not available.'}</div>` : '';
+      return (scroll?`<div class="bm-scroll">${table}</div>`:`<div class="client-table-wrap">${table}</div>`)+paceNote;
     };
 
-    // ---------- view toggle: standard/complete columns, all/changed lines ----------
+    // ------------------------------------------------------ view toggles
     App.bmViewState = function(){ return this.bmView ||= {mode:'complete', filter:'all'}; };
-    App.bmViewTableHtml = function(rows, {defaultMode='complete'}={}){
-      const st=this.bmViewState(); const mode=st.mode||defaultMode;
+    App.bmViewTableHtml = function(rows, opts={}){
+      const st=this.bmViewState(); const mode=st.mode;
       const changed=rows.filter(r=>Math.round(r.change)!==0).length;
       const seg=(attr,val,cur,label)=>`<button type="button" class="${cur===val?'active':''}" data-${attr}="${val}" aria-pressed="${cur===val}">${label}</button>`;
-      const bar=`<div class="bm-toolbar"><div><span class="lbl">View</span><span class="bm-seg">${seg('bm-mode','standard',mode,'Standard')}${seg('bm-mode','complete',mode,'Complete')}</span></div><div><span class="lbl">Lines</span><span class="bm-seg">${seg('bm-filter','all',st.filter,`All lines (${rows.length})`)}${seg('bm-filter','changed',st.filter,`Changed only (${changed})`)}</span></div><div class="field-hint">${mode==='complete'?'Complete view adds % change and spent to date.':'Standard view matches the City form.'}${st.filter==='changed'?' Totals still reflect the full budget.':''}</div></div>`;
-      return bar+this.bmFormTableHtml(rows,{compare:mode==='complete', onlyChanged:st.filter==='changed'});
+      const bar=`<div class="bm-toolbar"><div><span class="lbl">View</span><span class="bm-seg">${seg('bm-mode','standard',mode,'Standard')}${seg('bm-mode','complete',mode,'Complete')}</span></div><div><span class="lbl">Lines</span><span class="bm-seg">${seg('bm-filter','all',st.filter,`All lines (${rows.length})`)}${seg('bm-filter','changed',st.filter,`Changed only (${changed})`)}</span></div><div class="field-hint">${mode==='complete'?'Complete view adds % change, spent to date and projected year-end.':'Standard view matches the City form.'}${st.filter==='changed'?' Totals still reflect the full budget.':''}</div></div>`;
+      return bar+this.bmFormTableHtml(rows,{...opts, compare:mode==='complete', onlyChanged:st.filter==='changed'});
     };
 
-    // ---------- where the changes come from (sources → uses) ----------
-    App.bmFlowHtml = function(rows){
+    // ------------------------------------------------------ summary tiles
+    App.bmSummaryHtml = function(rows, v){
+      const changed=rows.filter(r=>Math.round(r.change)!==0), inc=changed.filter(r=>r.change>0).reduce((s,r)=>s+r.change,0), dec=changed.filter(r=>r.change<0).reduce((s,r)=>s+r.change,0);
+      const total=rows.reduce((s,r)=>s+r.approved,0);
+      const cat=SECTIONS.map(sec=>{ const ch=rows.filter(r=>r.category===sec.cat).reduce((s,r)=>s+r.change,0); return Math.round(ch)?`${sec.cat} ${ch>0?'+':'–'}${this.bmPlain(Math.abs(ch))}`:null; }).filter(Boolean);
+      const flagged=rows.filter(r=>(r.flags||[]).length), kinds={};
+      flagged.forEach(r=>r.flags.forEach(f=>{ const k=f.replace(/<[^>]+>/g,''); kinds[k]=(kinds[k]||0)+1; }));
+      const comments=(this.budgetMods.comments[v.id]||[]).length;
+      const tile=(t,val,s)=>`<div class="bm-tile"><div class="t">${t}</div><div class="v">${val}</div><div class="s">${s}</div></div>`;
+      return `<div class="bm-tiles">
+        ${tile('Lines changed',`${changed.length} <span style="font-size:13px;font-weight:600;color:#5B6573">of ${rows.length}</span>`, `${changed.filter(r=>r.change>0).length} up · ${changed.filter(r=>r.change<0).length} down`)}
+        ${tile('Funds moved',this.bmPlain(inc),`${total?(inc/total*100).toFixed(1):0}% of the budget · net ${this.bmPlain(inc+dec)}`)}
+        ${tile('Category shifts',cat.length,this.escape(cat.join(' · ')||'None'))}
+        ${tile('Flags for review',flagged.length,this.escape(Object.entries(kinds).map(([k,n])=>`${n} ${k.toLowerCase()}`).join(' · ')||'None'))}
+        ${tile('Discussion',comments,comments?'comments on this request':'no comments yet')}
+      </div>`;
+    };
+
+    // ------------------------------------------------- sources & uses
+    App.bmFlowHtml = function(rows, key){
       const dec=rows.filter(r=>Math.round(r.change)<0).sort((a,b)=>a.change-b.change);
       const inc=rows.filter(r=>Math.round(r.change)>0).sort((a,b)=>b.change-a.change);
       if(!dec.length && !inc.length) return '';
+      const showAll=!!this.bmFlowAll?.[key], LIMIT=5;
       const max=Math.max(1,...rows.map(r=>Math.abs(r.change)));
       const plain=v=>this.bmPlain(v);
       const item=(r,color)=>`<div style="display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:6px 0;border-bottom:1px solid #EEF1F5">
@@ -16453,65 +16593,64 @@ const App = {
           <div style="grid-column:1/-1;height:6px;background:#EEF1F5;border-radius:3px"><div style="width:${Math.max(2,Math.abs(r.change)/max*100)}%;height:100%;background:${color};border-radius:3px"></div></div>
           <div class="field-hint" style="grid-column:1/-1">${plain(r.approved)} → ${plain(r.revised)}${r.note?' · '+this.escape(r.note):' · <em>no reason given</em>'}</div></div>`;
       const decT=dec.reduce((s,r)=>s+r.change,0), incT=inc.reduce((s,r)=>s+r.change,0);
-      const col=(title,sub,list,color,total)=>`<div><div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid ${color};padding-bottom:6px;margin-bottom:2px"><div><strong>${title}</strong><div class="field-hint">${sub}</div></div><strong style="font-variant-numeric:tabular-nums">${plain(Math.abs(total))}</strong></div>${list.map(r=>item(r,color)).join('')||'<div class="field-hint" style="padding:8px 0">None</div>'}</div>`;
+      const col=(title,sub,list,color,total)=>`<div><div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid ${color};padding-bottom:6px;margin-bottom:2px"><div><strong>${title}</strong><div class="field-hint">${sub} (${list.length})</div></div><strong style="font-variant-numeric:tabular-nums">${plain(Math.abs(total))}</strong></div>${(showAll?list:list.slice(0,LIMIT)).map(r=>item(r,color)).join('')||'<div class="field-hint" style="padding:8px 0">None</div>'}${!showAll&&list.length>LIMIT?`<div class="field-hint" style="padding-top:6px">+ ${list.length-LIMIT} more totaling ${plain(Math.abs(list.slice(LIMIT).reduce((s,r)=>s+r.change,0)))}</div>`:''}</div>`;
       const cats=SECTIONS.map(sec=>{ const rs=rows.filter(r=>r.category===sec.cat); const ch=rs.reduce((s,r)=>s+r.change,0), ap=rs.reduce((s,r)=>s+r.approved,0); return {cat:sec.cat,ch,ap,rv:ap+ch}; });
       const cmax=Math.max(1,...cats.map(c=>Math.abs(c.ch)));
       const catRows=cats.map(c=>`<tr><td>${this.escape(c.cat)}</td><td class="num">${plain(c.ap)}</td><td class="num">${plain(c.rv)}</td><td class="num">${this.bmMoney(c.ch,{dashZero:true})}</td><td style="width:34%"><div style="display:flex;align-items:center;height:14px"><div style="flex:1;display:flex;justify-content:flex-end">${c.ch<0?`<div style="width:${Math.abs(c.ch)/cmax*100}%;height:10px;background:#C0504D;border-radius:3px 0 0 3px"></div>`:''}</div><div style="width:1px;height:14px;background:#9AA4B2"></div><div style="flex:1">${c.ch>0?`<div style="width:${c.ch/cmax*100}%;height:10px;background:#2F5496;border-radius:0 3px 3px 0"></div>`:''}</div></div></td></tr>`).join('');
-      return `<div class="card" style="margin:0 0 16px;box-shadow:none;border:1px solid var(--border)"><div class="card-header"><div><h2 class="card-title">Where the Changes Come From</h2><div class="field-hint">Decreases free up funds that pay for the increases. ${dec.length} lines decrease by ${plain(Math.abs(decT))}; ${inc.length} lines increase by ${plain(incT)}; net ${plain(incT+decT)}.</div></div></div><div class="card-body">
+      const more = (dec.length>LIMIT||inc.length>LIMIT) ? `<button type="button" class="btn btn-ghost btn-sm" data-bm-flowall="${this.escape(key)}">${showAll?'Show top 5':'Show all lines'}</button>` : '';
+      return `<div class="card" style="margin:0 0 16px;box-shadow:none;border:1px solid var(--border)"><div class="card-header" style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><h2 class="card-title">Where the Changes Come From</h2><div class="field-hint">Decreases free up funds that pay for the increases. Net ${plain(incT+decT)}.</div></div>${more}</div><div class="card-body">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px">${col('Sources','Lines decreased',dec,'#C0504D',decT)}${col('Uses','Lines increased',inc,'#2F5496',incT)}</div>
         <div class="section-label" style="margin-top:16px">Net shift by category</div>
         <div class="client-table-wrap"><table class="bm-form"><thead><tr><th>Category</th><th>Approved</th><th>Revised</th><th>Net Change</th><th><span style="opacity:.85">← decrease · increase →</span></th></tr></thead><tbody>${catRows}</tbody></table></div>
+        ${this.bmFundingImpactHtml(rows)}
       </div></div>`;
     };
 
-    App.bmDraftRows = function(){
-      const d=this.bmDraft, spent=this.bmSpentByLine();
-      return (this.fiscal.budgetLines||[]).map(b=>{ const ch=Number(d.lines[b.line_code]?.change||0);
-        return {line_code:b.line_code,line_name:b.line_name,category:b.category,subcategory:b.subcategory,approved:Number(b.approved_budget||0),change:ch,revised:Number(b.approved_budget||0)+ch,note:d.lines[b.line_code]?.note||'',spent:spent[b.line_code]||0}; });
-    };
-    App.bmVersionRows = function(versionId){
-      return (this.budgetMods.compare[versionId]||[]).map(r=>{
-        const ch=Number(r.change||0), below=Number(r.new_budget)<Number(r.spent_to_date)-0.004, flags=[];
-        if(ch!==0 && r.large_change) flags.push('<span class="badge badge-amber">Over 10%</span>');
-        if(below) flags.push('<span class="badge badge-red">Below spent</span>');
-        if(ch!==0 && !String(r.change_note||'').trim()) flags.push('<span class="badge badge-gray">No reason given</span>');
-        const sub=((this.budgetMods.lines[versionId]||[]).find(l=>l.line_code===r.line_code)||{}).subcategory || (this.fiscal.budgetLines||[]).find(b=>b.line_code===r.line_code)?.subcategory;
-        return {line_code:r.line_code,line_name:r.line_name,category:r.category,subcategory:sub,approved:Number(r.prior_budget||0),change:ch,revised:Number(r.new_budget||0),note:r.change_note||'',spent:Number(r.spent_to_date||0),flags};
-      });
+    // ------------------------------------------------- AHTF funding impact
+    App.bmFundingImpactHtml = function(rows){
+      const split=(amt,share)=>{ if(share===null) return [0,0,amt]; if(share<=0) return [0,amt,0]; if(share>=1) return [amt,0,0]; return [Math.round(amt*share),Math.round(amt*(1-share)),0]; };
+      const t={a:[0,0,0], r:[0,0,0]};
+      rows.forEach(r=>{ const sh=this.bmAhtfShare(r.line_code); const a=split(r.approved,sh), v=split(r.revised,sh); [0,1,2].forEach(i=>{t.a[i]+=a[i]; t.r[i]+=v[i];}); });
+      const line=(label,i)=>`<tr><td>${label}</td><td class="num">${this.bmPlain(t.a[i])}</td><td class="num">${this.bmPlain(t.r[i])}</td><td class="num">${this.bmMoney(t.r[i]-t.a[i],{dashZero:true})}</td></tr>`;
+      const moved=Math.round(t.r[0]-t.a[0]);
+      return `<div class="section-label" style="margin-top:16px">Funding-source impact (AHTF eligibility)</div>
+        <div class="client-table-wrap"><table class="bm-form"><thead><tr><th>Eligibility</th><th>Approved</th><th>Revised</th><th>Change</th></tr></thead><tbody>
+        ${line('AHTF eligible',0)}${line('Not AHTF eligible',1)}${(t.a[2]||t.r[2])?line('Not classified',2):''}</tbody></table></div>
+        <div class="field-hint" style="margin-top:6px">${moved===0?'This modification does not change the AHTF-eligible share of the budget.':`AHTF-eligible costs ${moved>0?'increase':'decrease'} by ${this.bmPlain(Math.abs(moved))}. Check grant claims and the funding plan.`} Uses each line's AHTF share from the fiscal workbook (split lines rounded to whole dollars).</div>`;
     };
 
-    // ---------- form header (Cover tab) ----------
+    // ------------------------------------------------- form header (cover)
     App.bmCoverHtml = function(v, {editable=false}={}){
       const ym=this.budgetMods.yearMeta||{}, d=this.bmDraft, m=this.bmMeta(v);
       const vendor=ym.vendor_number || (this.fiscal.monthMeta||[]).find(x=>x.vendor_number)?.vendor_number || '';
       const preparedBy = editable ? `<input id="bm-prepared-by" value="${this.escape(d.preparedBy||'')}" aria-label="Prepared by">` : this.escape(m.prepared_by||'—');
       const datePrepared = editable ? `<input id="bm-date-prepared" type="date" value="${this.escape(this.dateOnly(d.datePrepared)||'')}" aria-label="Date prepared">` : this.escape(m.date_prepared?this.formatDate(m.date_prepared):'—');
       const reqNo = v ? this.bmRequestNo(v) : this.bmRequestNo({version_no:1e9});
-      return `<div style="text-align:center;margin-bottom:14px"><div class="bm-title">BUDGET MODIFICATION REQUEST</div><div style="font-weight:700;margin-top:4px">${this.escape(this.program?.name||'Holloway Interim Housing Program')} — ${this.escape(String(this.fiscalBudgetYear||'').replace(/^FY/,'FY '))} Operating Budget</div><div class="field-hint">City of West Hollywood, Human Services Division &nbsp;|&nbsp; Operated by ${this.escape(this.agencyName?.()||'Ascencia')}</div></div>
+      return `<div style="text-align:center;margin-bottom:14px"><div class="bm-title">BUDGET MODIFICATION REQUEST</div><div style="font-weight:700;margin-top:4px">${this.escape(this.program?.name||'Holloway Interim Housing Program')} — ${this.escape(this.bmFyLabel())} Operating Budget</div><div class="field-hint">City of West Hollywood, Human Services Division &nbsp;|&nbsp; Operated by ${this.escape(this.bmAgency())}</div></div>
         <div class="bm-cover"><span class="k">Contract No.:</span><span>${this.escape(ym.contract_number||'—')}</span><span class="k">Fiscal Year:</span><span>${this.escape(this.bmFyLong())}</span>
         <span class="k">Vendor No.:</span><span>${this.escape(vendor||'—')}</span><span class="k">Service Location:</span><span>${this.escape(ym.service_location||'—')}</span>
         <span class="k">Prepared by:</span><span>${preparedBy}</span><span class="k">Date Prepared:</span><span>${datePrepared}</span>
-        <span class="k">Request No.:</span><span>${this.escape(reqNo)}</span><span></span><span></span></div>`;
+        <span class="k">Request No.:</span><span>${this.escape(reqNo)}</span><span class="k">Request Type:</span><span>${(v?this.bmRequestType(v):this.bmDraft?.requestType)==='closeout'?'Close-out modification':'Routine modification'}</span></div>`;
     };
     App.bmHowToHtml = function(){
       const total=this.bmMoney(this.bmApprovedTotal());
       return `<details class="bm-howto"><summary>Purpose of this form &amp; how to complete it</summary>
-        <p style="margin:8px 0 0">Review the ${this.escape(String(this.fiscalBudgetYear||'').replace(/^FY/,'FY '))} approved operating budget line by line and propose any reallocation needed to reflect actual spending patterns. Enter a positive number to increase a line or a negative number to decrease it. Increases and decreases must net to zero so the Revised Budget Grand Total remains ${total}.</p>
+        <p style="margin:8px 0 0">Review the ${this.escape(this.bmFyLabel())} approved operating budget line by line and propose any reallocation needed to reflect actual spending patterns. Enter a positive number to increase a line or a negative number to decrease it. Increases and decreases must net to zero so the Revised Budget Grand Total remains ${total}.</p>
         <ol><li>The ${this.bmFyShort()} Approved Budget column is pre-filled from the current approved budget and can't be edited.</li>
         <li>In the yellow <strong>Requested Change (+/–)</strong> column, enter the dollar amount to add or subtract from each line you want to change. Leave unchanged lines blank.</li>
         <li><strong>Revised Budget</strong> calculates automatically as Approved Budget + Requested Change.</li>
-        <li>In the yellow <strong>Reason for Change</strong> column, briefly explain each proposed change (e.g., staffing change, vacancy, rate increase).</li>
+        <li>In the yellow <strong>Reason for Change</strong> column, briefly explain each proposed change (e.g., staffing change, vacancy, rate increase). Attach quotes, payroll or other backup under Supporting Documents.</li>
         <li>The Revised Grand Total must equal ${total}. The Balance Check row flags it automatically if it doesn't balance.</li>
-        <li>Select <strong>Submit for City Review</strong>. The City reviews the request and approves it or returns it with comments. Once approved, the revised budget is used for invoicing and reporting.</li></ol>
-        <div class="field-hint" style="margin-top:6px"><span class="bm-legend"></span>Yellow fill: Ascencia enters the requested dollar change and reason here.</div></details>`;
+        <li>Certify and select <strong>Submit for City Review</strong>. The City may ask questions on individual lines, adjust amounts, approve, or return the request with comments. Once approved, the revised budget is used for invoicing and reporting.</li></ol>
+        <div class="field-hint" style="margin-top:6px"><span class="bm-legend"></span>Yellow fill: Ascencia enters the requested change and reason. &nbsp; 🔒 Locked lines change only through a contract amendment.</div></details>`;
     };
 
-    // ---------- current version banner ----------
     App.bmCurrentHtml = function(){
       const cur=this.bmCurrentVersion(); const open=this.bmOpenVersion();
       const curTxt = cur ? `<strong>Version ${cur.version_no} · ${this.escape(this.bmRequestNo(cur))}</strong> · approved ${this.escape(this.formatDate(cur.effective_date||cur.reviewed_at))} · ${this.bmMoney(this.bmApprovedTotal())}` : `<strong>No versioned budget yet.</strong> Version 1 is recorded automatically when the first modification is started.`;
-      const openTxt = open ? `<div class="notice ${open.status==='returned'?'red':open.status==='submitted'?'amber':'navy'}" style="margin:12px 0 0"><div>i</div><div><strong>${this.escape(this.bmRequestNo(open))} · ${this.escape(BM_LABEL[open.status])}</strong>${open.status==='returned'&&open.review_note?` — City comment: “${this.escape(open.review_note)}”`:''}${open.status==='submitted'?` · submitted ${this.escape(this.formatDateTime(open.submitted_at))}`:''}</div></div>`:'';
-      return `<div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Budget in Effect</h2><div class="field-hint">Invoicing, Budget vs. Actuals and exports all use the current approved version. Each invoice records the version it was submitted against.</div></div></div><div class="card-body">${curTxt}${openTxt}</div></div>`;
+      const openTxt = open ? `<div class="notice ${open.status==='returned'?'red':open.status==='submitted'?'amber':'navy'}" style="margin:12px 0 0"><div>i</div><div><strong>${this.escape(this.bmRequestNo(open))} · ${this.escape(BM_LABEL[open.status])}</strong>${open.status==='returned'&&open.review_note?` — City comment: “${this.escape(open.review_note)}”`:''}${open.status==='submitted'?` · submitted ${this.escape(this.formatDateTime(open.submitted_at))}`:''}${this.bmAwaitingSecond(open)?' · <strong>first approval given; awaiting second City approval</strong>':''}</div></div>`:'';
+      const dl=this.bmDeadlineText(); const dlHtml=dl?`<div class="field-hint" style="margin-top:10px">🗓 ${dl}</div>`:'';
+      return `<div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Budget in Effect</h2><div class="field-hint">Invoicing, Budget vs. Actuals and exports all use the current approved version. Each invoice records the version it was submitted against.</div></div></div><div class="card-body">${curTxt}${openTxt}${dlHtml}</div></div>`;
     };
 
     App.bmIssuesHtml = function(){
@@ -16521,33 +16660,90 @@ const App = {
         + (warnings.length?`<div class="notice navy"><div>i</div><div><strong>Recommended:</strong><ul style="margin:6px 0 0 18px;padding:0">${warnings.map(i=>`<li>${this.escape(i)}</li>`).join('')}</ul></div></div>`:'');
     };
 
-    // ---------- editor (draft / returned) ----------
+    // ------------------------------------------------- sign-offs & files
+    App.bmSignoffs = function(v){ return (v && this.budgetMods.signoffs[v.id]) || []; };
+    App.bmFirstApproval = function(v){ return this.bmSignoffs(v).filter(s=>s.kind==='city_approval' && (!v.submitted_at || new Date(s.signed_at)>=new Date(v.submitted_at))).pop()||null; };
+    App.bmNeedsSecond = function(v){ const t=this.bmRules().second_threshold; if(t==null) return false; const moved=(this.bmVersionRows(v.id)).filter(r=>r.change>0).reduce((s,r)=>s+r.change,0); return moved>=t; };
+    App.bmAwaitingSecond = function(v){ return v?.status==='submitted' && this.bmNeedsSecond(v) && !!this.bmFirstApproval(v); };
+    App.bmSignoffsHtml = function(v){
+      const list=this.bmSignoffs(v); if(!list.length) return '';
+      const label={agency_certification:`${this.bmAgency()} certification`, city_approval:'City first approval', city_final_approval:'City approval'};
+      return `<div class="bm-sign"><div class="section-label" style="margin-top:0">Certifications &amp; approvals</div>${list.map(s=>`<div style="font-size:12.5px;margin:6px 0"><strong>${this.escape(label[s.kind]||s.kind)}</strong> — ${this.escape(s.signer_name||'')} <span class="field-hint">(${this.escape(s.signer_email||'')}) · ${this.escape(this.formatDateTime(s.signed_at))}</span>${s.statement?`<div class="field-hint">“${this.escape(s.statement)}”</div>`:''}</div>`).join('')}</div>`;
+    };
+    App.bmFilesHtml = function(v){
+      if(!v) return '';
+      const files=this.budgetMods.attachments[v.id]||[], open=BM_OPEN.includes(v.status) && (this.isAdmin()||this.canEditFiscal?.());
+      if(!files.length && !open) return '';
+      const list=files.map(f=>`<li><button type="button" class="btn btn-ghost btn-sm" data-bm-file="${this.escape(f.id)}">${this.escape(f.file_name)}</button> <span class="field-hint">${f.file_size?Math.max(1,Math.round(f.file_size/1024))+' KB · ':''}${this.escape(f.uploaded_by||'')} · ${this.escape(this.formatDateTime(f.uploaded_at))}${f.description?' · '+this.escape(f.description):''}</span></li>`).join('');
+      const up=open?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px"><input type="file" id="bm-file-input" accept=".pdf,.xlsx,.xls,.csv,.docx,.doc,.png,.jpg,.jpeg"><input class="field-input" id="bm-file-desc" placeholder="What is this? (optional)" style="max-width:280px"><button type="button" class="btn btn-ghost btn-sm" id="bm-file-upload">Upload</button></div><div class="field-hint">PDF, Excel, CSV, Word or image files up to 20 MB.</div>`:'';
+      return `<div class="bm-sign"><div class="section-label" style="margin-top:0">Supporting documents</div>${files.length?`<ul class="bm-files" style="list-style:none;padding:0;margin:0">${list}</ul>`:'<div class="field-hint">No documents attached.</div>'}${up}</div>`;
+    };
+    App.bmExportButtonsHtml = function(v){
+      return `<div class="client-actions" style="justify-content:flex-end;margin:0 0 8px"><button type="button" class="btn btn-ghost btn-sm" data-bm-export-xlsx="${this.escape(v.id)}">Download Excel (City form)</button><button type="button" class="btn btn-ghost btn-sm" data-bm-print="${this.escape(v.id)}">Print / Save PDF</button></div>`;
+    };
+
+    // ------------------------------------------------- editor (draft/returned)
     App.bmEditorHtml = function(){
       const d=this.bmDraft, open=this.bmOpenVersion(), {blocking}=this.bmIssues();
+      const canSubmit=!blocking.length && d.certify && String(d.signer||'').trim();
+      const comments=open?(this.budgetMods.comments[open.id]||[]).length:0;
       return `<div class="card" style="margin-bottom:18px"><div class="card-body">
-        ${this.bmCoverHtml(open,{editable:true})}${this.bmHowToHtml()}
-        <div style="margin-top:16px">${this.bmFormTableHtml(this.bmDraftRows(),{editable:true})}</div>
-        <div class="field-group" style="margin-top:14px"><label class="field-label" for="bm-comments">Additional comments for the City <span class="field-hint">(optional)</span></label><textarea id="bm-comments" class="field-textarea" rows="2">${this.escape(d.comments||'')}</textarea></div>
-        <label style="display:flex;gap:8px;align-items:center;margin:8px 0 14px;font-size:13px"><input type="checkbox" id="bm-amendment" ${d.isAmendment?'checked':''}> This is a contract amendment (the grand total changes)</label>
-        <div id="bm-issues-wrap">${this.bmIssuesHtml()}</div>
-        <div class="client-actions"><button class="btn btn-ghost" id="bm-save">Save Draft</button><button class="btn btn-primary" id="bm-submit" ${blocking.length?'disabled':''}>Submit for City Review</button>${open?'<button class="btn btn-ghost" id="bm-withdraw">Withdraw</button>':'<button class="btn btn-ghost" id="bm-cancel">Cancel</button>'}</div>
+        ${open?this.bmExportButtonsHtml(open):''}
+        ${this.bmCoverHtml(open,{editable:true})}
+        <div class="bm-toolbar" style="margin-top:12px"><div><span class="lbl">Request type</span><span class="bm-seg"><button type="button" class="${d.requestType!=='closeout'?'active':''}" data-bm-type="routine" ${this.bmPastDeadline()?'disabled title="The routine deadline has passed"':''}>Routine</button><button type="button" class="${d.requestType==='closeout'?'active':''}" data-bm-type="closeout">Close-out modification</button></span></div><div class="field-hint">${d.requestType==='closeout'?'Close-out modifications are minor year-end adjustments. They are subject to City approval, can be disallowed, and cannot be revised once the final report is received.':'Call your City Program Administrator to discuss the modification before submitting.'}</div></div>
+        ${this.bmHowToHtml()}
+        ${open&&comments?`<div class="notice navy" style="margin-top:12px"><div>i</div><div>There ${comments===1?'is 1 comment':'are '+comments+' comments'} on this request. Lines with comments show a highlighted 💬 button.</div></div>`:''}
+        <div style="margin-top:16px">${this.bmFormTableHtml(this.bmDraftRows().map(r=>({...r,comments:open?(this.budgetMods.comments[open.id]||[]).filter(c=>c.line_code===r.line_code).length:0})),{editable:true, versionId:open?.id||null})}</div>
+        <div class="field-group" style="margin-top:14px"><label class="field-label" for="bm-comments">Budget modification narrative</label><div class="field-hint" style="margin-bottom:4px">Summarize what is changing and why, as in the handbook's narrative letter (Attachment I). You can also attach the signed letter under Supporting documents.</div><textarea id="bm-comments" class="field-textarea" rows="3">${this.escape(d.comments||'')}</textarea></div>
+        <label style="display:flex;gap:8px;align-items:center;margin:8px 0 14px;font-size:13px"><input type="checkbox" id="bm-amendment" ${d.isAmendment?'checked':''}> This is a contract amendment (the grand total or locked lines change)</label>
+        ${open?this.bmFilesHtml(open):'<div class="field-hint">Save the draft to attach supporting documents.</div>'}
+        <div id="bm-issues-wrap" style="margin-top:14px">${this.bmIssuesHtml()}</div>
+        <div class="bm-sign"><label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="checkbox" id="bm-certify" ${d.certify?'checked':''} style="margin-top:3px"> <span>${this.escape(CERT_TEXT(this.bmAgency()))}</span></label>
+          <div style="margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><label class="field-label" for="bm-signer" style="margin:0">Certified by (full name)</label><input type="text" id="bm-signer" value="${this.escape(d.signer||'')}"></div></div>
+        <div class="client-actions" style="margin-top:14px"><button class="btn btn-ghost" id="bm-save">Save Draft</button><button class="btn btn-primary" id="bm-submit" ${canSubmit?'':'disabled'}>Certify &amp; Submit for City Review</button>${open?'<button class="btn btn-ghost" id="bm-withdraw">Withdraw</button>':'<button class="btn btn-ghost" id="bm-cancel">Cancel</button>'}</div>
       </div></div>`;
     };
 
+    // ------------------------------------------------- submitted (review)
     App.bmSubmittedHtml = function(open){
       const admin=this.isAdmin(), m=this.bmMeta(open), rows=this.bmVersionRows(open.id);
-      const changed=rows.filter(r=>Math.round(r.change)!==0), inc=changed.filter(r=>r.change>0).reduce((s,r)=>s+r.change,0), dec=changed.filter(r=>r.change<0).reduce((s,r)=>s+r.change,0);
-      const flagged=rows.filter(r=>r.flags.length).length;
-      const summary=`<div class="report-summary-strip" style="margin:14px 0 12px"><strong>${changed.length} lines changed</strong> · increases ${this.bmMoney(inc)} · decreases ${this.bmMoney(dec)} · net ${this.bmMoney(inc+dec)}${flagged?` · <strong>${flagged} flagged</strong> for review`:''}${open.is_amendment?' · <strong>Contract amendment</strong>':''}${m.source_note?`<div class="field-hint" style="margin-top:4px">${this.escape(m.source_note)}</div>`:''}</div>`;
-      const review = admin ? `<div class="field-group" style="margin-top:14px"><label class="field-label" for="bm-review-note">City review comment <span class="field-hint">(required to return)</span></label><textarea id="bm-review-note" class="field-textarea" rows="3" placeholder="Notes for Ascencia"></textarea></div><div class="client-actions"><button class="btn btn-primary" id="bm-approve">Approve ${this.escape(this.bmRequestNo(open))}</button><button class="btn btn-ghost" id="bm-return">Return for Changes</button></div><div class="field-hint" style="margin-top:8px">Approving makes the revised budget the one used for invoicing and reporting right away. The current version is kept in history.</div>`
-        : (this.bmCanDraft()?`<div class="client-actions" style="margin-top:14px"><button class="btn btn-ghost" id="bm-withdraw">Withdraw to Make Changes</button></div>`:'');
-      return `<div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">${admin?'City Review':'Under City Review'} · ${this.escape(this.bmRequestNo(open))}</h2><div class="field-hint">Submitted ${this.escape(this.formatDateTime(open.submitted_at))}${open.submitted_by?' by '+this.escape(open.submitted_by):''}</div></div></div><div class="card-body">
-        ${this.bmCoverHtml(open)}${summary}
-        ${open.justification?`<div class="report-summary-strip" style="margin-bottom:12px"><strong>Comments:</strong> ${this.escape(open.justification)}</div>`:''}
-        ${this.bmFlowHtml(rows)}${this.bmViewTableHtml(rows)}${review}</div></div>`;
+      const first=this.bmFirstApproval(open), needsSecond=this.bmNeedsSecond(open), me=String(this.profile?.email||this.user?.email||'').toLowerCase();
+      const adjusting=admin && !!this.bmAdj && !first;
+      let tableRows=rows;
+      if(adjusting){ tableRows=rows.map(r=>{ const amt=Number(this.bmAdj[r.line_code]??r.revised); return {...r, revised:amt, change:amt-r.approved, adjusted: Math.round(amt)!==Math.round(r.revised)?{requested:r.adjusted?.requested??r.revised}:r.adjusted}; }); }
+      let review='';
+      if(admin){
+        const approveLabel = needsSecond ? (first ? 'Give second approval' : 'Give first approval') : `Approve ${this.escape(this.bmRequestNo(open))}`;
+        const blockedMine = needsSecond && first && String(first.signer_email||'').toLowerCase()===me;
+        const adjBar = adjusting
+          ? `<div class="notice navy" style="margin:12px 0"><div>i</div><div class="bm-noticebar" style="flex:1"><span><strong>Adjusting amounts.</strong> Edit the blue City-Approved Amount cells; the request must still balance. Ascencia's requested amounts stay on record.</span><span><button class="btn btn-primary btn-sm" id="bm-adj-save">Save adjustments</button> <button class="btn btn-ghost btn-sm" id="bm-adj-cancel">Cancel</button></span></div></div>`
+          : (!first?`<button class="btn btn-ghost" id="bm-adj-start">Adjust amounts before approving</button>`:'');
+        review = `${adjBar}<div class="bm-sign">
+          ${needsSecond?`<div class="field-hint" style="margin-bottom:8px">This request moves at least ${this.bmPlain(this.bmRules().second_threshold)}, so it needs approval from two different City admins.${first?` First approval: ${this.escape(first.signer_name)} on ${this.escape(this.formatDateTime(first.signed_at))}.`:''}</div>`:''}
+          <div class="field-group"><label class="field-label" for="bm-review-note">City review comment <span class="field-hint">(required to return)</span></label><textarea id="bm-review-note" class="field-textarea" rows="3" placeholder="Notes for ${this.escape(this.bmAgency())}"></textarea></div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0"><label class="field-label" for="bm-approver" style="margin:0">Approved by (full name)</label><input type="text" id="bm-approver" value="${this.escape(this.bmMyName())}"></div>
+          ${adjusting?'':`<div class="client-actions"><button class="btn btn-primary" id="bm-approve" ${blockedMine?'disabled title="A different City admin must give the second approval"':''}>${approveLabel}</button><button class="btn btn-ghost" id="bm-return">Return for Changes</button></div>`}
+          ${blockedMine?'<div class="field-hint">You gave the first approval. A different City admin must give the second approval.</div>':''}
+          <div class="field-hint" style="margin-top:8px">${adjusting?'Save or cancel your adjustments to continue.':'Approving makes the revised budget the one used for invoicing and reporting right away. The current version is kept in history.'}</div></div>`;
+      } else if(this.bmCanDraft()){
+        review = `<div class="client-actions" style="margin-top:14px"><button class="btn btn-ghost" id="bm-withdraw">Withdraw to Make Changes</button></div>`;
+      }
+      const tableHtml = adjusting
+        ? this.bmFormTableHtml(tableRows,{cityEdit:true, compare:this.bmViewState().mode==='complete', versionId:open.id})
+        : this.bmViewTableHtml(tableRows,{versionId:open.id});
+      return `<div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">${admin?'City Review':'Under City Review'} · ${this.escape(this.bmRequestNo(open))}</h2><div class="field-hint">Submitted ${this.escape(this.formatDateTime(open.submitted_at))}${open.submitted_by?' by '+this.escape(open.submitted_by):''}${m.source_note?' · '+this.escape(m.source_note):''}</div></div></div><div class="card-body">
+        ${this.bmExportButtonsHtml(open)}
+        ${this.bmCoverHtml(open)}
+        ${this.bmSummaryHtml(rows, open)}
+        ${this.bmRequestType(open)==='closeout'?`<div class="notice amber"><div>!</div><div><strong>Close-out modification.</strong> Minor year-end adjustment; the City may disallow it, and it cannot be revised once the final report is received.</div></div>`:''}
+        ${open.justification?`<div class="report-summary-strip" style="margin-bottom:12px"><strong>Narrative:</strong> ${this.escape(open.justification)}</div>`:'<div class="field-hint" style="margin-bottom:10px">No narrative was provided with this request.</div>'}
+        ${this.bmFlowHtml(rows,'open')}
+        ${adjusting?`<div class="field-hint" style="margin-bottom:6px"><span class="bm-legend city"></span>Blue fill: City-approved amount.</div>`:''}
+        ${tableHtml}
+        ${this.bmFilesHtml(open)}${this.bmSignoffsHtml(open)}${review}</div></div>`;
     };
 
-    // ---------- history ----------
+    // ------------------------------------------------- history
     App.bmHistoryHtml = function(){
       const versions=this.budgetMods.versions||[]; if(!versions.length) return '';
       const invByVer={}; (this.fiscal.submissions||[]).forEach(s=>{ if(s.budget_version_id) (invByVer[s.budget_version_id] ||= []).push(s.invoice_month); });
@@ -16556,11 +16752,39 @@ const App = {
         const m=this.bmMeta(v), log=(this.budgetMods.log||[]).filter(g=>g.version_id===v.id);
         const inv=(invByVer[v.id]||[]).sort().map(x=>this.escape(new Date(this.dateOnly(x)+'T12:00:00').toLocaleString('en-US',{month:'short',year:'numeric'}))).join(', ');
         const meta=[m.prepared_by?`prepared by ${this.escape(m.prepared_by)}${m.date_prepared?' on '+this.escape(this.formatDate(m.date_prepared)):''}`:'', v.effective_date?`effective ${this.escape(this.formatDate(v.effective_date))}`:'', v.reviewed_by&&!v.is_baseline&&['approved','superseded','returned'].includes(v.status)?`reviewed by ${this.escape(v.reviewed_by)}`:'', v.total_budget!=null?this.bmMoney(v.total_budget):''].filter(Boolean).join(' · ');
-        const open=!!expanded[v.id];
-        const detail=open?`<div style="margin-top:12px">${v.review_note?`<div class="report-summary-strip" style="margin-bottom:10px"><strong>City comment:</strong> ${this.escape(v.review_note)}</div>`:''}${v.is_baseline?'':this.bmFlowHtml(this.bmVersionRows(v.id))}${v.is_baseline?this.bmFormTableHtml(this.bmVersionRows(v.id)):this.bmViewTableHtml(this.bmVersionRows(v.id))}${inv?`<div class="field-hint" style="margin-top:8px">Invoices submitted against this version: ${inv}</div>`:''}<div class="section-label" style="margin-top:12px">Activity</div>${log.map(g=>`<div class="field-hint">${this.escape(this.formatDateTime(g.created_at))} · <strong>${this.escape(g.action.replaceAll('_',' '))}</strong>${g.acted_by?' · '+this.escape(g.acted_by):''}${g.note?' — '+this.escape(g.note):''}</div>`).join('')||'<div class="field-hint">No activity recorded.</div>'}</div>`:'';
-        return `<div style="border-top:1px solid var(--border);padding:12px 0"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><strong>Version ${v.version_no} · ${this.escape(this.bmRequestNo(v))}</strong> <span class="badge ${BM_BADGE[v.status]||'badge-gray'}">${this.escape(BM_LABEL[v.status]||v.status)}</span><div class="field-hint">${meta}</div></div><button class="btn btn-ghost btn-sm" data-bm-expand="${this.escape(v.id)}">${open?'Hide details':'View details'}</button></div>${detail}</div>`;
+        const isOpen=!!expanded[v.id];
+        const rows=isOpen?this.bmVersionRows(v.id):[];
+        const detail=isOpen?`<div style="margin-top:12px">${v.is_baseline?'':this.bmExportButtonsHtml(v)}${v.justification?`<div class="report-summary-strip" style="margin-bottom:10px"><strong>Narrative:</strong> ${this.escape(v.justification)}</div>`:''}${v.review_note?`<div class="report-summary-strip" style="margin-bottom:10px"><strong>City comment:</strong> ${this.escape(v.review_note)}</div>`:''}${v.is_baseline?'':this.bmSummaryHtml(rows,v)+this.bmFlowHtml(rows,v.id)}${v.is_baseline?this.bmFormTableHtml(rows,{scroll:true}):this.bmViewTableHtml(rows,{versionId:v.id})}${inv?`<div class="field-hint" style="margin-top:8px">Invoices submitted against this version: ${inv}</div>`:''}${this.bmFilesHtml(v)}${this.bmSignoffsHtml(v)}<div class="section-label" style="margin-top:12px">Activity</div>${log.map(g=>`<div class="field-hint">${this.escape(this.formatDateTime(g.created_at))} · <strong>${this.escape(g.action.replaceAll('_',' '))}</strong>${g.acted_by?' · '+this.escape(g.acted_by):''}${g.note?' — '+this.escape(g.note):''}</div>`).join('')||'<div class="field-hint">No activity recorded.</div>'}</div>`:'';
+        return `<div style="border-top:1px solid var(--border);padding:12px 0" data-bm-version="${this.escape(v.id)}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><strong>Version ${v.version_no} · ${this.escape(this.bmRequestNo(v))}</strong>${!v.is_baseline&&this.bmRequestType(v)==='closeout'?' <span class="badge badge-gray">Close-out</span>':''} <span class="badge ${BM_BADGE[v.status]||'badge-gray'}">${this.escape(BM_LABEL[v.status]||v.status)}</span><div class="field-hint">${meta}</div></div><button class="btn btn-ghost btn-sm" data-bm-expand="${this.escape(v.id)}">${isOpen?'Hide details':'View details'}</button></div>${detail}</div>`;
       }).join('');
-      return `<div class="card"><div class="card-header"><div><h2 class="card-title">Budget History</h2><div class="field-hint">Every version, what changed and why, who acted, and which invoices used it.</div></div></div><div class="card-body" style="padding-top:0">${items}</div></div>`;
+      return `<div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Budget History</h2><div class="field-hint">Every version, what changed and why, who acted, and which invoices used it.</div></div></div><div class="card-body" style="padding-top:0">${items}</div></div>`;
+    };
+
+    // ------------------------------------------------- rules (City admin)
+    App.bmRulesHtml = function(){
+      if(!this.isAdmin()) return '';
+      const r=this.bmRules(), lines=this.fiscal.budgetLines||[];
+      const locks=lines.map(b=>`<label style="font-weight:400;color:inherit;display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" data-bm-lock="${this.escape(b.line_code)}" ${r.locked.includes(b.line_code)?'checked':''}> ${this.escape(b.line_name)}</label>`).join('');
+      return `<div class="card"><div class="card-body"><details class="bm-details" ${this.bmRulesOpen?'open':''} id="bm-rules-details"><summary>Budget modification rules (City)</summary>
+        <div class="field-hint" style="margin-top:6px">These apply to every request for ${this.escape(this.bmFyLabel())}. Leave a field blank to turn that rule off.</div>
+        <div class="bm-rules">
+          <div><label for="bm-r-pct">Flag changes over (%)</label><input id="bm-r-pct" type="number" min="0" step="1" value="${r.flag_pct}"></div>
+          <div><label for="bm-r-min">…and at least ($)</label><input id="bm-r-min" type="number" min="0" step="100" value="${r.flag_min_amount}"></div>
+          <div><label for="bm-r-any">…or any change of at least ($)</label><input id="bm-r-any" type="number" min="0" step="500" value="${r.flag_any_amount??''}" placeholder="Off"></div>
+          <div><label for="bm-r-deadline">Routine modification deadline</label><input id="bm-r-deadline" type="date" value="${this.escape(this.dateOnly(r.deadline)||'')}"></div>
+          <div><label for="bm-r-cap">Indirect / Administrative cap (% of total; handbook: 10%)</label><input id="bm-r-cap" type="number" min="0" step="0.1" value="${r.indirect_cap_pct??''}" placeholder="No cap"></div>
+          <div><label for="bm-r-two">Second City approval when funds moved ≥ ($)</label><input id="bm-r-two" type="number" min="0" step="1000" value="${r.second_threshold??''}" placeholder="Off"></div>
+          <div style="grid-column:1/-1"><label for="bm-r-emails">Notify these City staff of new submissions (comma-separated)</label><input id="bm-r-emails" value="${this.escape(r.city_emails.join(', '))}" placeholder="All City admins"></div>
+        </div>
+        <div style="margin-top:12px"><label style="font-size:12px;font-weight:700;color:${C.section}">Locked lines (change only through a contract amendment)</label><div class="bm-lockgrid">${locks}</div></div>
+        <div class="client-actions" style="margin-top:12px"><button class="btn btn-primary btn-sm" id="bm-rules-save">Save rules</button></div>
+      </details></div></div>`;
+    };
+
+    App.bmNoticeHtml = function(){
+      const n=this.bmPendingNotice; if(!n) return '';
+      const href=`mailto:${encodeURIComponent((n.to||[]).join(','))}?subject=${encodeURIComponent(n.subject||'')}&body=${encodeURIComponent(n.body||'')}`;
+      return `<div class="notice green"><div>✉</div><div class="bm-noticebar" style="flex:1"><span><strong>Let them know:</strong> ${this.escape(n.subject||'')} — to ${this.escape((n.to||[]).join(', ')||'(no recipients set)')}</span><span><a class="btn btn-primary btn-sm" href="${href}" id="bm-notice-open">Open email</a> <button class="btn btn-ghost btn-sm" id="bm-notice-dismiss">Dismiss</button></span></div></div>`;
     };
 
     App.budgetModsHtml = function(){
@@ -16570,37 +16794,66 @@ const App = {
       let work='';
       if(open?.status==='submitted') work=this.bmSubmittedHtml(open);
       else if(open && this.bmCanDraft()) work=this.bmEditorHtml();
-      else if(open) work=`<div class="notice navy"><div>i</div><div>Ascencia is preparing ${this.escape(this.bmRequestNo(open))}. It will appear here for review once submitted.</div></div>`;
+      else if(open) work=`<div class="notice navy"><div>i</div><div>${this.escape(this.bmAgency())} is preparing ${this.escape(this.bmRequestNo(open))}. It will appear here for review once submitted.</div></div>`;
       else if(this.bmDraft?.started && this.bmCanDraft()) work=this.bmEditorHtml();
       else if(this.bmCanDraft()) work=`<div class="client-actions" style="margin-bottom:18px"><button class="btn btn-primary" id="bm-start">Start a Budget Modification Request</button></div>`;
-      return this.bmCurrentHtml()+work+this.bmHistoryHtml();
+      return this.bmNoticeHtml()+this.bmCurrentHtml()+work+this.bmHistoryHtml()+this.bmRulesHtml();
     };
 
-    // ---------- live refresh while editing ----------
+    // ------------------------------------------------- live refresh
     App.bmRefreshLive = function(lineCode){
       const el=document.getElementById('view-fiscal'); if(!el||!this.bmDraft) return;
       const rows=this.bmDraftRows(), sum=(rs,k)=>rs.reduce((s,r)=>s+Number(r[k]||0),0);
       if(lineCode){ const c=el.querySelector(`[data-bm-revised="${CSS.escape(lineCode)}"]`); if(c) c.innerHTML=this.bmMoney(this.bmRevised(lineCode),{dashZero:true});
         const tr=c?.closest('tr'); if(tr) tr.classList.toggle('bm-changed', Math.round(Number(this.bmDraft.lines[lineCode]?.change||0))!==0); }
-      const set=(key,rs)=>{ const a=el.querySelector(`[data-bm-tchange="${CSS.escape(key)}"]`), b=el.querySelector(`[data-bm-trevised="${CSS.escape(key)}"]`); if(a) a.innerHTML=this.bmMoney(sum(rs,'change'),{dashZero:true}); if(b) b.innerHTML=this.bmMoney(sum(rs,'revised')); };
+      this.bmRefreshTotals(rows);
+      const wrap=el.querySelector('#bm-issues-wrap'); if(wrap) wrap.innerHTML=this.bmIssuesHtml();
+      this.bmRefreshSubmit();
+    };
+    App.bmRefreshTotals = function(rows){
+      const el=document.getElementById('view-fiscal'); if(!el) return; const sum=(rs,k)=>rs.reduce((s,r)=>s+Number(r[k]||0),0);
+      const set=(key,rs)=>{ const a=el.querySelector(`#fiscal-budgetmods [data-bm-tchange="${CSS.escape(key)}"]`), b=el.querySelector(`#fiscal-budgetmods [data-bm-trevised="${CSS.escape(key)}"]`); if(a) a.innerHTML=this.bmMoney(sum(rs,'change'),{dashZero:true}); if(b) b.innerHTML=this.bmMoney(sum(rs,'revised')); };
       SECTIONS.forEach(sec=>{ const rs=rows.filter(r=>r.category===sec.cat); set(sec.cat,rs); (sec.groups||[]).forEach(g=>set(sec.cat+'|'+g.sub,rs.filter(r=>r.subcategory===g.sub))); });
       set('ALL',rows);
       const diff=sum(rows,'revised')-sum(rows,'approved');
       const bd=el.querySelector('#bm-balance-diff'); if(bd) bd.innerHTML=this.bmMoney(diff);
       const bm=el.querySelector('#bm-balance-msg'); if(bm) bm.innerHTML=Math.round(diff)===0?'<span style="color:#1A5735">✓ Balanced</span>':'<span class="bm-neg">⚠ Out of balance — adjust requested changes</span>';
-      const wrap=el.querySelector('#bm-issues-wrap'); if(wrap) wrap.innerHTML=this.bmIssuesHtml();
-      const sb=el.querySelector('#bm-submit'); if(sb) sb.disabled=this.bmIssues().blocking.length>0;
+      return diff;
+    };
+    App.bmRefreshSubmit = function(){
+      const sb=document.querySelector('#bm-submit'); if(!sb||!this.bmDraft) return;
+      sb.disabled = this.bmIssues().blocking.length>0 || !this.bmDraft.certify || !String(this.bmDraft.signer||'').trim();
+    };
+    App.bmRefreshAdjust = function(){
+      const open=this.bmOpenVersion(); if(!open||!this.bmAdj) return;
+      const rows=this.bmVersionRows(open.id).map(r=>{ const amt=Number(this.bmAdj[r.line_code]??r.revised); return {...r, revised:amt, change:amt-r.approved}; });
+      const diff=this.bmRefreshTotals(rows);
+      const btn=document.getElementById('bm-adj-save'); if(btn) btn.disabled=Math.round(diff)!==0 && !open.is_amendment;
     };
 
-    // ---------- actions ----------
-    App.bmRpc = async function(fn, args, okMsg){
+    // ------------------------------------------------- actions
+    App.bmRpc = async function(fn, args, okMsg, {notify=false}={}){
       const {data,error}=await this.sb.rpc(fn,args);
       if(error){ this.toast(error.message||'Something went wrong.',{error:true}); return null; }
       this._bmDirty=false;
+      const vid=args.p_version_id;
       await this.loadFiscalData(this.fiscalBudgetYear);
+      if(notify && vid) await this.bmPrepareNotice(vid, notify);
       if(okMsg) this.toast(okMsg);
       this.renderFiscal();
-      return data;
+      return data ?? true;
+    };
+    App.bmPrepareNotice = async function(versionId, event){
+      const v=this.budgetMods.versions.find(x=>x.id===versionId)||{id:versionId};
+      let note=null;
+      if(this.isAdmin()){
+        const {data}=await this.sb.from('holloway_fiscal_budget_notifications').select('*').eq('version_id',versionId).order('created_at',{ascending:false}).limit(1);
+        note=(data||[])[0]||null;
+      }
+      if(note){ this.bmPendingNotice={to:note.to_emails,subject:note.subject,body:note.body}; return; }
+      const req=this.bmRequestNo(v), r=this.bmRules();
+      const subject=`Holloway ${req}: ${event==='submitted'?'submitted for City review':event}`;
+      this.bmPendingNotice={to:r.city_emails, subject, body:`${req} for ${this.bmFyLabel()} has been ${event==='submitted'?'submitted for City review':event}. Open the Holloway Reporting Portal → Fiscal Reporting → Budget Modifications to view it.`};
     };
     App.bmSaveDraft = async function(){
       const d=this.bmDraft;
@@ -16608,51 +16861,229 @@ const App = {
       if(error){ this.toast(error.message||'Could not save the draft.',{error:true}); return null; }
       const h=await this.sb.rpc('holloway_fiscal_budget_set_header',{p_version_id:data.id,p_prepared_by:d.preparedBy,p_date_prepared:d.datePrepared||null});
       if(h.error){ this.toast(h.error.message||'Saved, but the prepared-by details could not be saved.',{error:true}); }
+      const t=await this.sb.rpc('holloway_fiscal_budget_set_request_type',{p_version_id:data.id,p_request_type:d.requestType||'routine'});
+      if(t.error){ this.toast(t.error.message||'Saved, but the request type could not be saved.',{error:true}); }
       this._bmDirty=false; return data;
     };
     App.bmSave = async function(){ if(await this.bmSaveDraft()){ await this.loadFiscalData(this.fiscalBudgetYear); this.toast('Budget modification draft saved.'); this.renderFiscal(); } };
     App.bmSubmit = async function(){
-      if(this.bmIssues().blocking.length) return;
-      if(!window.confirm('Submit this budget modification request to the City for review?')) return;
+      const d=this.bmDraft;
+      if(this.bmIssues().blocking.length || !d.certify || !String(d.signer||'').trim()) return;
+      if(!window.confirm('Certify and submit this budget modification request to the City for review?')) return;
       const v=await this.bmSaveDraft(); if(!v) return;
-      await this.bmRpc('holloway_fiscal_budget_submit',{p_version_id:v.id},'Budget modification request submitted for City review.');
+      await this.bmRpc('holloway_fiscal_budget_submit_certified',{p_version_id:v.id,p_signer_name:d.signer.trim(),p_statement:CERT_TEXT(this.bmAgency())},'Budget modification request submitted for City review.',{notify:'submitted'});
     };
     App.bmWithdraw = async function(){
       const open=this.bmOpenVersion(); if(!open) return;
       if(!window.confirm(`Withdraw ${this.bmRequestNo(open)}? It stays in history as withdrawn.`)) return;
       await this.bmRpc('holloway_fiscal_budget_withdraw',{p_version_id:open.id},'Budget modification request withdrawn.');
     };
-    App.bmReview = async function(action){
+    App.bmApprove = async function(){
+      const open=this.bmOpenVersion(); if(!open) return;
+      const note=document.getElementById('bm-review-note')?.value||'', name=(document.getElementById('bm-approver')?.value||'').trim();
+      if(!name){ this.toast('Enter your name to sign the approval.',{error:true}); return; }
+      const first=this.bmFirstApproval(open), needsSecond=this.bmNeedsSecond(open);
+      const msg = needsSecond && !first ? `Give the first approval for ${this.bmRequestNo(open)}? A second City admin will need to approve before it takes effect.` : `Approve ${this.bmRequestNo(open)}? The revised budget becomes the budget for invoicing and reporting immediately.`;
+      if(!window.confirm(msg)) return;
+      const {data,error}=await this.sb.rpc('holloway_fiscal_budget_approve',{p_version_id:open.id,p_note:note||null,p_signer_name:name});
+      if(error){ this.toast(error.message||'Could not approve.',{error:true}); return; }
+      await this.loadFiscalData(this.fiscalBudgetYear);
+      await this.bmPrepareNotice(open.id, data==='approved'?'approved':'first approval');
+      this.toast(data==='approved'?`${this.bmRequestNo(open)} approved. Invoicing and reports now use the revised budget.`:'First approval recorded. A second City admin must approve.');
+      this.renderFiscal();
+    };
+    App.bmReturn = async function(){
       const open=this.bmOpenVersion(); if(!open) return;
       const note=document.getElementById('bm-review-note')?.value||'';
-      if(action==='returned' && !note.trim()){ this.toast('Add a comment explaining what needs to change.',{error:true}); return; }
-      if(action==='approved' && !window.confirm(`Approve ${this.bmRequestNo(open)}? The revised budget becomes the budget for invoicing and reporting immediately.`)) return;
-      await this.bmRpc('holloway_fiscal_budget_review',{p_version_id:open.id,p_action:action,p_note:note||null},
-        action==='approved'?`${this.bmRequestNo(open)} approved. Invoicing and reports now use the revised budget.`:'Budget modification request returned to Ascencia.');
+      if(!note.trim()){ this.toast('Add a comment explaining what needs to change.',{error:true}); return; }
+      await this.bmRpc('holloway_fiscal_budget_return',{p_version_id:open.id,p_note:note},'Budget modification request returned to '+this.bmAgency()+'.',{notify:'returned'});
+    };
+    App.bmSaveAdjustments = async function(){
+      const open=this.bmOpenVersion(); if(!open||!this.bmAdj) return;
+      const cur=Object.fromEntries((this.budgetMods.lines[open.id]||[]).map(l=>[l.line_code,Number(l.approved_budget)]));
+      const lines=Object.entries(this.bmAdj).filter(([k,v])=>Math.round(v)!==Math.round(cur[k])).map(([k,v])=>({line_code:k,amount:Math.round(v),note:(this.bmAdjNotes?.[k]||'').trim()||null}));
+      Object.entries(this.bmAdjNotes||{}).forEach(([k,n])=>{ if(n.trim() && !lines.some(l=>l.line_code===k)) lines.push({line_code:k,amount:Math.round(cur[k]),note:n.trim()}); });
+      if(!lines.length){ this.bmAdj=null; this.renderFiscal(); return; }
+      const ok=await this.bmRpc('holloway_fiscal_budget_adjust',{p_version_id:open.id,p_lines:lines},`${lines.length} line${lines.length>1?'s':''} adjusted. Review and approve when ready.`);
+      if(ok){ this.bmAdj=null; this.bmAdjNotes={}; this.renderFiscal(); }
+    };
+    App.bmPostComment = async function(code, versionId){
+      const vid=versionId||this.bmOpenVersion()?.id; if(!vid) return;
+      const box=document.querySelector(`#fiscal-budgetmods [data-bm-cbody="${CSS.escape(code)}"]`), body=(box?.value||'').trim(); if(!body) return;
+      const {error}=await this.sb.rpc('holloway_fiscal_budget_add_comment',{p_version_id:vid,p_line_code:code,p_body:body});
+      if(error){ this.toast(error.message||'Could not post the comment.',{error:true}); return; }
+      await this.loadBudgetVersions(); this.renderFiscal();
+    };
+    App.bmUpload = async function(){
+      const open=this.bmOpenVersion(); if(!open) return;
+      const input=document.getElementById('bm-file-input'), file=input?.files?.[0], desc=document.getElementById('bm-file-desc')?.value||'';
+      if(!file){ this.toast('Choose a file to upload.',{error:true}); return; }
+      if(file.size>20*1024*1024){ this.toast('File is too large. Keep uploads under 20 MB.',{error:true}); return; }
+      const safe=file.name.replace(/[^a-zA-Z0-9._-]+/g,'_'), path=`${this.program.id}/${open.id}/${Date.now()}_${safe}`;
+      const up=await this.sb.storage.from('holloway-budget-mod-documents').upload(path,file,{upsert:false,contentType:file.type||undefined});
+      if(up.error){ this.toast('Upload failed: '+up.error.message,{error:true}); return; }
+      const {error}=await this.sb.rpc('holloway_fiscal_budget_add_attachment',{p_version_id:open.id,p_file_name:file.name,p_file_size:file.size,p_mime_type:file.type||'',p_storage_path:path,p_description:desc||null});
+      if(error){ this.toast('File saved but could not be listed: '+error.message,{error:true}); return; }
+      await this.loadBudgetVersions(); this.toast('Supporting document uploaded.'); this.renderFiscal();
+    };
+    App.bmOpenFile = async function(id){
+      const f=Object.values(this.budgetMods.attachments).flat().find(x=>String(x.id)===String(id)); if(!f) return;
+      const {data,error}=await this.sb.storage.from('holloway-budget-mod-documents').createSignedUrl(f.storage_path,3600);
+      if(error){ this.toast('Could not open file: '+error.message,{error:true}); return; }
+      window.open(data.signedUrl,'_blank');
+    };
+    App.bmSaveRules = async function(){
+      const g=id=>document.getElementById(id)?.value, num=v=>v===''||v==null?null:Number(v);
+      const row={program_id:this.program.id, fiscal_year:this.fiscalBudgetYear,
+        flag_pct:num(g('bm-r-pct'))??10, flag_min_amount:num(g('bm-r-min'))??0, indirect_cap_pct:num(g('bm-r-cap')), second_approval_threshold:num(g('bm-r-two')),
+        city_notify_emails:String(g('bm-r-emails')||'').split(/[,;\s]+/).map(s=>s.trim().toLowerCase()).filter(Boolean),
+        locked_line_codes:[...document.querySelectorAll('[data-bm-lock]')].filter(x=>x.checked).map(x=>x.dataset.bmLock),
+        updated_by:this.profile?.email||this.user?.email||'', updated_at:new Date().toISOString()};
+      const {error}=await this.sb.from('holloway_fiscal_budget_rules').upsert(row,{onConflict:'program_id,fiscal_year'});
+      if(error){ this.toast('Could not save rules: '+error.message,{error:true}); return; }
+      const ext={program_id:this.program.id, fiscal_year:this.fiscalBudgetYear, flag_any_amount:num(g('bm-r-any')), routine_deadline:g('bm-r-deadline')||null, updated_by:row.updated_by, updated_at:row.updated_at};
+      const e2=await this.sb.from('holloway_fiscal_budget_rule_settings').upsert(ext,{onConflict:'program_id,fiscal_year'});
+      if(e2.error){ this.toast('Could not save the deadline/flag settings: '+e2.error.message,{error:true}); return; }
+      this.bmRulesOpen=true; await this.loadBudgetVersions(); this.toast('Budget modification rules saved.'); this.renderFiscal();
     };
 
+    // ------------------------------------------------- export: Excel (City form) & print
+    App.bmLoadExcelJS = function(){
+      if(window.ExcelJS) return Promise.resolve(window.ExcelJS);
+      return this._bmExcelP ||= new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=EXCELJS_URL; s.onload=()=>res(window.ExcelJS); s.onerror=()=>{this._bmExcelP=null; rej(new Error('Could not load the Excel library.'));}; document.head.appendChild(s); });
+    };
+    App.bmExportXlsx = async function(versionId){
+      const v=this.budgetMods.versions.find(x=>x.id===versionId); if(!v) return;
+      let ExcelJS; try{ ExcelJS=await this.bmLoadExcelJS(); }catch(e){ this.toast(e.message,{error:true}); return; }
+      const rows=this.bmVersionRows(versionId), m=this.bmMeta(v), ym=this.budgetMods.yearMeta||{}, req=this.bmRequestNo(v);
+      const wb=new ExcelJS.Workbook(); wb.creator='Holloway Reporting Portal'; wb.created=new Date();
+      const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:'FF'+c.replace('#','')}}), white={color:{argb:'FFFFFFFF'},bold:true}, money='$#,##0;($#,##0);-';
+      // Cover
+      const cv=wb.addWorksheet('Cover'); cv.columns=[{width:4},{width:18},{width:30},{width:18},{width:46}];
+      cv.mergeCells('A1:E1'); cv.getCell('A1').value='BUDGET MODIFICATION REQUEST'; cv.getCell('A1').font={bold:true,size:16,color:{argb:'FF1F3864'}}; cv.getCell('A1').alignment={horizontal:'center'};
+      cv.mergeCells('A3:E3'); cv.getCell('A3').value=`${this.program?.name||'Holloway Interim Housing Program'} — ${this.bmFyLabel()} Operating Budget`; cv.getCell('A3').font={bold:true}; cv.getCell('A3').alignment={horizontal:'center'};
+      cv.mergeCells('A4:E4'); cv.getCell('A4').value=`City of West Hollywood, Human Services Division  |  Operated by ${this.bmAgency()}`; cv.getCell('A4').alignment={horizontal:'center'};
+      const kv=[[6,'Contract No.:',ym.contract_number||'','Fiscal Year:',this.bmFyLong()],[7,'Vendor No.:',ym.vendor_number||'','Service Location:',ym.service_location||''],[8,'Prepared by:',m.prepared_by||'','Date Prepared:',m.date_prepared?this.formatDate(m.date_prepared):''],[9,'Request No.:',req,'Status:',BM_LABEL[v.status]||v.status],[10,'Request Type:',this.bmRequestType(v)==='closeout'?'Close-out modification':'Routine modification','','']];
+      kv.forEach(([r,a,b,c,d])=>{ cv.getCell('B'+r).value=a; cv.getCell('B'+r).font={bold:true}; cv.getCell('C'+r).value=b; cv.getCell('D'+r).value=c; cv.getCell('D'+r).font={bold:true}; cv.getCell('E'+r).value=d; });
+      let cr=12; if(v.justification){ cv.getCell('B'+cr).value='Narrative:'; cv.getCell('B'+cr).font={bold:true}; cv.mergeCells(`C${cr}:E${cr}`); cv.getCell('C'+cr).value=v.justification; cv.getCell('C'+cr).alignment={wrapText:true}; cr+=2; }
+      const sig=this.bmSignoffs(v);
+      if(sig.length){ cv.getCell('A'+cr).value='CERTIFICATIONS & APPROVALS'; cv.getCell('A'+cr).font={bold:true,color:{argb:'FF1F3864'}}; cr++;
+        sig.forEach(s=>{ cv.getCell('B'+cr).value={agency_certification:'Agency certification',city_approval:'City first approval',city_final_approval:'City approval'}[s.kind]||s.kind; cv.getCell('B'+cr).font={bold:true}; cv.getCell('C'+cr).value=`${s.signer_name||''} (${s.signer_email||''})`; cv.getCell('D'+cr).value=this.formatDateTime(s.signed_at); cv.getCell('E'+cr).value=s.statement||''; cv.getCell('E'+cr).alignment={wrapText:true}; cr++; }); }
+      if(v.review_note){ cr++; cv.getCell('B'+cr).value='City comment:'; cv.getCell('B'+cr).font={bold:true}; cv.mergeCells(`C${cr}:E${cr}`); cv.getCell('C'+cr).value=v.review_note; cv.getCell('C'+cr).alignment={wrapText:true}; }
+      // Detail (City form layout with live formulas)
+      const ws=wb.addWorksheet('Budget Mod Detail',{views:[{state:'frozen',ySplit:3}]}); ws.columns=[{width:52},{width:15},{width:17},{width:15},{width:50}];
+      ws.mergeCells('A1:E1'); ws.getCell('A1').value='BUDGET MODIFICATION REQUEST — LINE-ITEM DETAIL'; ws.getCell('A1').font={bold:true,size:13,color:{argb:'FF1F3864'}};
+      ws.mergeCells('A2:E2'); ws.getCell('A2').value=`${this.program?.name||'Holloway Interim Housing Program'}  |  ${this.bmFyLabel()}  |  ${req}`;
+      const hdr=ws.getRow(3); ['Position / Expense Category',`${this.bmFyShort()} Approved\nBudget`,'Requested Change\n(Ascencia, +/–)','Revised Budget','Reason for Change (Ascencia)'].forEach((t,i)=>{ const c=hdr.getCell(i+1); c.value=t; c.fill=fill(C.head); c.font=white; c.alignment={horizontal:'center',vertical:'middle',wrapText:true}; }); hdr.height=32;
+      let r=4; const totals={}, sectionRefs=[];
+      const band=(text,color)=>{ ws.mergeCells(`A${r}:E${r}`); const c=ws.getCell('A'+r); c.value=text; c.fill=fill(color); c.font=white; r++; };
+      const lineRow=x=>{ const row=ws.getRow(r); row.getCell(1).value=x.line_name; row.getCell(2).value=Math.round(x.approved); const ch=Math.round(x.revised-x.approved); row.getCell(3).value=ch||null; row.getCell(3).fill=fill(C.input); row.getCell(4).value={formula:`B${r}+IF(C${r}="",0,C${r})`,result:Math.round(x.revised)}; row.getCell(5).value=[x.note,x.adjusted?`City adjusted (requested ${this.bmPlain(x.adjusted.requested)})${x.adjusted.note?': '+x.adjusted.note:''}`:''].filter(Boolean).join(' — ')||null; row.getCell(5).fill=fill(C.input); row.getCell(5).alignment={wrapText:true}; [2,3,4].forEach(i=>row.getCell(i).numFmt=money); return r++; };
+      const totRow=(label,from,to,color,textWhite,refs)=>{ const row=ws.getRow(r); row.getCell(1).value=label; ['B','C','D'].forEach((col,i)=>{ const c=row.getCell(i+2); c.value={formula: refs?refs.map(x=>col+x).join('+'):`SUM(${col}${from}:${col}${to})`}; c.numFmt=money; }); for(let i=1;i<=5;i++){ const c=row.getCell(i); c.fill=fill(color); c.font=textWhite?white:{bold:true}; } return r++; };
+      SECTIONS.forEach(sec=>{
+        const rs=rows.filter(x=>x.category===sec.cat); if(!rs.length) return;
+        band(sec.title,C.section);
+        if(sec.groups){ const subRefs=[];
+          sec.groups.forEach(g=>{ const gr=rs.filter(x=>x.subcategory===g.sub); if(!gr.length) return; ws.getCell('A'+r).value=g.title; ws.getCell('A'+r).font={bold:true,color:{argb:'FF1F3864'}}; r++; const a=r; gr.forEach(lineRow); subRefs.push(totRow(g.total,a,r-1,C.sub,false)); });
+          totals[sec.cat]=totRow(sec.total,null,null,C.total,true,subRefs);
+        } else { const a=r; rs.forEach(lineRow); totals[sec.cat]=totRow(sec.total,a,r-1,C.total,true); }
+        sectionRefs.push(totals[sec.cat]);
+      });
+      const grand=totRow('GRAND TOTAL',null,null,C.section,true,sectionRefs);
+      r++; const target=Math.round(rows.reduce((s,x)=>s+x.approved,0));
+      ws.getCell('A'+r).value=`Balance Check: Revised Grand Total must equal ${this.bmPlain(target)}`; ws.getCell('A'+r).font={bold:true};
+      ws.getCell('D'+r).value={formula:`D${grand}-${target}`}; ws.getCell('D'+r).numFmt=money;
+      ws.getCell('E'+r).value={formula:`IF(D${r}=0,"✓ Balanced","⚠ Out of balance — adjust proposed amounts")`};
+      // Review detail
+      const rv=wb.addWorksheet('City Review Detail',{views:[{state:'frozen',ySplit:1}]}); rv.columns=[{header:'Line',width:48},{header:'Category',width:16},{header:'Approved',width:13},{header:'Change',width:12},{header:'Revised',width:13},{header:'% Change',width:10},{header:'Spent to Date',width:14},{header:'Projected Year-End',width:17},{header:'Flags',width:40},{header:'Comments',width:10}];
+      rv.getRow(1).eachCell(c=>{c.fill=fill(C.head); c.font=white; c.alignment={wrapText:true,vertical:'middle'};});
+      rows.forEach(x=>{ const row=rv.addRow([x.line_name,x.category,Math.round(x.approved),Math.round(x.change)||null,Math.round(x.revised),x.approved?x.change/x.approved:null,Math.round(x.spent),Math.round(x.projected),(x.flags||[]).map(f=>f.replace(/<[^>]+>/g,'')).join('; '),x.comments||null]); [3,4,5,7,8].forEach(i=>row.getCell(i).numFmt=money); row.getCell(6).numFmt='0.0%'; });
+      const pace=this.bmPace(); rv.addRow([]); rv.addRow([pace.months?`Projected year-end = spent to date ÷ ${pace.months} month(s) of posted actuals (${pace.label}) × ${pace.total}.`:'No actuals posted yet; projections not available.']);
+      const buf=await wb.xlsx.writeBuffer();
+      const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`Holloway_Budget_Mod_${this.bmFyShort()}_${req.replace(/[^A-Za-z0-9]+/g,'_')}.xlsx`; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},1500);
+      this.toast('Excel file downloaded.');
+    };
+    App.bmPrint = function(versionId){
+      const v=this.budgetMods.versions.find(x=>x.id===versionId); if(!v) return;
+      const rows=this.bmVersionRows(versionId);
+      const w=window.open('','_blank'); if(!w){ this.toast('Allow pop-ups to print.',{error:true}); return; }
+      const css=document.getElementById('bm-styles')?.textContent||'';
+      const prevBmView=this.bmView; this.bmView={mode:'standard',filter:'all'};
+      const table=this.bmFormTableHtml(rows.map(r=>({...r,comments:0,flags:[]})),{compare:false,scroll:false});
+      this.bmView=prevBmView;
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${this.escape(this.bmRequestNo(v))} — Budget Modification Request</title><style>
+        body{font-family:Inter,Segoe UI,Arial,sans-serif;color:#1B2430;margin:24px} ${css}
+        .field-hint{color:#5B6573;font-size:11px} .badge{display:inline-block;border-radius:999px;padding:1px 7px;font-size:10px;font-weight:700;background:#EEF1F5;margin:1px}
+        .client-table-wrap{border:1px solid #D6DAE0;border-radius:8px;overflow:hidden} .bm-sign{border:1px solid #D6DAE0;border-radius:8px;padding:10px 12px;margin-top:12px} .section-label{font-weight:800;text-transform:uppercase;font-size:11px;letter-spacing:.05em;color:#1F3864;margin:8px 0}
+        @media print{body{margin:0} tr{page-break-inside:avoid} .bm-form th{-webkit-print-color-adjust:exact;print-color-adjust:exact} .bm-form td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+      </style></head><body>${this.bmCoverHtml(v)}<div style="margin-top:14px">${table}</div>${v.review_note?`<div class="bm-sign"><strong>City comment:</strong> ${this.escape(v.review_note)}</div>`:''}${this.bmSignoffsHtml(v)}<div class="field-hint" style="margin-top:12px">Printed ${this.escape(new Date().toLocaleString())} from the Holloway Reporting Portal · Status: ${this.escape(BM_LABEL[v.status]||v.status)}</div><script>window.onload=()=>{window.print();}<\/script></body></html>`);
+      w.document.close();
+    };
+
+    // ------------------------------------------------- events
     App.bindBudgetModsEvents = function(panel){
-      panel.querySelector('#bm-start')?.addEventListener('click',()=>{ this.bmSeedDraft(null); this.bmDraft.started=true; this.renderFiscal(); });
-      panel.querySelector('#bm-cancel')?.addEventListener('click',()=>{ if(this._bmDirty&&!window.confirm('Discard this unsaved request?'))return; this.bmSeedDraft(null); this.renderFiscal(); });
-      panel.querySelectorAll('[data-bm-change]').forEach(x=>x.addEventListener('input',()=>{ const k=x.dataset.bmChange; (this.bmDraft.lines[k] ||= {change:0,note:''}).change=Math.round(Number(x.value||0)); this._bmDirty=true; this.bmRefreshLive(k); }));
-      panel.querySelectorAll('[data-bm-note]').forEach(x=>x.addEventListener('input',()=>{ const k=x.dataset.bmNote; (this.bmDraft.lines[k] ||= {change:0,note:''}).note=x.value; this._bmDirty=true; const wrap=panel.querySelector('#bm-issues-wrap'); if(wrap) wrap.innerHTML=this.bmIssuesHtml(); }));
-      panel.querySelector('#bm-comments')?.addEventListener('input',e=>{ this.bmDraft.comments=e.target.value; this._bmDirty=true; });
-      panel.querySelector('#bm-prepared-by')?.addEventListener('input',e=>{ this.bmDraft.preparedBy=e.target.value; this._bmDirty=true; const wrap=panel.querySelector('#bm-issues-wrap'); if(wrap) wrap.innerHTML=this.bmIssuesHtml(); });
-      panel.querySelector('#bm-date-prepared')?.addEventListener('input',e=>{ this.bmDraft.datePrepared=e.target.value; this._bmDirty=true; });
-      panel.querySelector('#bm-amendment')?.addEventListener('change',e=>{ this.bmDraft.isAmendment=e.target.checked; this._bmDirty=true; this.bmRefreshLive(); });
-      panel.querySelector('#bm-save')?.addEventListener('click',()=>this.bmSave());
-      panel.querySelector('#bm-submit')?.addEventListener('click',()=>this.bmSubmit());
-      panel.querySelector('#bm-withdraw')?.addEventListener('click',()=>this.bmWithdraw());
-      panel.querySelector('#bm-approve')?.addEventListener('click',()=>this.bmReview('approved'));
-      panel.querySelector('#bm-return')?.addEventListener('click',()=>this.bmReview('returned'));
-      panel.querySelectorAll('[data-bm-mode]').forEach(b=>b.addEventListener('click',()=>{ this.bmViewState().mode=b.dataset.bmMode; this.renderFiscal(); }));
-      panel.querySelectorAll('[data-bm-filter]').forEach(b=>b.addEventListener('click',()=>{ this.bmViewState().filter=b.dataset.bmFilter; this.renderFiscal(); }));
-      panel.querySelectorAll('[data-bm-expand]').forEach(b=>b.addEventListener('click',()=>{ this.bmExpanded ||= {}; this.bmExpanded[b.dataset.bmExpand]=!this.bmExpanded[b.dataset.bmExpand]; this.renderFiscal(); }));
+      const on=(sel,fn,ev='click')=>panel.querySelector(sel)?.addEventListener(ev,fn);
+      const all=(sel,fn,ev='click')=>panel.querySelectorAll(sel).forEach(x=>x.addEventListener(ev,()=>fn(x)));
+      on('#bm-start',()=>{ this.bmSeedDraft(null); this.bmDraft.started=true; this.renderFiscal(); });
+      on('#bm-cancel',()=>{ if(this._bmDirty&&!window.confirm('Discard this unsaved request?'))return; this.bmSeedDraft(null); this.renderFiscal(); });
+      all('[data-bm-change]',x=>{ const k=x.dataset.bmChange; (this.bmDraft.lines[k] ||= {change:0,note:''}).change=Math.round(Number(x.value||0)); this._bmDirty=true; this.bmRefreshLive(k); },'input');
+      all('[data-bm-note]',x=>{ const k=x.dataset.bmNote; (this.bmDraft.lines[k] ||= {change:0,note:''}).note=x.value; this._bmDirty=true; const wrap=panel.querySelector('#bm-issues-wrap'); if(wrap) wrap.innerHTML=this.bmIssuesHtml(); },'input');
+      on('#bm-comments',e=>{ this.bmDraft.comments=e.target.value; this._bmDirty=true; },'input');
+      on('#bm-prepared-by',e=>{ this.bmDraft.preparedBy=e.target.value; this._bmDirty=true; const wrap=panel.querySelector('#bm-issues-wrap'); if(wrap) wrap.innerHTML=this.bmIssuesHtml(); },'input');
+      on('#bm-date-prepared',e=>{ this.bmDraft.datePrepared=e.target.value; this._bmDirty=true; },'input');
+      on('#bm-amendment',e=>{ this.bmDraft.isAmendment=e.target.checked; this._bmDirty=true; this.renderFiscal(); },'change');
+      all('[data-bm-type]',x=>{ if(x.disabled) return; this.bmDraft.requestType=x.dataset.bmType; this._bmDirty=true; this.renderFiscal(); });
+      on('#bm-certify',e=>{ this.bmDraft.certify=e.target.checked; this.bmRefreshSubmit(); },'change');
+      on('#bm-signer',e=>{ this.bmDraft.signer=e.target.value; this.bmRefreshSubmit(); },'input');
+      on('#bm-save',()=>this.bmSave());
+      on('#bm-submit',()=>this.bmSubmit());
+      on('#bm-withdraw',()=>this.bmWithdraw());
+      on('#bm-approve',()=>this.bmApprove());
+      on('#bm-return',()=>this.bmReturn());
+      on('#bm-adj-start',()=>{ const open=this.bmOpenVersion(); this.bmAdj=Object.fromEntries((this.budgetMods.lines[open.id]||[]).map(l=>[l.line_code,Number(l.approved_budget)])); this.bmAdjBase={...this.bmAdj}; this.bmAdjNotes={}; this.renderFiscal(); });
+      on('#bm-adj-cancel',()=>{ this.bmAdj=null; this.bmAdjNotes={}; this.renderFiscal(); });
+      on('#bm-adj-save',()=>this.bmSaveAdjustments());
+      all('[data-bm-adj]',x=>{ const k=x.dataset.bmAdj; this.bmAdj[k]=Math.max(0,Math.round(Number(x.value||0))); x.closest('tr')?.classList.add('bm-changed');
+        const n=panel.querySelector(`[data-bm-adjnote="${CSS.escape(k)}"]`); if(n) n.style.display=(Math.round(this.bmAdj[k])!==Math.round(this.bmAdjBase?.[k]??this.bmAdj[k])||n.value)?'':'none'; this.bmRefreshAdjust(); },'input');
+      all('[data-bm-adjnote]',x=>{ (this.bmAdjNotes ||= {})[x.dataset.bmAdjnote]=x.value; },'input');
+      all('[data-bm-mode]',x=>{ this.bmViewState().mode=x.dataset.bmMode; this.renderFiscal(); });
+      all('[data-bm-filter]',x=>{ this.bmViewState().filter=x.dataset.bmFilter; this.renderFiscal(); });
+      all('[data-bm-expand]',x=>{ this.bmExpanded ||= {}; this.bmExpanded[x.dataset.bmExpand]=!this.bmExpanded[x.dataset.bmExpand]; this.renderFiscal(); });
+      all('[data-bm-flowall]',x=>{ this.bmFlowAll ||= {}; this.bmFlowAll[x.dataset.bmFlowall]=!this.bmFlowAll[x.dataset.bmFlowall]; this.renderFiscal(); });
+      all('[data-bm-thread]',x=>{ const vid=this.bmThreadVersion(x); if(!vid) return; this.bmThreads ||= {}; const k=vid+'|'+x.dataset.bmThread; this.bmThreads[k]=!this.bmThreads[k]; this.renderFiscal(); });
+      all('[data-bm-cpost]',x=>this.bmPostComment(x.dataset.bmCpost, this.bmThreadVersion(x)));
+      all('[data-bm-file]',x=>this.bmOpenFile(x.dataset.bmFile));
+      on('#bm-file-upload',()=>this.bmUpload());
+      all('[data-bm-export-xlsx]',x=>this.bmExportXlsx(x.dataset.bmExportXlsx));
+      all('[data-bm-print]',x=>this.bmPrint(x.dataset.bmPrint));
+      on('#bm-rules-save',()=>this.bmSaveRules());
+      on('#bm-rules-details',e=>{ this.bmRulesOpen=e.target.open; },'toggle');
+      on('#bm-notice-dismiss',()=>{ this.bmPendingNotice=null; this.renderFiscal(); });
+      on('#bm-notice-open',()=>{ setTimeout(()=>{ this.bmPendingNotice=null; this.renderFiscal(); },400); });
+    };
+    // Comment buttons in the open request belong to it; in history they belong to the expanded version.
+    App.bmThreadVersion = function(btn){
+      const exp=btn.closest('[data-bm-version]'); if(exp) return exp.dataset.bmVersion;
+      return this.bmOpenVersion()?.id||null;
     };
 
-    // ---------- add the tab to the existing Fiscal Reporting page ----------
+    // ------------------------------------------------- invoice check: no line over its budget (handbook)
+    const baseChecks = App.fiscalReconciliationChecks;
+    App.fiscalReconciliationChecks = function(month=this.resolveFiscalMonth()){
+      const checks = baseChecks.call(this, month);
+      const keys=new Set((this.fiscalMonths?.()||[]).slice(0,(this.fiscalMonthIndex?.(month)??-1)+1).map(m=>this.dateOnly(m.key)));
+      const ytd={}; (this.fiscal?.actuals||[]).forEach(a=>{ if(keys.has(this.dateOnly(a.invoice_month))) ytd[a.line_code]=(ytd[a.line_code]||0)+Number(a.amount||0); });
+      const over=(this.fiscal?.budgetLines||[]).filter(b=>(ytd[b.line_code]||0)>Number(b.approved_budget||0)+0.005);
+      checks.push({label:'Line-item budgets', severity:over.length?'error':'ok',
+        detail: over.length ? over.map(b=>`${b.line_name}: ${this.fiscalMoney(ytd[b.line_code])} spent through this month vs. ${this.fiscalMoney(b.approved_budget)} budget`).join(' · ') : 'No line exceeds its approved budget through this month.',
+        fix: over.length ? 'Cumulative expenses cannot exceed the budget for any line item. Correct the amounts or request a budget modification before submitting.' : 'No action needed.'});
+      return checks;
+    };
+
+    // ------------------------------------------------- tab on the Fiscal Reporting page
     const baseRender = App.renderFiscal;
     App.renderFiscal = async function(){
+      const y=window.scrollY;
       await baseRender.call(this);
       const el=document.getElementById('view-fiscal'); if(!el) return;
       const tabs=el.querySelector('.fiscal-tabs'); if(!tabs || !this.canViewFiscal?.() || !this.fiscal?.setupReady) return;
@@ -16669,6 +17100,7 @@ const App = {
       panel.innerHTML=this.budgetModsHtml();
       el.appendChild(panel);
       this.bindBudgetModsEvents(panel);
+      if(this._bmKeepScroll!==false) window.scrollTo(0,y);
     };
   })();
 
