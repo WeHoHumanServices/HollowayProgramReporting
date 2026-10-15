@@ -3172,8 +3172,8 @@ const App = {
     // is enabled — read-only Program Reports. Hide every other program view.
     if (fiscalOnly) {
       const allowed = CONFIG.FISCAL_VIEW_PROGRAM_REPORTS
-        ? ['dashboard', 'fiscal', 'quarter']
-        : ['dashboard', 'fiscal'];
+        ? ['dashboard', 'fiscal', 'budget', 'quarter']
+        : ['dashboard', 'fiscal', 'budget'];
       document.querySelectorAll('.sidebar-item[data-view]').forEach(el => {
         el.style.display = allowed.includes(el.dataset.view) ? 'flex' : 'none';
       });
@@ -3202,13 +3202,13 @@ const App = {
 
   showView(view) {
     const fiscalViews = CONFIG.FISCAL_VIEW_PROGRAM_REPORTS
-      ? ['dashboard','fiscal','quarter']
-      : ['dashboard','fiscal'];
+      ? ['dashboard','fiscal','budget','quarter']
+      : ['dashboard','fiscal','budget'];
     if (this.isAgencyFiscal?.() && !fiscalViews.includes(view)) {
       view = 'dashboard';
       this.toast?.(CONFIG.FISCAL_VIEW_PROGRAM_REPORTS
-        ? 'Agency-Fiscal access is limited to the Program Dashboard, Program Reports (view only) and Fiscal Reporting.'
-        : 'Agency-Fiscal access is limited to the Program Dashboard and Fiscal Reporting.', {error:true});
+        ? 'Agency-Fiscal access is limited to the Program Dashboard, Program Reports (view only), Invoices and Budget.'
+        : 'Agency-Fiscal access is limited to the Program Dashboard, Invoices and Budget.', {error:true});
     }
     this.view = view;
     document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
@@ -17080,28 +17080,228 @@ const App = {
       return checks;
     };
 
-    // ------------------------------------------------- tab on the Fiscal Reporting page
+    // ================================================= Fiscal section layout
+    // Invoices (view "fiscal") · Budget (view "budget") · Payments (view "payments", City only)
+    if(!document.getElementById('bm-layout-styles')){
+      const st=document.createElement('style'); st.id='bm-layout-styles';
+      st.textContent=`
+        .bm-subtabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin:18px 0 14px;overflow:auto}
+        .bm-subtabs button{border:0;background:transparent;padding:9px 14px;font-weight:700;font-size:13px;color:#5B6573;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+        .bm-subtabs button.active{color:var(--navy);border-bottom-color:var(--navy)}
+        .bm-action{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;border-radius:12px;padding:12px 14px;margin:0 0 6px}
+        .bm-action.amber{background:var(--amber-light,#FDF3DC);border:1px solid #F0C96B;color:#7A5200}
+        .bm-action.red{background:var(--red-light,#FDECEA);border:1px solid #F3B0A7;color:#7A1E15}
+        .bm-action.navy{background:#F2F6FC;border:1px solid #CAD9EE;color:var(--navy)}
+        .bm-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#C9A227;margin-left:6px;vertical-align:1px}
+        .bm-li td.pend-up{color:#1A5735;font-weight:700} .bm-li td.pend-down{color:#B42318;font-weight:700}`;
+      document.head.appendChild(st);
+    }
+
+    // --- sidebar: Invoices / Budget / Payments
+    (function addNav(){
+      const fiscal=document.getElementById('nav-fiscal'); if(!fiscal || document.getElementById('nav-budget')) return;
+      const svgIcon=(paths)=>`<svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
+      const label=[...fiscal.childNodes].find(n=>n.nodeType===3 && n.textContent.trim()); if(label) label.textContent='Invoices';
+      fiscal.insertAdjacentHTML('afterend',
+        `<div class="sidebar-item" id="nav-budget" data-view="budget" style="display:none;">${svgIcon('<path d="M3 7a2 2 0 0 1 2-2h13v4"/><path d="M3 7v11a2 2 0 0 0 2 2h15V9H5a2 2 0 0 1-2-2z"/><circle cx="16" cy="14.5" r="1.4"/>')}Budget</div>`+
+        `<div class="sidebar-item" id="nav-payments" data-view="payments" style="display:none;">${svgIcon('<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>')}Payments</div>`);
+      const sec=document.createElement('section'); sec.id='view-budget'; sec.className='view-section';
+      const sec2=document.createElement('section'); sec2.id='view-payments'; sec2.className='view-section';
+      const host=document.getElementById('view-fiscal'); host?.after(sec, sec2);
+    })();
+
+    const baseSidebar = App.renderSidebarForRole;
+    App.renderSidebarForRole = function(){
+      baseSidebar.call(this);
+      const fiscalOk = this.programHas?.('has_fiscal') && this.canViewFiscal?.();
+      const b=document.getElementById('nav-budget'), pmt=document.getElementById('nav-payments');
+      if(b) b.style.display = fiscalOk ? 'flex' : 'none';
+      if(pmt) pmt.style.display = fiscalOk && this.isAdmin() ? 'flex' : 'none';
+      document.querySelectorAll('.sidebar-section').forEach(section=>{ const items=[...section.querySelectorAll('.sidebar-item')]; if(items.length) section.style.display = items.some(el=>el.style.display!=='none' && getComputedStyle(el).display!=='none') ? '' : 'none'; });
+      this.bmRefreshPending?.();
+    };
+
+    // --- pending-request awareness (sidebar dot + Review Queue), across fiscal years
+    App.bmRefreshPending = async function(){
+      if(!this.program?.id || !this.canViewFiscal?.() || !this.programHas?.('has_fiscal')){ this.bmPending=[]; this.bmPaintPending(); return; }
+      const {data,error}=await this.sb.from('holloway_fiscal_budget_versions').select('id,fiscal_year,version_no,label,status,submitted_at,review_note').eq('program_id',this.program.id);
+      if(error){ return; }
+      const ids=(data||[]).map(v=>v.id);
+      let meta={}; if(ids.length){ const m=await this.sb.from('holloway_fiscal_budget_version_meta').select('version_id,request_no,prepared_by').in('version_id',ids); (m.data||[]).forEach(x=>meta[x.version_id]=x); }
+      this.bmPending=(data||[]).filter(v=>v.status==='submitted'||v.status==='returned'||v.status==='draft').map(v=>({...v, request_no:meta[v.id]?.request_no||v.label, prepared_by:meta[v.id]?.prepared_by}));
+      this.bmPaintPending();
+    };
+    App.bmMyAction = function(v){ return this.isAdmin() ? v.status==='submitted' : v.status==='returned'; };
+    App.bmPaintPending = function(){
+      const mine=(this.bmPending||[]).filter(v=>this.bmMyAction(v));
+      const nav=document.getElementById('nav-budget');
+      if(nav){ let d=nav.querySelector('.bm-dot'); if(mine.length && !d){ d=document.createElement('span'); d.className='bm-dot'; d.title='Needs your action'; nav.appendChild(d); } if(!mine.length && d) d.remove(); }
+      this.updateReviewQueueBadge?.();
+    };
+    const baseBadge = App.updateReviewQueueBadge;
+    App.updateReviewQueueBadge = function(){
+      baseBadge.call(this);
+      const nav=document.getElementById('nav-review'); if(!nav || !this.isAdmin()) return;
+      const extra=(this.bmPending||[]).filter(v=>v.status==='submitted').length; if(!extra) return;
+      let badge=nav.querySelector('.count-badge');
+      const base=badge?Number(badge.dataset.base??badge.textContent)||0:0;
+      if(!badge){ badge=document.createElement('span'); badge.className='count-badge'; nav.appendChild(badge); }
+      badge.dataset.base=String(base); badge.textContent=String(base+extra);
+    };
+    const baseAdminReview = App.renderAdminReview;
+    App.renderAdminReview = function(){
+      baseAdminReview.call(this);
+      const el=document.getElementById('view-admin-review'); if(!el || !this.isAdmin()) return;
+      const sub=(this.bmPending||[]).filter(v=>v.status==='submitted'); if(!sub.length) return;
+      const rows=sub.map(v=>`<tr><td>${this.escape(this.agencyName?.()||'')}</td><td><strong>${this.escape(v.request_no||'Budget modification')}</strong><div class="field-hint">${this.escape(String(v.fiscal_year).replace(/^FY/,'FY '))}${v.prepared_by?' · prepared by '+this.escape(v.prepared_by):''}</div></td><td><span class="badge badge-amber">Submitted for City review</span></td><td>${this.escape(this.formatDateTime(v.submitted_at))}</td><td style="text-align:right"><button class="btn btn-primary btn-sm" data-bm-open-review="${this.escape(v.fiscal_year)}">Review</button></td></tr>`).join('');
+      const card=document.createElement('div'); card.className='card'; card.style.marginBottom='18px';
+      card.innerHTML=`<div class="card-header"><div><h2 class="card-title">Budget modifications</h2><div class="field-hint">Requests waiting for City review.</div></div></div><div class="card-body"><div class="client-table-wrap"><table class="client-table"><thead><tr><th>Agency</th><th>Request</th><th>Status</th><th>Submitted</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+      const header=el.querySelector('.page-header'); if(header) header.after(card); else el.prepend(card);
+      card.querySelectorAll('[data-bm-open-review]').forEach(b=>b.addEventListener('click',async()=>{ this.budgetTab='mods'; if(this.fiscalBudgetYear!==b.dataset.bmOpenReview){ this.fiscalBudgetYear=b.dataset.bmOpenReview; } this.showView('budget'); }));
+    };
+
+    // --- view routing
+    const baseShow = App.showView;
+    App.showView = function(view){
+      if((view==='budget'||view==='payments') && !this.canViewFiscal?.()){ baseShow.call(this,'dashboard'); this.toast('Budget is available to Agency Management, Agency-Fiscal, and City Admin users.',{error:true}); return; }
+      if(view==='payments' && !this.isAdmin()){ baseShow.call(this,'budget'); return; }
+      baseShow.call(this, view);
+      if(view==='budget'||view==='payments'){
+        const el=document.getElementById('view-'+view); if(el) el.innerHTML='<div class="notice navy"><div>i</div><div>Loading…</div></div>';
+        this.loadFiscalData(this.fiscalBudgetYear).then(()=>this.renderFiscal()).catch(e=>{ console.error(e); if(el) el.innerHTML=`<div class="notice red"><div>!</div><div>Could not load: ${this.escape(e?.message||String(e))}</div></div>`; });
+      }
+    };
+
+    // --- every fiscal action ends in renderFiscal(); send it to the page on screen
     const baseRender = App.renderFiscal;
     App.renderFiscal = async function(){
       const y=window.scrollY;
+      if(this.view==='budget'){ await this.renderBudgetPage(); window.scrollTo(0,y); return; }
+      if(this.view==='payments'){ await this.renderPaymentsPage(); window.scrollTo(0,y); return; }
+      if(this.fiscalTab==='payments'||this.fiscalTab==='budgetmods') this.fiscalTab='data';
       await baseRender.call(this);
       const el=document.getElementById('view-fiscal'); if(!el) return;
-      const tabs=el.querySelector('.fiscal-tabs'); if(!tabs || !this.canViewFiscal?.() || !this.fiscal?.setupReady) return;
-      if(!this.budgetMods) await this.loadBudgetVersions();
-      const open=this.bmOpenVersion();
-      const needsAction = open && ((this.isAdmin() && open.status==='submitted') || (!this.isAdmin() && open.status==='returned'));
-      const btn=document.createElement('button');
-      btn.className='fiscal-tab'+(this.fiscalTab==='budgetmods'?' active':'');
-      btn.innerHTML=`${tabs.children.length+1} · Budget Modifications${needsAction?' <span class="badge badge-amber" style="margin-left:4px">1</span>':''}`;
-      btn.addEventListener('click',()=>{ this.syncFiscalDraftFromDom?.(); this.fiscalTab='budgetmods'; this.renderFiscal(); });
-      tabs.appendChild(btn);
-      if(this.fiscalTab!=='budgetmods') return;
-      const panel=document.createElement('div'); panel.id='fiscal-budgetmods';
-      panel.innerHTML=this.budgetModsHtml();
-      el.appendChild(panel);
-      this.bindBudgetModsEvents(panel);
-      if(this._bmKeepScroll!==false) window.scrollTo(0,y);
+      el.querySelector('[data-fiscal-tab="payments"]')?.remove();
+      const t=el.querySelector('.page-title'); if(t) t.textContent='Invoices';
+      const st=el.querySelector('.page-subtitle'); if(st) st.textContent='Monthly actuals, supporting documentation, reconciliation, invoice generation, and City invoice review.';
+      if(this.fiscalTab==='review' && this.fiscal?.setupReady){
+        if(!this.budgetMods) await this.loadBudgetVersions();
+        const cur=this.bmCurrentVersion(), open=this.bmOpenVersion();
+        const grid=el.querySelector('.fiscal-summary-grid');
+        if(grid && cur){
+          grid.insertAdjacentHTML('beforebegin',`<div class="bm-action navy" style="margin-bottom:14px"><div><strong>Measured against ${this.escape(this.bmRequestNo(cur))} (Version ${cur.version_no})</strong>, approved ${this.escape(this.formatDate(cur.effective_date||cur.reviewed_at))} · ${this.bmPlain(this.bmApprovedTotal())}${open&&open.status==='submitted'?` · <strong>${this.escape(this.bmRequestNo(open))} is pending City review</strong>`:''}</div><button class="btn btn-ghost btn-sm" id="bm-goto-budget">View budget</button></div>`);
+          el.querySelector('#bm-goto-budget')?.addEventListener('click',()=>{ this.budgetTab='lines'; this.showView('budget'); });
+        }
+      }
     };
+
+    App.bmFySelectHtml = function(id){
+      return `<select id="${id}" class="field-input" style="width:auto;min-width:130px">${(this.fiscal.years||[]).map(y=>`<option value="${this.escape(y.fiscal_year)}" ${y.fiscal_year===this.fiscalBudgetYear?'selected':''}>${this.escape(y.budget_label||y.fiscal_year)}</option>`).join('')}</select>`;
+    };
+    App.bmBindFySelect = function(el,id){
+      el.querySelector('#'+id)?.addEventListener('change',async e=>{ if((this._bmDirty||this._fiscalPaymentDirty)&&!window.confirm('Discard unsaved changes and switch fiscal years?')){ e.target.value=this.fiscalBudgetYear; return; } this._bmDirty=false; this._fiscalPaymentDirty=false; this.bmDraft=null; await this.loadFiscalData(e.target.value); this.renderFiscal(); });
+    };
+
+    // --- Budget page
+    App.bmLineItemsHtml = function(){
+      const spent=this.bmSpentByLine(), pace=this.bmPace(), open=this.bmOpenVersion();
+      const pend={}; if(open) (this.budgetMods.lines[open.id]||[]).forEach(l=>{ const b=(this.fiscal.budgetLines||[]).find(x=>x.line_code===l.line_code); pend[l.line_code]=Number(l.approved_budget)-Number(b?.approved_budget||0); });
+      const rows=(this.fiscal.budgetLines||[]).map(b=>({b, sp:spent[b.line_code]||0, pj:(spent[b.line_code]||0)*pace.factor, pd:pend[b.line_code]||0}));
+      const sum=(rs,k)=>rs.reduce((s,r)=>s+(k==='bud'?Number(r.b.approved_budget||0):r[k]),0);
+      const pctOf=(a,b)=>b>0?`${Math.round(a/b*100)}%`:'–';
+      const pj=(v,bud)=>`${this.bmMoney(v,{dashZero:true})}${bud>0&&v>bud+0.5?' <span class="badge badge-red" title="Projected to exceed the line budget at the current pace">over</span>':''}`;
+      const pdCell=v=>Math.round(v)?`<td class="num ${v>0?'pend-up':'pend-down'}">${v>0?'+':''}${this.bmMoney(v).replace(/<[^>]+>/g,'').replace('(','–').replace(')','')}</td>`:'<td class="num" style="color:#9AA4B2">–</td>';
+      const lineRow=r=>`<tr><td>${this.escape(r.b.line_name)}</td><td class="num">${this.bmMoney(r.b.approved_budget)}</td><td class="num">${this.bmMoney(r.sp,{dashZero:true})}</td><td class="num">${pctOf(r.sp,Number(r.b.approved_budget))}</td><td class="num">${pj(r.pj,Number(r.b.approved_budget))}</td><td class="num">${this.bmMoney(Number(r.b.approved_budget)-r.sp)}</td>${open?pdCell(r.pd):''}</tr>`;
+      const tot=(cls,label,rs)=>{ const bud=sum(rs,'bud'), sp=sum(rs,'sp'), p=sum(rs,'pj'), d=sum(rs,'pd'); return `<tr class="${cls}"><td>${label}</td><td class="num">${this.bmMoney(bud)}</td><td class="num">${this.bmMoney(sp,{dashZero:true})}</td><td class="num">${pctOf(sp,bud)}</td><td class="num">${this.bmMoney(p,{dashZero:true})}</td><td class="num">${this.bmMoney(bud-sp)}</td>${open?`<td class="num">${Math.round(d)?this.bmMoney(d):'–'}</td>`:''}</tr>`; };
+      const ncol=open?7:6; let body='';
+      SECTIONS.forEach(sec=>{ const rs=rows.filter(r=>r.b.category===sec.cat); if(!rs.length) return;
+        body+=`<tr class="bm-section"><td colspan="${ncol}">${sec.title}</td></tr>`;
+        if(sec.groups){ sec.groups.forEach(g=>{ const gr=rs.filter(r=>r.b.subcategory===g.sub); if(!gr.length) return; body+=`<tr class="bm-subhead"><td colspan="${ncol}">${g.title}</td></tr>`+gr.map(lineRow).join('')+tot('bm-subtotal',g.total,gr); }); body+=rs.filter(r=>!sec.groups.some(g=>g.sub===r.b.subcategory)).map(lineRow).join(''); }
+        else body+=rs.map(lineRow).join('');
+        body+=tot('bm-total',sec.total,rs); });
+      body+=tot('bm-grand','GRAND TOTAL',rows);
+      const head=`<th>Position / Expense Category</th><th>Budget</th><th>Spent to Date</th><th>% Spent</th><th>Projected<br>Year-End</th><th>Remaining</th>${open?`<th>Pending<br><span style="font-weight:400">${this.escape(this.bmRequestNo(open))}</span></th>`:''}`;
+      const note=pace.months?`Projected year-end = spent to date ÷ ${pace.months} month${pace.months>1?'s':''} of posted actuals (${pace.label}) × ${pace.total}. Early in the year, billing lags can understate the pace.`:'No actuals have been posted yet.';
+      return `<div class="bm-scroll"><table class="bm-form bm-li"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div><div class="field-hint" style="margin-top:6px">${note}</div>`;
+    };
+
+    App.bmActionBannerHtml = function(){
+      const open=this.bmOpenVersion(); if(!open) return '';
+      const req=this.escape(this.bmRequestNo(open)), m=this.bmMeta(open), rows=this.bmVersionRows(open.id);
+      const moved=rows.filter(r=>r.change>0).reduce((s,r)=>s+r.change,0), changed=rows.filter(r=>Math.round(r.change)).length, large=rows.filter(r=>(r.flags||[]).some(f=>f.includes('Large change'))).length;
+      const facts=`${m.prepared_by?this.escape(m.prepared_by)+' · ':''}${changed} lines changed · ${this.bmPlain(moved)} moved${large?` · ${large} large change${large===1?'':'s'}`:''}`;
+      const go=(label)=>this.budgetTab==='mods'?'':`<button class="btn btn-primary btn-sm" data-bm-subtab="mods">${label}</button>`;
+      if(open.status==='submitted') return this.isAdmin()
+        ? `<div class="bm-action amber"><div><strong>${req} is waiting for your review${this.bmAwaitingSecond(open)?' (second approval)':''}</strong><div style="font-size:12.5px">${facts}</div></div>${go('Review')}</div>`
+        : `<div class="bm-action navy"><div><strong>${req} is under City review</strong><div style="font-size:12.5px">Submitted ${this.escape(this.formatDateTime(open.submitted_at))} · ${facts}</div></div>${go('View request')}</div>`;
+      if(open.status==='returned') return `<div class="bm-action red"><div><strong>${req} was returned for changes</strong><div style="font-size:12.5px">${open.review_note?'City comment: “'+this.escape(open.review_note)+'”':facts}</div></div>${this.isAdmin()?'':go('Revise request')}</div>`;
+      return `<div class="bm-action navy"><div><strong>${req} is a draft</strong><div style="font-size:12.5px">${this.isAdmin()?this.escape(this.bmAgency())+' has not submitted it yet.':'Not yet submitted to the City.'}</div></div>${this.isAdmin()?'':go('Continue draft')}</div>`;
+    };
+
+    App.renderBudgetPage = async function(){
+      const el=document.getElementById('view-budget'); if(!el) return;
+      if(!this.canViewFiscal?.()){ el.innerHTML='<div class="notice red"><div>!</div><div><strong>Budget access is restricted.</strong></div></div>'; return; }
+      if(!this.fiscal?.years?.length) await this.loadFiscalData();
+      if(!this.budgetMods) await this.loadBudgetVersions();
+      if(!this.fiscal.setupReady){ el.innerHTML='<div class="notice amber"><div>!</div><div><strong>Fiscal database setup is incomplete.</strong></div></div>'; return; }
+      const tabs=[['lines','Line items'],['mods','Modifications'],['history','History']].concat(this.isAdmin()?[['rules','Rules']]:[]);
+      if(!tabs.some(t=>t[0]===this.budgetTab)) this.budgetTab='lines';
+      const cur=this.bmCurrentVersion(), open=this.bmOpenVersion(), ym=this.budgetMods.yearMeta||{}, y=this.fiscalYearRecord?.()||{};
+      const total=this.bmApprovedTotal(), spent=Object.values(this.bmSpentByLine()).reduce((s,v)=>s+v,0), pace=this.bmPace(), proj=spent*pace.factor;
+      const r=this.bmRules(); const dl=r.deadline; const days=dl?Math.round((new Date(this.dateOnly(dl)+'T12:00:00')-new Date(this.localDate()+'T12:00:00'))/864e5):null;
+      const kpi=(label,val,sub,cls='')=>`<div class="fiscal-kpi"><div class="label">${label}</div><div class="value ${cls}">${val}</div><div class="sub">${sub}</div></div>`;
+      const canStart=this.bmCanDraft() && !open;
+      const startBtn = canStart ? `<button class="btn btn-primary" id="bm-start-top">Request a modification</button>` : '';
+      const pending=open?(this.budgetMods.versions||[]).filter(v=>BM_OPEN.includes(v.status)).length:0;
+      let content='';
+      if(this.budgetTab==='lines') content=this.bmLineItemsHtml();
+      if(this.budgetTab==='mods'){
+        if(open?.status==='submitted') content=this.bmSubmittedHtml(open);
+        else if(open && this.bmCanDraft()) content=this.bmEditorHtml();
+        else if(open) content=`<div class="notice navy"><div>i</div><div>${this.escape(this.bmAgency())} is preparing ${this.escape(this.bmRequestNo(open))}. It will appear here for review once submitted.</div></div>`;
+        else if(this.bmDraft?.started && this.bmCanDraft()) content=this.bmEditorHtml();
+        else content=`<div class="card"><div class="card-body" style="text-align:center;padding:28px 18px"><div style="font-weight:800;color:var(--navy);font-size:15px">No modification in progress</div><div class="field-hint" style="margin:6px auto 14px;max-width:520px">${this.isAdmin()?`${this.escape(this.bmAgency())} submits budget modification requests here. You'll see them in this tab and in the Review Queue.`:'Request a modification to move funds between budget lines. Call your City Program Administrator first to discuss it.'}${dl?` Routine modifications are due by ${this.escape(new Date(this.dateOnly(dl)+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}))}.`:''}</div>${this.bmCanDraft()?'<button class="btn btn-primary" id="bm-start">Request a modification</button>':''}</div></div>`;
+      }
+      if(this.budgetTab==='history') content=this.bmHistoryHtml()||'<div class="field-hint">No versions yet.</div>';
+      if(this.budgetTab==='rules'){ this.bmRulesOpen=true; content=this.bmRulesHtml(); }
+      el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Budget</h1><div class="page-subtitle">${ym.contract_number?'Contract '+this.escape(ym.contract_number)+' · ':''}${this.escape(y.source_name||'Approved operating budget')}</div></div><div class="client-actions" style="align-items:center">${this.bmFySelectHtml('bm-fy')}${startBtn}</div></div>
+        ${this.bmNoticeHtml()}
+        <div class="fiscal-kpis" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+          ${kpi('Budget in effect',this.bmPlain(total),cur?`Version ${cur.version_no} · ${this.escape(this.bmRequestNo(cur))}`:'Original budget')}
+          ${kpi('Spent to date',this.bmPlain(spent),`${total?Math.round(spent/total*100):0}%${pace.label?' · '+this.escape(pace.label):''}`)}
+          ${kpi('Projected year-end',pace.months?this.bmPlain(proj):'–',pace.months?`at current pace · ${total?Math.round(proj/total*100):0}% of budget`:'no actuals posted yet')}
+          ${kpi('Modification deadline',dl?new Date(this.dateOnly(dl)+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'Not set',dl?(days>=0?`${days} day${days===1?'':'s'} left · routine requests`:'passed · close-out only'):'set under Rules')}
+        </div>
+        ${this.bmActionBannerHtml()}
+        <div class="bm-subtabs" role="tablist">${tabs.map(([k,l])=>`<button type="button" role="tab" class="${this.budgetTab===k?'active':''}" data-bm-subtab="${k}" aria-selected="${this.budgetTab===k}">${l}${k==='mods'&&pending?' <span class="badge badge-amber" style="margin-left:4px">1</span>':''}</button>`).join('')}</div>
+        <div id="fiscal-budgetmods">${content}</div>`;
+      this.bmBindFySelect(el,'bm-fy');
+      el.querySelectorAll('[data-bm-subtab]').forEach(b=>b.addEventListener('click',()=>{ if(this._bmDirty && this.budgetTab==='mods' && b.dataset.bmSubtab!=='mods' && !window.confirm('You have unsaved changes to this request. Leave without saving?')) return; this.budgetTab=b.dataset.bmSubtab; this.renderFiscal(); }));
+      el.querySelector('#bm-start-top')?.addEventListener('click',()=>{ this.bmSeedDraft(null); this.bmDraft.started=true; this.budgetTab='mods'; this.renderFiscal(); });
+      el.querySelector('#bm-notice-dismiss')?.addEventListener('click',()=>{ this.bmPendingNotice=null; this.renderFiscal(); });
+      el.querySelector('#bm-notice-open')?.addEventListener('click',()=>{ setTimeout(()=>{ this.bmPendingNotice=null; this.renderFiscal(); },400); });
+      this.bindBudgetModsEvents(el.querySelector('#fiscal-budgetmods'));
+      this.bmPaintPending();
+    };
+
+    // --- Payments page (City)
+    App.renderPaymentsPage = async function(){
+      const el=document.getElementById('view-payments'); if(!el) return;
+      if(!this.isAdmin()){ el.innerHTML='<div class="notice red"><div>!</div><div><strong>Payments are available to City admins.</strong></div></div>'; return; }
+      if(!this.fiscal?.years?.length) await this.loadFiscalData();
+      el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Payments</h1><div class="page-subtitle">City payment tracking and funding-source allocation for approved invoices.</div></div><div class="client-actions">${this.bmFySelectHtml('pay-fy')}</div></div>${this.fiscalCityPaymentHtml()}`;
+      this.bmBindFySelect(el,'pay-fy');
+      el.querySelectorAll('[data-payment-status]').forEach(x=>x.addEventListener('change',()=>{const p=this.ensureFiscalPayment(x.dataset.paymentStatus);p.payment_status=x.value;this._fiscalPaymentDirty=true;this.refreshFiscalPaymentLive();}));
+      el.querySelectorAll('[data-payment-date]').forEach(x=>x.addEventListener('input',()=>{const p=this.ensureFiscalPayment(x.dataset.paymentDate);p.payment_date=x.value;this._fiscalPaymentDirty=true;}));
+      el.querySelectorAll('[data-payment-ref]').forEach(x=>x.addEventListener('input',()=>{const p=this.ensureFiscalPayment(x.dataset.paymentRef);p.payment_reference=x.value;this._fiscalPaymentDirty=true;}));
+      el.querySelectorAll('[data-payment-note]').forEach(x=>x.addEventListener('input',()=>{const p=this.ensureFiscalPayment(x.dataset.paymentNote);p.notes=x.value;this._fiscalPaymentDirty=true;}));
+      el.querySelectorAll('[data-payment-allocation]').forEach(x=>x.addEventListener('input',()=>{const a=this.ensureFiscalPaymentAllocation(x.dataset.paymentMonth,x.dataset.fundingCode);a.amount=Number(x.value||0);this._fiscalPaymentDirty=true;const fund=this.fiscalFundingBreakdown(x.dataset.paymentMonth,false);if(x.dataset.fundingCode==='ahtf'){x.classList.toggle('fiscal-over',Number(x.value||0)>fund.eligible+0.005);x.title=Number(x.value||0)>fund.eligible+0.005?'AHTF allocation exceeds AHTF-eligible costs for this invoice.':'';}this.refreshFiscalPaymentLive();}));
+      el.querySelector('#btn-save-fiscal-payments')?.addEventListener('click',()=>this.saveFiscalPaymentTracking());
+    };
+
+    // keep the open request's pending list in sync after any budget action
+    const baseLoadVersions = App.loadBudgetVersions;
+    App.loadBudgetVersions = async function(){ await baseLoadVersions.call(this); this.bmRefreshPending?.(); };
   })();
 
 document.addEventListener('DOMContentLoaded', () => App.init());
