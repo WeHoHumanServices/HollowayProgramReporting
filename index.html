@@ -2016,7 +2016,7 @@ button, input, select, textarea { font-family: var(--font-ui); }
         <label class="field-label" for="account-password-confirm">Confirm New Password</label>
         <input type="password" id="account-password-confirm" class="field-input" autocomplete="new-password" placeholder="••••••••" />
       </div>
-      <div class="field-hint" style="margin-top:10px;">At least 10 characters. Once set, you can sign in with your email and password instead of waiting on a Magic Link.</div>
+      <div class="field-hint" style="margin-top:10px;">At least 10 characters.</div>
       <p id="account-error" style="font-size:12px;margin:12px 0 0;"></p>
     </div>
     <div class="form-footer">
@@ -3794,7 +3794,7 @@ const App = {
       <div class="field-hint" style="margin-top:8px;">Groups with fewer than 5 exits are suppressed to protect client privacy.</div>
     </details>`;
     return `<div class="card" style="margin-top:16px;"><div class="card-header"><h2 class="card-title">Housing Outcomes</h2></div><div class="card-body">
-      <p class="field-hint" style="margin-bottom:12px;">Permanent housing remains the official contract outcome. Positive non-permanent exits, such as moving in with family or a partner without a lease, are tracked separately. Deceased exits are shown separately and excluded from the permanent-housing rate.</p>
+      <p class="field-hint" style="margin-bottom:12px;">Permanent housing is the contract outcome. Positive non-permanent exits are tracked separately; deceased exits are excluded from the rate.</p>
       <div class="content-grid" style="grid-template-columns:1fr 1fr;gap:20px;">
         ${this.renderOutcomeBandTable(qtr, `${q} (this quarter)`)}
         ${this.renderOutcomeBandTable(ytd, 'Year to date')}
@@ -4376,7 +4376,7 @@ const App = {
     this.reportsTab = this.reportsTab === 'narrative' ? 'narrative' : 'overview';
     el.innerHTML = `
       <div class="page-header">
-        <div><h1 class="page-title">Program Reports</h1><div class="page-subtitle">Review readiness, submit the quarter, and manage the quarterly narrative — all in one place.</div></div>
+        <div><h1 class="page-title">Program Reports</h1><div class="page-subtitle">Readiness, narrative and submission for the quarter.</div></div>
         <button class="btn btn-ghost btn-sm" id="btn-print-quarter">Print / Save PDF</button>
       </div>
       ${this.renderQuarterButtons()}
@@ -4443,7 +4443,7 @@ const App = {
     const arrow = (field) => sort.field === field ? `<span class="sort-arrow" aria-hidden="true">${sort.dir==='asc'?'▲':'▼'}</span>` : '<span class="sort-arrow" aria-hidden="true">↕</span>';
     const opts = (selected, vals) => vals.map(([v,l]) => `<option value="${v}" ${v===selected?'selected':''}>${l}</option>`).join('');
 
-    el.innerHTML = `<div class="page-header"><div><h1 class="page-title">City Admin Review Queue</h1><div class="page-subtitle">Review ${this.escape(this.programName())} submissions, request revisions, accept, or void a bundle.</div></div></div>
+    el.innerHTML = `<div class="page-header"><div><h1 class="page-title">City Admin Review Queue</h1><div class="page-subtitle">Submissions waiting for City review.</div></div></div>
       <div class="card"><div class="card-header"><h2 class="card-title">Quarterly Bundles</h2><button class="btn btn-ghost btn-sm" id="btn-refresh-admin">Refresh</button></div>
       <div class="card-body" style="overflow-x:auto;">
         <div class="review-filters">
@@ -4526,7 +4526,7 @@ const App = {
           <button class="btn btn-gold" id="btn-run-er" type="button">Generate Review</button>
           ${this._erResultHtml ? '<button class="btn btn-ghost" id="btn-copy-er" type="button">Copy</button>' : ''}
         </div>
-        <div id="er-result">${this._erResultHtml || '<p class="field-hint">Pick a date range and generate a review of the engagement activity recorded in that window.</p>'}</div>
+        <div id="er-result">${this._erResultHtml || '<p class="field-hint">Summarize engagement activity for a date range.</p>'}</div>
       </div></div>`;
   },
 
@@ -4577,7 +4577,7 @@ const App = {
 
     const label = btn.textContent;
     btn.disabled = true; btn.textContent = 'Reviewing…';
-    out.innerHTML = '<p class="field-hint">Reviewing records — this usually takes 10–20 seconds.</p>';
+    out.innerHTML = '<p class="field-hint">Reviewing records…</p>';
     try {
       const { data, error } = await this.sb.functions.invoke('review-engagement', {
         body: { dateFrom: from, dateTo: to, sources }
@@ -4650,7 +4650,7 @@ const App = {
         </div>
       </div>
       <div class="card-body">
-        <p class="field-hint" style="margin-bottom:11px;">Answers cover the date range and record types set in Engagement Review above, plus the resident roster — tenure and current census are program-to-date, not limited to the window. Residents are identified by HMIS ID and staff by name; client names are withheld. Counts and rankings are calculated from the database rather than estimated by the model. Changing the dates starts a new conversation.</p>
+        <p class="field-hint" style="margin-bottom:11px;">Uses the date range and record types above. Client names are withheld; counts come from the database.</p>
         <div class="chat-starters">${starters.map(x => `<button class="chat-starter" type="button" data-chat-starter="${this.escape(x)}">${this.escape(x)}</button>`).join('')}</div>
         <div id="chat-log" class="chat-log"></div>
         <div class="chat-input-row">
@@ -4684,7 +4684,7 @@ const App = {
     if (!box) return;
     const msgs = this._chatMsgs || [];
     if (!msgs.length && !this._chatBusy) {
-      box.innerHTML = '<p class="field-hint">No questions yet. Try one of the suggestions above, or ask your own.</p>';
+      box.innerHTML = '<p class="field-hint">Ask a question or pick a suggestion above.</p>';
       return;
     }
     const bubble = (role, text, cls='') =>
@@ -4839,7 +4839,7 @@ const App = {
     const esc = v => this.escape(String(v == null ? '' : v));
     const list = (items) => (items && items.length)
       ? `<ul>${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`
-      : '<p class="field-hint">Nothing in the records for this window supported an entry here.</p>';
+      : '<p class="field-hint">Nothing recorded for this period.</p>';
     const block = (title, inner, cls='') => `<div class="er-block ${cls}"><h4>${title}</h4>${inner}</div>`;
     const para = (t) => t ? `<p>${esc(t)}</p>` : '<p class="field-hint">Not enough in the records to summarise.</p>';
 
@@ -4864,7 +4864,7 @@ const App = {
         ${block('Recurring themes', list(r.themes))}
         ${block('Data gaps', list(r.dataGaps))}
       </div>
-      <p class="field-hint">Generated ${esc(this.formatDateTime(data.generatedAt))} · model ${esc(data.model)} · de-identified before review. AI-generated — verify against the underlying records before relying on it.</p>`;
+      <p class="field-hint">Generated ${esc(this.formatDateTime(data.generatedAt))} · AI-generated; verify against source records.</p>`;
   },
 
 
@@ -5013,7 +5013,7 @@ const App = {
     const program_id = isCity ? null : this.program.id;
     const agency_group = isCity ? null : (isFiscal ? 'fiscal' : (isManagement ? 'management' : 'support'));
     const { error } = await this.sb.from('approved_users').upsert({ email, full_name, organization, access_type, role, active, program_id, agency_group });
-    if (error) document.getElementById('au-msg').textContent = /agency_group/i.test(error.message||'') ? 'Run the updated fiscal access migration first, then save this user again.' : error.message;
+    if (error) document.getElementById('au-msg').textContent = /agency_group/i.test(error.message||'') ? 'Fiscal access isn’t set up yet. Contact the portal administrator.' : error.message;
     else { document.getElementById('au-msg').textContent = 'Saved.'; await this.loadAll(); this.renderAccessManagement(); }
   },
 
@@ -5181,7 +5181,7 @@ const App = {
     html += `<div class="demo-cell row-label total-row">Grand Total</div>
       <div class="demo-cell ro total-row" data-age-grand="male">${qMale}</div><div class="demo-cell ro total-row" data-age-grand="female">${qFemale}</div><div class="demo-cell ro total-row" data-age-grand="nb">${qNb}</div><div class="demo-cell ro total-row" data-age-grand="unk">${qUnk}</div><div class="demo-cell ro total-row" data-age-grand-total>${qMale+qFemale+qNb+qUnk}</div>
       <div class="demo-cell ro total-row" data-ytd-age-grand="male">${yMale}</div><div class="demo-cell ro total-row" data-ytd-age-grand="female">${yFemale}</div><div class="demo-cell ro total-row" data-ytd-age-grand="nb">${yNb}</div><div class="demo-cell ro total-row" data-ytd-age-grand="unk">${yUnk}</div><div class="demo-cell ro total-row" data-ytd-age-grand-total>${yMale+yFemale+yNb+yUnk}</div>`;
-    return html + `</div><p class="field-hint" style="margin-top:8px;">Quarter demographics must equal Persons Served This Quarter. When client-generated reporting is active, both quarter and YTD demographics are calculated from client records and shown read-only.</p>`;
+    return html + `</div><p class="field-hint" style="margin-top:8px;">Must equal Persons Served This Quarter. Calculated from client records when client-generated reporting is on.</p>`;
   },
 
   renderSimpleDemoTable(prefix, keys, values, q, readonly=false) {
@@ -5295,7 +5295,7 @@ const App = {
     const readiness = this.readiness(q);
     document.getElementById('qr-review-body').innerHTML = `<div class="form-section"><div class="form-section-title">Submission Summary</div>
       ${readiness.map(i => `<div class="readiness-row"><div class="readiness-left"><span aria-hidden="true">${i.ok?'✅':i.started?'⚠':'⚪'}</span><div><strong>${i.label}</strong><br><span class="field-hint">${i.detail}</span></div></div></div>`).join('')}
-      <p class="field-hint" style="margin-top:12px;">All three components should be complete before submitting the quarter to the City.</p>
+      <p class="field-hint" style="margin-top:12px;">Complete all three before submitting.</p>
     </div>`;
   },
 
@@ -5423,7 +5423,7 @@ const App = {
     document.getElementById('roster-body').innerHTML = `<div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9L9.2 3.9A2 2 0 0 0 7.5 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></div><div><strong>HMIS Roster Backup Documentation and Quarterly Program Movement</strong><br>Upload the HMIS roster/export that supports clients served, entry dates, exit dates, and length of stay for the reporting period. This backup documentation supports the program counts generated by the portal and should reconcile with quarterly program movement.</div></div>
       ${useProgramMovement ? `<div class="notice green"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></div><div><strong>Historical quarter movement calculated from accepted program report data.</strong><br>For accepted quarters, this screen displays operational movement based on active residents, intakes, and exits from the program report rather than editable roster summary fields.</div></div>` : ''}
       <div class="form-section"><div class="form-section-title">Upload HMIS Roster Backup</div>
-        <label class="upload-zone"><input type="file" id="roster-file"><div style="font-size:30px;" aria-hidden="true">📁</div><div id="roster-file-label"><strong>Click to select roster file</strong><br><span class="field-hint">Accepted formats: Excel, CSV, PDF, Word, image, ZIP, or other HMIS export/back-up file.</span></div></label>
+        <label class="upload-zone"><input type="file" id="roster-file"><div style="font-size:30px;" aria-hidden="true">📁</div><div id="roster-file-label"><strong>Click to select roster file</strong><br><span class="field-hint">Excel, CSV, PDF, Word, image or ZIP.</span></div></label>
       </div>
       <div class="form-section"><div class="form-section-title">Roster Period</div>
         <div class="form-row">${this.field('roster-start','Period Start',r.period_start || '','date',true)}${this.field('roster-end','Period End',r.period_end || '','date',true)}</div>
@@ -5432,7 +5432,7 @@ const App = {
         <div class="form-row">${this.field('roster-start-count','People Physically in Program at Start of Quarter',startVal,'number',true)}${this.field('roster-intakes-count','Intakes During Quarter',intakesVal,'number',true)}</div>
         <div class="form-row">${this.field('roster-exits-count','Exits During Quarter',exitsVal,'number',true)}${this.field('roster-end-count','People Physically in Program at End of Quarter',endVal,'number',true)}</div>
         <div id="roster-reconcile" class="notice ${ties ? 'green' : 'amber'}" style="margin-top:10px;"><div aria-hidden="true">${ties ? '<svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>' : '<svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'}</div><div><strong>${ties ? 'Quarterly program movement ties out.' : 'Check quarterly program movement.'}</strong><br><span>${this.escape(detail)}</span></div></div>
-        <p class="field-hint">This movement summary reconciles the number of people physically in the 20-bed program at the start and end of the quarter and supports reported clients served and length of stay.</p>
+        <p class="field-hint">People in the program at the start and end of the quarter.</p>
       </div>
       <div class="form-section"><div class="form-section-title">Optional Notes</div><div class="field-group"><label class="field-label" for="roster-notes">Notes</label><textarea class="field-textarea" id="roster-notes" placeholder="Optional: describe HMIS source, export date, roster filters used, or reconciliation notes.">${this.escape(r.notes || '')}</textarea></div></div>
       <div class="form-section"><div class="form-section-title">Roster Records</div>${this.renderRosterPager()}</div>`;
@@ -6298,7 +6298,7 @@ const App = {
       ['Housing Plans Needed', stalePlans.length, 'Missing or not-started housing plans'],
       ['No Service This Week', noRecent.length, 'Active clients with no service in last 7 days']
     ];
-    return `<div class="card" style="margin-bottom:18px;"><div class="card-header"><div><h2 class="card-title">Today</h2><div class="field-hint">Daily work queue for program staff. These items also improve quarter-end reporting readiness.</div></div><button class="btn btn-ghost btn-sm" data-view-shortcut="housing-followups">View Follow-Ups</button></div><div class="card-body"><div class="today-grid">${cards.map(c=>`<div class="today-card"><div class="label">${this.escape(c[0])}</div><div class="value">${c[1]}</div><div class="sub">${this.escape(c[2])}</div></div>`).join('')}</div>${this.renderQuarterReadinessChecklist(q)}</div></div>`;
+    return `<div class="card" style="margin-bottom:18px;"><div class="card-header"><div><h2 class="card-title">Today</h2><div class="field-hint">Items that need attention.</div></div><button class="btn btn-ghost btn-sm" data-view-shortcut="housing-followups">View Follow-Ups</button></div><div class="card-body"><div class="today-grid">${cards.map(c=>`<div class="today-card"><div class="label">${this.escape(c[0])}</div><div class="value">${c[1]}</div><div class="sub">${this.escape(c[2])}</div></div>`).join('')}</div>${this.renderQuarterReadinessChecklist(q)}</div></div>`;
   };
 
   App.renderQuarterReadinessChecklist = function(q=this.currentQuarter){
@@ -6486,7 +6486,7 @@ const App = {
     pane.innerHTML = `
       <div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div><div><strong>Narrative guidance</strong><br>Use the calculated quarter summary below to explain context behind the numbers. Please include a success story from the quarter. Client names should not be included in City-facing narratives unless expressly authorized and appropriate.</div></div>
       <div class="generated-metric-grid" style="grid-template-columns:repeat(3,1fr);">${metrics.map(m=>`<div class="generated-metric"><div class="label">${this.escape(m[0])}</div><div class="value">${this.escape(m[1])}</div></div>`).join('')}</div>
-      <div class="card"><div class="card-header"><div><h2 class="card-title">Narrative Sections</h2><div class="field-hint">These sections will be combined into the quarterly report narrative. Boxes grow as you type.</div></div><button class="btn btn-gold btn-sm" id="btn-narrative-save">Save Narrative</button></div><div class="card-body">
+      <div class="card"><div class="card-header"><div><h2 class="card-title">Narrative Sections</h2><div class="field-hint">Combined into the quarterly narrative.</div></div><button class="btn btn-gold btn-sm" id="btn-narrative-save">Save Narrative</button></div><div class="card-body">
         ${this.narrativeSectionHtml(1,'program_summary','narr-program-summary','Program Summary', sections.program_summary, { placeholder:'Summarize overall program operations during this reporting period.' })}
         ${this.narrativeSectionHtml(2,'program_successes','narr-program-successes','Program Successes', sections.program_successes, { placeholder:'Describe significant accomplishments, partnerships, or notable progress.' })}
         ${this.narrativeSectionHtml(3,'program_challenges','narr-program-challenges','Challenges', sections.program_challenges, { placeholder:'Describe barriers such as housing availability, documentation, staffing, engagement, or other challenges.' })}
@@ -6828,7 +6828,7 @@ const App = {
     el.innerHTML=`
       <div class="page-header">
         <div><h1 class="page-title">Exits</h1>
-        <div class="page-subtitle">${scoped.length} exit${scoped.length===1?'':'s'} ${f.scope==='ytd'?'year to date':'in '+this.escape(f.scope)} · a client appears here once an exit date is recorded</div></div>
+        <div class="page-subtitle">${scoped.length} exit${scoped.length===1?'':'s'} ${f.scope==='ytd'?'year to date':'in '+this.escape(f.scope)}</div></div>
       </div>
       ${this.renderExitTiles(scoped)}
       <div class="table-filter-row exit-filter-row">
@@ -6880,9 +6880,9 @@ const App = {
     document.getElementById('client-body').innerHTML=`<div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>Complete intake and demographics first. Housing progress, case management milestones, services, and exit details can be added as the case progresses.</div></div><div class="wizard-steps"><div class="wizard-step"><div class="num">Step 1</div><div class="name">Intake & Demographics</div></div><div class="wizard-step"><div class="num">Step 2</div><div class="name">Housing & Case Management</div></div><div class="wizard-step"><div class="num">Step 3</div><div class="name">Services / Exit if applicable</div></div></div><div class="client-entry-layout"><div>
       <div class="form-section"><div class="form-section-title">Intake & Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label required">HMIS ID</label><input id="cf-hmis-id" class="field-input" value="${this.escape(c.id||c.hmis_unique_identifier||c.agency_client_id||'')}" placeholder="HMIS Unique Identifier"></div><div class="field-group"><label class="field-label required">Entry Date</label><input id="cf-entry-date" type="date" class="field-input" value="${this.dateOnly(c.entry_date)}"></div><div class="field-group"><label class="field-label">Current Status</label><div class="segmented-row" data-status-group>${['Active','Scheduled Exit','Exited'].map(v=>`<button type="button" class="segment-btn ${status===v?'active':''}" data-status="${v}">${v}</button>`).join('')}</div><input type="hidden" id="cf-status" value="${this.escape(status)}"></div><div class="field-group"><label class="field-label">Room / Bed Assignment</label><input id="cf-room-number" class="field-input" value="${this.escape(c.room_assignment||'')}" placeholder="e.g., Room 7, 102, Bed A, Unassigned"></div></div></div>
       <div class="form-section"><div class="form-section-title">Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Client Name <span class="field-hint">Agency use only</span></label><input id="cf-client-name" class="field-input" value="${this.escape(c.client_name||'')}"></div><div class="field-group"><label class="field-label">Age</label><input id="cf-age" type="number" class="field-input" value="${c.age||''}"></div><div class="field-group"><label class="field-label">Gender Identity</label><select id="cf-gender" class="field-select"><option></option>${opt(this.hmisGenderOptions(), c.gender)}</select><div id="cf-gender-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify gender identity</label><input id="cf-gender-other" class="field-input" value="${this.escape(c.gender_other||'')}"></div><div class="field-hint">Transgender experience is captured separately below and is not treated as a gender.</div></div><div class="field-group"><label class="field-label">Transgender Experience</label><select id="cf-transgender-status" class="field-select"><option></option>${opt(['Yes','No','Questioning','Client doesn’t know','Client prefers not to answer','Data not collected'], c.transgender_status)}</select></div><div class="field-group"><label class="field-label">Race / Ethnicity</label><select id="cf-race" class="field-select"><option></option>${opt(this.hmisRaceEthnicityOptions(), c.race_ethnicity)}</select><div id="cf-race-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify race/ethnicity</label><input id="cf-race-other" class="field-input" value="${this.escape(c.race_ethnicity_other||'')}"></div></div><div class="field-group"><label class="field-label">Primary Language</label><select id="cf-primary-language" class="field-select"><option></option>${opt(['English','Spanish','Russian','Farsi','Other'], c.primary_language||c.household_language||c.language)}</select><div id="cf-primary-language-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify language</label><input id="cf-primary-language-other" class="field-input" value="${this.escape(c.primary_language_other||'')}"></div></div>${this.yesNoSegment('cf-veteran','Veteran Status',c.veteran)}${this.yesNoSegment('cf-disability','Disability Status',c.disability)}</div><details style="margin-top:12px;"><summary class="field-label" style="cursor:pointer;">Additional Information</summary><div class="client-form-grid" style="margin-top:12px;"><div class="field-group"><label class="field-label">Income at Entry</label><input id="cf-income-entry" type="number" class="field-input" value="${c.income_at_entry||''}"></div></div></details></div>
-      <div class="form-section"><div class="form-section-title">Housing & Case Management</div><div class="housing-progress">${this.housingProgressOptions().map(v=>`<button type="button" class="hp-step ${progress===v?'active':''}" data-housing-progress="${this.escape(v)}">○ ${this.escape(v)}</button>`).join('')}</div><input type="hidden" id="cf-housing-plan" value="${this.escape(progress)}"><div class="client-form-grid" style="margin-top:14px;"><div class="field-group"><label class="field-label">Expected Exit Date</label><input id="cf-expected-exit" type="date" class="field-input" value="${this.dateOnly(c.expected_exit_date)}"></div><div class="field-group full"><label class="field-label">Intake Milestones</label><div class="field-hint" style="margin-bottom:8px;">Tick each item once it is complete. The date defaults to the intake date — change it if the item was finished later. Leave unticked if it has not happened yet.</div><div class="reason-list">${this.intakeMilestoneDefs().map(m=>{const val=this.dateOnly(c[m.col]);return `<label class="reason-row" style="display:flex;align-items:center;gap:10px;"><input type="checkbox" class="cf-milestone-check" data-milestone="${m.id}" ${val?'checked':''}><span style="flex:1;">${this.escape(m.label)}</span><input id="${m.id}" type="date" class="field-input cf-milestone-date" style="max-width:172px;" value="${val}" ${val?'':'disabled'}></label>`}).join('')}</div><button type="button" class="btn btn-ghost btn-sm" id="cf-milestones-all" style="margin-top:8px;">Mark all three complete at intake date</button></div></div></div>
+      <div class="form-section"><div class="form-section-title">Housing & Case Management</div><div class="housing-progress">${this.housingProgressOptions().map(v=>`<button type="button" class="hp-step ${progress===v?'active':''}" data-housing-progress="${this.escape(v)}">○ ${this.escape(v)}</button>`).join('')}</div><input type="hidden" id="cf-housing-plan" value="${this.escape(progress)}"><div class="client-form-grid" style="margin-top:14px;"><div class="field-group"><label class="field-label">Expected Exit Date</label><input id="cf-expected-exit" type="date" class="field-input" value="${this.dateOnly(c.expected_exit_date)}"></div><div class="field-group full"><label class="field-label">Intake Milestones</label><div class="field-hint" style="margin-bottom:8px;">Check each item when complete. The date defaults to intake.</div><div class="reason-list">${this.intakeMilestoneDefs().map(m=>{const val=this.dateOnly(c[m.col]);return `<label class="reason-row" style="display:flex;align-items:center;gap:10px;"><input type="checkbox" class="cf-milestone-check" data-milestone="${m.id}" ${val?'checked':''}><span style="flex:1;">${this.escape(m.label)}</span><input id="${m.id}" type="date" class="field-input cf-milestone-date" style="max-width:172px;" value="${val}" ${val?'':'disabled'}></label>`}).join('')}</div><button type="button" class="btn btn-ghost btn-sm" id="cf-milestones-all" style="margin-top:8px;">Mark all three complete at intake date</button></div></div></div>
       <div id="cf-exit-section" class="form-section exit-section ${status==='Exited'?'':'is-hidden'}"><div class="form-section-title">Exit Information</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Exit Date</label><input id="cf-exit-date" type="date" class="field-input" value="${this.dateOnly(c.exit_date)}"></div><div class="field-group"><label class="field-label">Exit Destination</label><select id="cf-exit-type" class="field-select"><option></option>${opt(this.exitDestinationOptions(), c.exit_destination_type)}</select><div id="cf-exit-type-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please describe exit destination</label><input id="cf-exit-type-other" class="field-input" value="${this.escape(c.exit_destination_other||'')}"></div></div><div class="field-group full"><label class="field-label">Reason for Exit</label><div class="field-hint" style="margin-bottom:7px;">Select every reason that applies.</div><div class="reason-list" id="cf-exit-reason-list">${this.exitReasonOptions().map((r,i)=>`<label class="reason-row"><input type="checkbox" class="cf-exit-reason" id="cf-exit-reason-${i}" value="${this.escape(r)}" ${selectedReasons.includes(r)?'checked':''}><span>${this.escape(r)}</span></label>`).join('')}</div><div id="cf-exit-reason-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required" for="cf-exit-reason-other">Please specify reason for exit</label><input id="cf-exit-reason-other" class="field-input" value="${this.escape(c.exit_reason_other||'')}"></div></div><div class="field-group"><label class="field-label">Specific Destination / Notes</label><input id="cf-exit-destination" class="field-input" value="${this.escape(c.exit_destination||'')}"></div><div class="field-group"><label class="field-label">Income at Exit</label><input id="cf-income-exit" type="number" class="field-input" value="${c.income_at_exit||''}"></div><div class="field-group full"><label class="field-label">Outcome Notes</label><textarea id="cf-exit-notes" class="field-textarea">${this.escape(c.exit_notes||'')}</textarea></div></div></div>
-      <div class="form-section"><div class="form-section-title">Service Contacts</div><div class="field-hint" style="margin-bottom:8px;">${services.length} contact${services.length===1?'':'s'} on file. Service contacts feed the quarterly service tallies; case notes do not.</div><div class="recent-service-list">${recent}</div><button class="btn btn-ghost btn-sm" id="cf-add-service" ${id?'':'disabled'}>+ Add Service</button><div class="field-hint" style="margin-top:6px;">Save the client before adding services.</div></div><div class="form-section"><div class="form-section-title">Income / Benefits Updates</div>${recentUpdates}<button class="btn btn-ghost btn-sm" id="cf-add-update" ${id?'':'disabled'}>+ Add Update</button><div class="field-hint" style="margin-top:6px;">Save the client before adding an update. One update per quarter.</div></div><div id="cf-quality" class="data-quality-list"></div>
+      <div class="form-section"><div class="form-section-title">Service Contacts</div><div class="field-hint" style="margin-bottom:8px;">${services.length} contact${services.length===1?'':'s'} on file.</div><div class="recent-service-list">${recent}</div><button class="btn btn-ghost btn-sm" id="cf-add-service" ${id?'':'disabled'}>+ Add Service</button><div class="field-hint" style="margin-top:6px;">Save the client before adding services.</div></div><div class="form-section"><div class="form-section-title">Income / Benefits Updates</div>${recentUpdates}<button class="btn btn-ghost btn-sm" id="cf-add-update" ${id?'':'disabled'}>+ Add Update</button><div class="field-hint" style="margin-top:6px;">Save the client before adding an update. One update per quarter.</div></div><div id="cf-quality" class="data-quality-list"></div>
     </div>${this.reportingSummaryHtml({...c,housing_plan_status:progress})}</div>`;
     this.openOverlay('client');
     const isOtherValue=(v)=>String(v||'').toLowerCase().includes('other') || String(v||'').toLowerCase().includes('different identity') || String(v||'').toLowerCase().includes('additional race');
@@ -7003,7 +7003,7 @@ const App = {
     }
     if(error){ document.getElementById('client-save-state').textContent='Save failed: '+error.message; return; }
     if(reasonsDropped && selectedExitReasons.length>1){
-      this.toast('Saved, but only the first exit reason was stored — the exit_reasons migration has not been applied here.',{error:true});
+      this.toast('Saved, but only the first exit reason was stored.',{error:true});
     }
 
     const clientName=document.getElementById('cf-client-name')?.value.trim()||null;
@@ -7059,13 +7059,13 @@ const App = {
       <div class="field-group full" id="sf-client-single"><label class="field-label required" for="sf-client">Client</label><select id="sf-client" class="field-select">${this.clientOptionList(s.client_id)}</select></div>
       <div class="field-group full" id="sf-client-multi" style="display:none;">
         <label class="field-label required">Attendees</label>
-        <div class="field-hint" style="margin-bottom:8px;">Group session — tick everyone who attended. One entry is saved per attendee.</div>
+        <div class="field-hint" style="margin-bottom:8px;">Check everyone who attended.</div>
         <div class="attendee-toolbar"><button type="button" class="btn btn-ghost btn-sm" id="sf-attend-all">Select all</button><button type="button" class="btn btn-ghost btn-sm" id="sf-attend-none">Clear</button><span class="attendee-count" id="sf-attend-count"></span></div>
         <div class="attendee-list">${attendeeList}</div>
       </div>
       <div class="field-group"><label class="field-label required" for="sf-date">Service Date</label><input id="sf-date" type="date" class="field-input" value="${this.dateOnly(s.service_date) || this.localDate()}"></div>
       <div class="field-group"><label class="field-label required" for="sf-type">Service Type</label><select id="sf-type" class="field-select">${typeSelect}</select>
-        <div id="sf-type-other-wrap" style="display:none;margin-top:8px;"><label class="field-label required" for="sf-type-other">Name of this service</label><input id="sf-type-other" class="field-input" placeholder="e.g. Sunday Supper Club" value="${this.escape(s.service_type_other||'')}"><div class="field-hint">Staff-defined. Reporting still rolls this up under On-Site Participation.</div></div>
+        <div id="sf-type-other-wrap" style="display:none;margin-top:8px;"><label class="field-label required" for="sf-type-other">Name of this service</label><input id="sf-type-other" class="field-input" placeholder="e.g. Sunday Supper Club" value="${this.escape(s.service_type_other||'')}"><div class="field-hint">Reported under On-Site Participation.</div></div>
         <div id="sf-group-note" class="group-session-note" style="display:none;">On-site group session</div>
       </div>
       <div class="field-group"><label class="field-label" for="sf-minutes">Duration Minutes</label><input id="sf-minutes" type="number" min="0" class="field-input" value="${s.duration_minutes||30}"></div>
@@ -7215,7 +7215,7 @@ const App = {
       ? `${label} logged for ${rows.length} attendees.`
       : `${label} saved.`);
     if (degraded) {
-      this.toast('Saved — but the service name and group flag were not stored. The database migration has not been applied yet.', { error:true });
+      this.toast('Saved, but the service name and group flag weren’t stored.', { error:true });
     }
   };
 
@@ -7405,7 +7405,7 @@ const App = {
       <div class="field-group full"><label class="field-label required">Client</label><select id="cn-client" class="field-select">${this.clientOptionList(n.client_id)}</select></div>
       <div class="field-group"><label class="field-label required">Note Date</label><input id="cn-date" type="date" class="field-input" value="${this.dateOnly(n.note_date)||this.localDate()}"></div>
       <div class="field-group"><label class="field-label">Staff</label><input id="cn-staff" class="field-input" value="${this.escape(n.staff_name||this.user?.email||'')}"></div>
-      <div class="field-group full"><label class="field-label required">Case Note</label><textarea id="cn-note" class="field-textarea" style="min-height:150px;">${this.escape(n.note||'')}</textarea><div class="field-hint">Case notes are saved to the client history only. They are not used in quarterly metrics or printed program-report calculations.</div></div>
+      <div class="field-group full"><label class="field-label required">Case Note</label><textarea id="cn-note" class="field-textarea" style="min-height:150px;">${this.escape(n.note||'')}</textarea><div class="field-hint">Case notes aren’t used in quarterly reporting.</div></div>
     </div></div>`;
     document.getElementById('case-note-save-state').textContent = noteId
       ? `Editing a note dated ${this.formatDate(this.dateOnly(n.note_date))}.`
@@ -7829,7 +7829,7 @@ const App = {
       return `<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.statusBadge(this.simpleClientStatus(c).toLowerCase().replace(' ','-'))}</td><td>${this.escape(c.housing_plan_status||'—')}</td><td>${this.clientBedNights(c,this.dateOnly(c.entry_date),this.today()).toLocaleString()}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.escape(c.room_assignment||'—')}${isDuplicate?' <span class="badge badge-amber">Duplicate</span>':''}</td><td><span class="badge ${part.cssClass}" title="${this.escape(part.hint||'')}">${this.escape(part.label)}</span></td><td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button><button class="btn btn-ghost btn-sm" data-add-service="${c.id}">Add Service</button><button class="btn btn-ghost btn-sm" data-add-update="${c.id}">Add Update</button></div></td></tr>`;
     }).join('') || `<tr><td colspan="9" class="empty-table-state">${activeRaw.length ? 'No residents match the current filter.' : 'No active client records entered yet.'}</td></tr>`;
     const flagLabels = { all:'All residents', noplan:'Housing plan not started', quiet:'No contact in 14+ days', pending:'Scheduled intakes' };
-    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Active Caseload</h1><div class="page-subtitle">Daily client workspace. Quarterly reporting is generated from these source records.</div></div><button class="btn btn-gold" id="btn-new-client">+ Add Client</button></div>
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Active Caseload</h1><div class="page-subtitle">Client records feed quarterly reporting.</div></div><button class="btn btn-gold" id="btn-new-client">+ Add Client</button></div>
       ${this.renderCensusPanel()}
       ${duplicateNotice}
       <div class="table-filter-row">
@@ -7954,7 +7954,7 @@ const App = {
     const byType={}; services.forEach(s=>{const k=this.serviceGroupKey(s); byType[k]=(byType[k]||0)+1});
     const onsite=services.filter(s=>this.isGroupSessionType(s.service_type));
     const sessionCount=new Set(onsite.map(s=>s.group_session_id||s.id)).size;
-    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Services</h1><div class="page-subtitle">Individual service contacts generate service tallies automatically.</div></div><button class="btn btn-gold" id="btn-new-service">+ Add Service</button></div>${this.renderQuarterButtons()}<div class="generated-metric-grid"><div class="generated-metric"><div class="label">Service Contacts</div><div class="value">${services.length}</div></div><div class="generated-metric"><div class="label">Clients Engaged</div><div class="value">${new Set(services.map(s=>s.client_id)).size}</div></div><div class="generated-metric"><div class="label">Minutes</div><div class="value">${services.reduce((a,b)=>a+Number(b.duration_minutes||0),0)}</div></div><div class="generated-metric"><div class="label">Service Types</div><div class="value">${Object.keys(byType).length}</div></div><div class="generated-metric"><div class="label">On-Site Participation</div><div class="value">${onsite.length}</div><div class="field-hint">${sessionCount} session${sessionCount===1?'':'s'} · ${new Set(onsite.map(s=>s.client_id)).size} resident${new Set(onsite.map(s=>s.client_id)).size===1?'':'s'}</div></div></div><div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._servicesSort,'date','Date')}${this.sortableHeader(this._servicesSort,'clientId','Client ID')}${this.sortableHeader(this._servicesSort,'name','Name')}${this.sortableHeader(this._servicesSort,'type','Service Type')}${this.sortableHeader(this._servicesSort,'minutes','Minutes')}${this.sortableHeader(this._servicesSort,'staff','Staff')}<th>Notes</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Services</h1><div class="page-subtitle">Service contacts by type.</div></div><button class="btn btn-gold" id="btn-new-service">+ Add Service</button></div>${this.renderQuarterButtons()}<div class="generated-metric-grid"><div class="generated-metric"><div class="label">Service Contacts</div><div class="value">${services.length}</div></div><div class="generated-metric"><div class="label">Clients Engaged</div><div class="value">${new Set(services.map(s=>s.client_id)).size}</div></div><div class="generated-metric"><div class="label">Minutes</div><div class="value">${services.reduce((a,b)=>a+Number(b.duration_minutes||0),0)}</div></div><div class="generated-metric"><div class="label">Service Types</div><div class="value">${Object.keys(byType).length}</div></div><div class="generated-metric"><div class="label">On-Site Participation</div><div class="value">${onsite.length}</div><div class="field-hint">${sessionCount} session${sessionCount===1?'':'s'} · ${new Set(onsite.map(s=>s.client_id)).size} resident${new Set(onsite.map(s=>s.client_id)).size===1?'':'s'}</div></div></div><div class="client-table-wrap"><table class="client-table"><thead><tr>${this.sortableHeader(this._servicesSort,'date','Date')}${this.sortableHeader(this._servicesSort,'clientId','Client ID')}${this.sortableHeader(this._servicesSort,'name','Name')}${this.sortableHeader(this._servicesSort,'type','Service Type')}${this.sortableHeader(this._servicesSort,'minutes','Minutes')}${this.sortableHeader(this._servicesSort,'staff','Staff')}<th>Notes</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     this.bindQuarterButtons(el);
     this.wireSortableHeaders(el, this._servicesSort, ()=>this.renderServices());
     el.querySelector('#btn-new-service').addEventListener('click',()=>this.openServiceForm());
@@ -7978,7 +7978,7 @@ const App = {
     const chipRow = (types) => types.map(t =>
       `<button class="quick-chip${this.isGroupSessionType(t)?' quick-chip-onsite':''}" data-quick-service="${this.escape(t)}">+ ${this.escape(t)}</button>`).join('');
 
-    const quick=`<div class="card" style="margin-bottom:16px;"><div class="card-header"><div><h2 class="card-title">One-Click Service Entry</h2><div class="field-hint">Pick a service to open a pre-filled entry. Today's date and 30 minutes are set automatically; on-site sessions open with the attendee list ready.</div></div></div><div class="card-body">
+    const quick=`<div class="card" style="margin-bottom:16px;"><div class="card-header"><div><h2 class="card-title">One-Click Service Entry</h2><div class="field-hint">Pick a service to start an entry.</div></div></div><div class="card-body">
       <div class="quick-group-label">Case management &amp; housing</div>
       <div class="quick-service-bar">${chipRow(caseChips)}</div>
       <div class="quick-group-label" style="margin-top:14px;">On-site participation <span class="quick-group-note">group sessions — log once for everyone who attended</span></div>
@@ -8021,7 +8021,7 @@ const App = {
     const overdue=rows.filter(f=>this.followUpStatus(f)==='overdue');
     this._followup6Sort = this._followup6Sort || {key:null, dir:'asc'};
     this._followup12Sort = this._followup12Sort || {key:null, dir:'asc'};
-    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Housing Follow-Ups</h1><div class="page-subtitle">Track 6-month and 12-month housing status checks for clients placed in permanent housing.</div></div></div><div class="generated-metric-grid"><div class="generated-metric"><div class="label">Open Follow-Ups</div><div class="value">${due.length}</div></div><div class="generated-metric"><div class="label">Completed</div><div class="value">${complete.length}</div></div><div class="generated-metric"><div class="label">Overdue</div><div class="value">${overdue.length}</div></div><div class="generated-metric"><div class="label">PH Clients</div><div class="value">${this.phExitClients().length}</div></div></div><div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg></div><div><strong>Purpose:</strong> after a client exits to documented permanent housing, staff should confirm housing status at 6 months and 12 months. This helps the City understand whether placements remain stable beyond the point of exit.</div></div>${this.renderFollowUpSection(rows,'6-month','6-Month Follow-Ups',this._followup6Sort)}${this.renderFollowUpSection(rows,'12-month','12-Month Follow-Ups',this._followup12Sort)}`;
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Housing Follow-Ups</h1><div class="page-subtitle">6- and 12-month checks for clients placed in permanent housing.</div></div></div><div class="generated-metric-grid"><div class="generated-metric"><div class="label">Open Follow-Ups</div><div class="value">${due.length}</div></div><div class="generated-metric"><div class="label">Completed</div><div class="value">${complete.length}</div></div><div class="generated-metric"><div class="label">Overdue</div><div class="value">${overdue.length}</div></div><div class="generated-metric"><div class="label">PH Clients</div><div class="value">${this.phExitClients().length}</div></div></div><div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg></div><div><strong>Purpose:</strong> after a client exits to documented permanent housing, staff should confirm housing status at 6 months and 12 months. This helps the City understand whether placements remain stable beyond the point of exit.</div></div>${this.renderFollowUpSection(rows,'6-month','6-Month Follow-Ups',this._followup6Sort)}${this.renderFollowUpSection(rows,'12-month','12-Month Follow-Ups',this._followup12Sort)}`;
     el.querySelectorAll('[data-followup-client]').forEach(b=>b.addEventListener('click',()=>this.openFollowUpForm(b.dataset.followupClient,b.dataset.followupType)));
     this.wireSortableHeaders(el.querySelector('[data-followup-table="6-month"]'), this._followup6Sort, ()=>this.renderHousingFollowUps());
     this.wireSortableHeaders(el.querySelector('[data-followup-table="12-month"]'), this._followup12Sort, ()=>this.renderHousingFollowUps());
@@ -8041,7 +8041,7 @@ const App = {
     };
     const users = this.applySort(this.data.approvedUsers||[], this._accessSort, accessors);
     el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Access Management</h1><div class="page-subtitle">Manage approved ${this.escape(this.programName())} portal users.</div></div></div>
-      <div class="card" style="margin-bottom:18px;"><div class="card-header"><div><h2 class="card-title">Add or Update User</h2><div class="field-hint">Agency Support Staff keep program access without fiscal information. Agency Management receives program access plus fiscal reporting. Agency-Fiscal can view the Program Dashboard and fully prepare/submit fiscal invoices, but cannot access program management or quarterly reporting.</div></div></div><div class="card-body">
+      <div class="card" style="margin-bottom:18px;"><div class="card-header"><div><h2 class="card-title">Add or Update User</h2><div class="field-hint">Support Staff: program only. Management: program and fiscal. Fiscal: dashboard, invoices and budget.</div></div></div><div class="card-body">
         <div class="form-row"><div class="field-group"><label class="field-label required">Email</label><input class="field-input" id="au-email" type="email"></div><div class="field-group"><label class="field-label required">Full Name</label><input class="field-input" id="au-name"></div></div>
         <div class="form-row three"><div class="field-group"><label class="field-label">Organization</label><input class="field-input" id="au-org" value="${this.escape(this.agencyName())}"></div>
         <div class="field-group"><label class="field-label">Role</label><select class="field-select" id="au-access"><option value="agency_support">Agency Support Staff</option><option value="agency_management">Agency Management</option><option value="agency_fiscal">Agency-Fiscal</option><option value="city_admin">City Admin</option></select></div>
@@ -8158,7 +8158,7 @@ const App = {
             return `<div class="goal-row"><div class="goal-meta"><div><div class="goal-name">${this.escape(g.name)}</div><div class="field-hint">${this.escape(g.desc)}</div>${quickLink}</div><div style="text-align:right;"><strong>${this.escape(String(g.actual))}</strong> / ${this.escape(String(g.target))}<br><span class="badge ${status === 'On Track' ? 'badge-green' : status === 'In Progress' ? 'badge-amber' : 'badge-red'}">${status}</span></div></div><div class="goal-bar"><div class="goal-fill ${cls}" style="width:${pct}%"></div></div></div>`;
           }).join('')}
         </div>
-        <p class="field-hint" style="margin-top:10px;">Annual goals are shown for program monitoring and should be interpreted with care when counts are small or the contract year is still in progress.</p>
+        <p class="field-hint" style="margin-top:10px;">Interpret with care when counts are small or the year is in progress.</p>
       </div>
     </div>`;
   };
@@ -8237,7 +8237,7 @@ const App = {
   };
 
   App.renderIncidentAttachmentsList = function(incidentId){
-    if (!incidentId) return `<div class="field-hint">Attachments can be added once the incident is saved for the first time — select files below and save; they'll upload automatically.</div>`;
+    if (!incidentId) return `<div class="field-hint">Select files below; they upload when you save.</div>`;
     const files = this.attachmentsForIncident(incidentId);
     if (!files.length) return `<div class="field-hint">No files attached yet.</div>`;
     return `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>File</th><th>Uploaded</th><th>Actions</th></tr></thead><tbody>
@@ -8284,7 +8284,7 @@ const App = {
         <td><div class="client-actions">${c?`<button class="btn btn-ghost btn-sm" data-open-incident-client="${c.id}">Open Client</button>`:''}<button class="btn btn-ghost btn-sm" data-edit-incident="${this.escape(i.id)}">Edit</button></div></td>
       </tr>`;
     }).join('') || '<tr><td colspan="9" class="empty-table-state">No incidents match the current filter.</td></tr>';
-    el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Incident Log</h1><div class="page-subtitle">Documentation of behavioral issues, grievances, and other incidents for the caseload.</div></div><button class="btn btn-gold" id="btn-new-incident">+ Log Incident</button></div>
+    el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Incident Log</h1><div class="page-subtitle">Behavioral issues, grievances and other incidents.</div></div><button class="btn btn-gold" id="btn-new-incident">+ Log Incident</button></div>
       <div class="table-filter-row" style="margin-top:16px;">
         <div class="field-group" style="margin:0;"><label class="field-label" for="incident-filter-client" style="margin-bottom:4px;">Filter by client</label><select id="incident-filter-client" class="field-select"><option value="">All clients (${(this.data.clientIncidents||[]).length})</option>${filterOptions.map(o=>`<option value="${this.escape(o.id)}" ${this._incidentFilterClient===o.id?'selected':''}>${this.escape(o.label)}</option>`).join('')}</select></div>
         ${this._incidentFilterClient ? `<button class="btn btn-ghost btn-sm" id="btn-clear-incident-filter" style="margin-top:18px;">Clear filter</button>` : ''}
@@ -8344,7 +8344,7 @@ const App = {
         <div class="field-group"><label class="field-label required">Severity</label><select id="in-severity" class="field-select">${this.incidentSeverityOptions().map(x=>`<option value="${this.escape(x)}" ${(i.severity||'Low')===x?'selected':''}>${this.escape(x)}</option>`).join('')}</select></div>
         <div class="field-group"><label class="field-label required">Status</label><select id="in-status" class="field-select">${this.incidentStatusOptions().map(x=>`<option value="${this.escape(x)}" ${(i.status||'Open')===x?'selected':''}>${this.escape(x)}</option>`).join('')}</select></div>
         <div class="field-group"><label class="field-label">Staff</label><input id="in-staff" class="field-input" value="${this.escape(i.staff_name||this.user?.email||'')}"></div>
-        <div class="field-group full"><label class="field-label required">Description</label><textarea id="in-description" class="field-textarea" style="min-height:120px;">${this.escape(i.description||'')}</textarea><div class="field-hint">Describe what happened, in enough detail to stand alone as a record if referenced later.</div></div>
+        <div class="field-group full"><label class="field-label required">Description</label><textarea id="in-description" class="field-textarea" style="min-height:120px;">${this.escape(i.description||'')}</textarea><div class="field-hint">What happened, in enough detail to stand on its own.</div></div>
         <div class="field-group full"><label class="field-label">Immediate Action Taken</label><textarea id="in-action" class="field-textarea" style="min-height:80px;">${this.escape(i.immediate_action||'')}</textarea><div class="field-hint">De-escalation, staff response, referrals made, etc.</div></div>
         <div class="field-group full"><label class="field-label">Witnesses</label><input id="in-witnesses" class="field-input" value="${this.escape(i.witnesses||'')}"><div class="field-hint">Staff and/or other clients present.</div></div>
       </div></div>
@@ -8789,7 +8789,7 @@ const App = {
           ${row(counts.notes, 'Case notes')}
           ${row(counts.followups, 'Housing follow-ups')}
         </div>
-        <div class="field-hint">${total ? 'A snapshot of everything above is written to the deletion log before removal.' : 'This record has no linked activity — safe to remove.'}</div>
+        <div class="field-hint">${total ? 'A snapshot of everything above is written to the deletion log before removal.' : 'No linked activity.'}</div>
       </div>
       <div class="form-section">
         <div class="form-section-title">Confirm</div>
@@ -9879,7 +9879,7 @@ const App = {
   };
   App.fiscalMonthTotal = function(month=this.resolveFiscalMonth()){ return ['Personnel','Facility','Program','Administrative'].reduce((s,c)=>s+this.fiscalCategoryMonth(c,month),0); };
   App.fiscalYtdTotal = function(month=this.resolveFiscalMonth()){ return ['Personnel','Facility','Program','Administrative'].reduce((s,c)=>s+this.fiscalCategoryYtd(c,month),0); };
-  App.fiscalCategoryBudget = function(category){ const t=this.fiscalSourceTotals(); return Number(({Personnel:t.personnel,Facility:t.facility,Program:t.program,Administrative:t.administrative})[category]||0); };
+  App.fiscalCategoryBudget = function(category){ return (this.fiscal.budgetLines||[]).filter(l=>l.category===category).reduce((s,l)=>s+Number(l.approved_budget||0),0); };
   App.fiscalLineDetailBudget = function(){ return (this.fiscal.budgetLines||[]).reduce((s,l)=>s+Number(l.approved_budget||0),0); };
   App.fiscalSourceSubtotalSum = function(){ const t=this.fiscalSourceTotals(); return Number(t.personnel||0)+Number(t.facility||0)+Number(t.program||0)+Number(t.administrative||0); };
 
@@ -9913,7 +9913,7 @@ const App = {
     return {eligible,nonEligible,unclassified,total,classified,difference};
   };
   App.fiscalFundingRuleLabel = function(line){
-    if(line?.ahtf_percent===null || line?.ahtf_percent===undefined || line?.ahtf_percent==='') return 'Not classified in source workbook';
+    if(line?.ahtf_percent===null || line?.ahtf_percent===undefined || line?.ahtf_percent==='') return 'Not classified';
     const pct=Number(line.ahtf_percent);
     if(pct>=1) return 'AHTF eligible';
     if(pct<=0) return 'Not AHTF eligible';
@@ -9922,9 +9922,9 @@ const App = {
   App.fiscalFundingBreakdownHtml = function(month=this.resolveFiscalMonth()){
     const cur=this.fiscalFundingBreakdown(month,false), ytd=this.fiscalFundingBreakdown(month,true);
     const unclassifiedRow=(Math.abs(cur.unclassified)>0.005 || Math.abs(ytd.unclassified)>0.005)
-      ? `<tr><td>Not classified by source workbook</td><td style=\"text-align:right\">${this.fiscalMoney(cur.unclassified)}</td><td style=\"text-align:right\">${this.fiscalMoney(ytd.unclassified)}</td></tr>` : '';
+      ? `<tr><td>Not classified</td><td style=\"text-align:right\">${this.fiscalMoney(cur.unclassified)}</td><td style=\"text-align:right\">${this.fiscalMoney(ytd.unclassified)}</td></tr>` : '';
     const note=(Math.abs(cur.unclassified)>0.005)
-      ? `<div class=\"notice amber\" style=\"margin-top:12px;margin-bottom:0\"><div>!</div><div>Building M&amp;R and/or Indirect Costs have activity this month. The source workbook does not include those lines in either AHTF eligibility formula, so they are shown separately rather than silently reclassified.</div></div>` : '';
+      ? `<div class=\"notice amber\" style=\"margin-top:12px;margin-bottom:0\"><div>!</div><div>Some activity this month is on lines without an AHTF classification.</div></div>` : '';
     return `<div class=\"client-table-wrap\"><table class=\"client-table\"><thead><tr><th>Funding Classification</th><th style=\"text-align:right\">Current Month</th><th style=\"text-align:right\">YTD</th></tr></thead><tbody><tr><td><strong>AHTF Eligible</strong></td><td style=\"text-align:right\"><strong>${this.fiscalMoney(cur.eligible)}</strong></td><td style=\"text-align:right\"><strong>${this.fiscalMoney(ytd.eligible)}</strong></td></tr><tr><td>Not AHTF Eligible</td><td style=\"text-align:right\">${this.fiscalMoney(cur.nonEligible)}</td><td style=\"text-align:right\">${this.fiscalMoney(ytd.nonEligible)}</td></tr>${unclassifiedRow}<tr><td><strong>Total Actuals</strong></td><td style=\"text-align:right\"><strong>${this.fiscalMoney(cur.total)}</strong></td><td style=\"text-align:right\"><strong>${this.fiscalMoney(ytd.total)}</strong></td></tr></tbody></table></div>${note}`;
   };
 
@@ -9939,11 +9939,11 @@ const App = {
     const overCats=['Personnel','Facility','Program','Administrative'].filter(c=>this.fiscalCategoryYtd(c,month)>this.fiscalCategoryBudget(c)+0.005);
     const funding=this.fiscalFundingBreakdown(month,false);
     const checks=[
-      {label:'Fiscal database setup',severity:this.fiscal.setupReady?'ok':'error',detail:this.fiscal.setupReady?'Fiscal tables and document metadata are available.':'The protected fiscal database is not available yet.',fix:this.fiscal.setupReady?'No action needed.':'Run the supplied Supabase fiscal migration before entering or submitting data.'},
+      ...(this.fiscal.setupReady?[]:[{label:'Fiscal database setup',severity:this.fiscal.setupReady?'ok':'error',detail:this.fiscal.setupReady?'Ready.':'Fiscal data isn’t available.',fix:this.fiscal.setupReady?'No action needed.':'Contact the portal administrator.'}]),
       {label:'Monthly expense detail',severity:total>0?'ok':'error',detail:`Current invoice total: ${this.fiscalMoney(total)}`,fix:total>0?'No action needed.':'Enter at least one monthly actual before submission.'},
       {label:'General Ledger backup',severity:hasGL?'ok':'error',detail:hasGL?`${docs.length} supporting file${docs.length===1?'':'s'} uploaded; General Ledger is present.`:`${docs.length} supporting file${docs.length===1?'':'s'} uploaded; no General Ledger found.`,fix:hasGL?'No action needed.':'Upload the monthly General Ledger before submission.'},
       {label:'Invoice metadata',severity:meta.invoice_date&&meta.po_number?'ok':'error',detail:`Invoice #: ${meta.invoice_number||'not entered'} · Invoice date: ${meta.invoice_date||'not entered'} · PO: ${meta.po_number||'not entered'}`,fix:meta.invoice_date&&meta.po_number?'No action needed.':'Enter the invoice date and current FY27 PO number before submission.'},
-      {label:'AHTF allocation',severity:Math.abs(funding.unclassified)>0.005?'warning':'ok',detail:`AHTF eligible: ${this.fiscalMoney(funding.eligible)} · Not AHTF eligible: ${this.fiscalMoney(funding.nonEligible)}${Math.abs(funding.unclassified)>0.005?` · Not classified by source workbook: ${this.fiscalMoney(funding.unclassified)}`:''}`,fix:Math.abs(funding.unclassified)>0.005?'Review Building M&R and/or Indirect Cost activity. The source workbook does not classify those lines in either AHTF formula.':'AHTF and non-AHTF amounts follow the source workbook allocation formulas.'},
+      {label:'AHTF allocation',severity:Math.abs(funding.unclassified)>0.005?'warning':'ok',detail:`AHTF eligible: ${this.fiscalMoney(funding.eligible)} · Not AHTF eligible: ${this.fiscalMoney(funding.nonEligible)}${Math.abs(funding.unclassified)>0.005?` · Not classified: ${this.fiscalMoney(funding.unclassified)}`:''}`,fix:Math.abs(funding.unclassified)>0.005?'Review Building M&R and/or Indirect Cost activity. The source workbook does not classify those lines in either AHTF formula.':'No action needed.'},
       {label:'Budget monitoring',severity:overCats.length?'warning':'ok',detail:overCats.length?`${overCats.join(', ')} ${overCats.length===1?'is':'are'} over the published annual category budget through this month.`:`YTD actuals ${this.fiscalMoney(ytd)} remain within the published annual total ${this.fiscalMoney(official)}.`,fix:overCats.length?'Review and document any approved budget modification or reallocation.':'No action needed.'}
     ];
     return checks;
@@ -9966,8 +9966,8 @@ const App = {
     if(!lines.length) return `<div class="notice amber"><div>!</div><div>No budget lines are configured for ${this.escape(this.fiscalBudgetYear)}.</div></div>`;
     let html='', lastCat='', lastSub='';
     for(const l of lines){
-      if(l.category!==lastCat){ html+=`<tr class="fiscal-section-row"><td colspan="7">${this.escape(l.category)} Expenses</td></tr>`; lastCat=l.category; lastSub=''; }
-      if(l.subcategory && l.subcategory!==lastSub){ html+=`<tr class="fiscal-subsection-row"><td colspan="7">${this.escape(l.subcategory)}</td></tr>`; lastSub=l.subcategory; }
+      if(l.category!==lastCat){ html+=`<tr class="fiscal-section-row"><td colspan="7">${this.escape(l.category)}</td></tr>`; lastCat=l.category; lastSub=''; }
+      if(l.subcategory && l.subcategory!==lastSub){ const many=new Set(lines.filter(x=>x.category===l.category).map(x=>x.subcategory)).size>1; if(many) html+=`<tr class="fiscal-subsection-row"><td colspan="7">${this.escape(l.subcategory)}</td></tr>`; lastSub=l.subcategory; }
       const a=this.fiscalActualFor(month,l.line_code)||{}, current=Number(a.amount||0), ytd=this.fiscalLineYtd(l.line_code,month), budget=Number(l.approved_budget||0), remaining=budget-ytd, ratio=budget?ytd/budget:0;
       const detail=l.fte_count!=null?`${Number(l.fte_count).toFixed(2)} FTE`:'';
       const remClass=remaining<0?'fiscal-over':ratio>=.9?'fiscal-near':'';
@@ -9976,21 +9976,21 @@ const App = {
     const cats=['Personnel','Facility','Program','Administrative'];
     const totals=cats.map(c=>({c,b:this.fiscalCategoryBudget(c),m:this.fiscalCategoryMonth(c,month),y:this.fiscalCategoryYtd(c,month)}));
     const totalBudget=this.fiscalOfficialTotal(), totalMonth=this.fiscalMonthTotal(month), totalYtd=this.fiscalYtdTotal(month);
-    html+=`<tr class="fiscal-total-row"><td><strong>Published FY27 Grand Total</strong></td><td style="text-align:right">${this.fiscalMoney(totalBudget)}</td><td style="text-align:right">${this.fiscalMoney(totalMonth)}</td><td style="text-align:right">${this.fiscalMoney(totalYtd)}</td><td style="text-align:right">${this.fiscalMoney(totalBudget-totalYtd)}</td><td style="text-align:right">${this.fiscalPct(totalBudget?totalYtd/totalBudget:0)}</td><td></td></tr>`;
-    return `<div class="fiscal-budget-wrap"><table class="fiscal-budget-table"><thead><tr><th>Budget Line</th><th style="text-align:right">FY27 Budget</th><th style="text-align:right">Current Month</th><th style="text-align:right">YTD</th><th style="text-align:right">Remaining</th><th style="text-align:right">% Spent</th><th>Notes</th></tr></thead><tbody>${html}</tbody></table></div>`;
+    html+=`<tr class="fiscal-total-row"><td><strong>Grand Total</strong></td><td style="text-align:right">${this.fiscalMoney(totalBudget)}</td><td style="text-align:right">${this.fiscalMoney(totalMonth)}</td><td style="text-align:right">${this.fiscalMoney(totalYtd)}</td><td style="text-align:right">${this.fiscalMoney(totalBudget-totalYtd)}</td><td style="text-align:right">${this.fiscalPct(totalBudget?totalYtd/totalBudget:0)}</td><td></td></tr>`;
+    return `<div class="fiscal-budget-wrap"><table class="fiscal-budget-table"><thead><tr><th>Budget Line</th><th style="text-align:right">Budget</th><th style="text-align:right">This Month</th><th style="text-align:right">YTD</th><th style="text-align:right">Remaining</th><th style="text-align:right">% Spent</th><th>Notes</th></tr></thead><tbody>${html}</tbody></table></div>`;
   };
 
   App.fiscalDocumentsHtml = function(month=this.resolveFiscalMonth()){
     const docs=this.fiscalDocsFor(month), editable=this.fiscalCanEditMonth(month);
     const list=docs.map(d=>`<div class="fiscal-doc-row"><div><strong>${this.escape(d.doc_type||'Backup')}</strong> · ${this.escape(d.file_name||'file')}<div class="fiscal-doc-meta">${this.escape(this.formatBytes?.(d.file_size) || this.fiscalFormatBytes(d.file_size))} · uploaded by ${this.escape(d.uploaded_by||'—')} · ${this.escape(this.formatDateTime(d.uploaded_at))}</div></div><div class="client-actions"><button class="btn btn-ghost btn-sm" data-fiscal-open-doc="${this.escape(d.id)}">Open</button>${editable?`<button class="btn btn-ghost btn-sm" data-fiscal-delete-doc="${this.escape(d.id)}">Delete</button>`:''}</div></div>`).join('') || `<div class="field-hint">No fiscal backup has been uploaded for this month.</div>`;
-    return `<div class="card" style="margin-top:18px"><div class="card-header"><div><h2 class="card-title">Supporting Documentation</h2><div class="field-hint">The General Ledger is required before monthly submission. Additional payroll, check-register, receipt/invoice, and allocation backup can be attached here.</div></div></div><div class="card-body">${editable?`<div class="fiscal-doc-upload"><div class="form-row"><div class="field-group"><label class="field-label">Document Type</label><select class="field-select" id="fiscal-doc-type">${DOC_TYPES.map(x=>`<option>${this.escape(x)}</option>`).join('')}</select></div><div class="field-group"><label class="field-label">GL / Backup File</label><input class="field-input" id="fiscal-doc-file" type="file" accept=".pdf,.xlsx,.xls,.csv"></div></div><button class="btn btn-ghost btn-sm" id="btn-fiscal-upload">Upload Documentation</button><div class="field-hint" style="margin-top:8px">PDF, XLSX, XLS, or CSV · maximum 20 MB.</div></div>`:''}<div class="fiscal-doc-list">${list}</div></div></div>`;
+    return `<div class="card" style="margin-top:18px"><div class="card-header"><div><h2 class="card-title">Supporting Documentation</h2><div class="field-hint">General Ledger required. Add payroll, receipts or other backup as needed.</div></div></div><div class="card-body">${editable?`<div class="fiscal-doc-upload"><div class="form-row"><div class="field-group"><label class="field-label">Document Type</label><select class="field-select" id="fiscal-doc-type">${DOC_TYPES.map(x=>`<option>${this.escape(x)}</option>`).join('')}</select></div><div class="field-group"><label class="field-label">GL / Backup File</label><input class="field-input" id="fiscal-doc-file" type="file" accept=".pdf,.xlsx,.xls,.csv"></div></div><button class="btn btn-ghost btn-sm" id="btn-fiscal-upload">Upload Documentation</button><div class="field-hint" style="margin-top:8px">PDF, XLSX, XLS, or CSV · maximum 20 MB.</div></div>`:''}<div class="fiscal-doc-list">${list}</div></div></div>`;
   };
   App.fiscalFormatBytes = function(n){ n=Number(n)||0; if(n<1024)return n+' B'; if(n<1048576)return (n/1024).toFixed(1)+' KB'; return (n/1048576).toFixed(1)+' MB'; };
 
   App.fiscalMetaHtml = function(month=this.resolveFiscalMonth()){
     const meta=this.fiscalMetaFor(month), editable=this.fiscalCanEditMonth(month);
     const field=(id,label,value,type='text',placeholder='')=>`<div class="field-group"><label class="field-label">${label}</label>${editable?`<input class="field-input" id="${id}" type="${type}" value="${this.escape(value||'')}" placeholder="${this.escape(placeholder)}">`:`<div class="locked-field">${this.escape(value||'—')}</div>`}</div>`;
-    return `<div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Invoice Information</h2><div class="field-hint">PO and vendor information is kept with the monthly fiscal record so it can change by fiscal year without changing application code.</div></div>${this.fiscalStatusBadge(this.fiscalStatus(month))}</div><div class="card-body"><div class="form-row">${field('fiscal-invoice-number','Invoice #',meta.invoice_number||this.fiscalInvoiceNumberFor(month),'text','Agency invoice number')}${field('fiscal-invoice-date','Invoice Date',meta.invoice_date||this.localDate(),'date')}</div><div class="form-row">${field('fiscal-po-number','P.O. #',meta.po_number,'text','Enter FY27 PO number')}${field('fiscal-vendor-number','Vendor No.',meta.vendor_number,'text','Agency vendor number')}</div>${editable?`<div class="field-group"><label class="field-label">Fiscal Note (optional)</label><textarea class="field-textarea" id="fiscal-month-notes" style="min-height:70px">${this.escape(meta.notes||'')}</textarea></div>`:`<div class="field-group"><label class="field-label">Fiscal Note</label><div class="locked-field">${this.escape(meta.notes||'—')}</div></div>`}</div></div>`;
+    return `<div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Invoice Information</h2><div class="field-hint">PO and vendor numbers for this invoice.</div></div>${this.fiscalStatusBadge(this.fiscalStatus(month))}</div><div class="card-body"><div class="form-row">${field('fiscal-invoice-number','Invoice #',meta.invoice_number||this.fiscalInvoiceNumberFor(month),'text','Agency invoice number')}${field('fiscal-invoice-date','Invoice Date',meta.invoice_date||this.localDate(),'date')}</div><div class="form-row">${field('fiscal-po-number','P.O. #',meta.po_number,'text','Enter FY27 PO number')}${field('fiscal-vendor-number','Vendor No.',meta.vendor_number,'text','Agency vendor number')}</div>${editable?`<div class="field-group"><label class="field-label">Fiscal Note (optional)</label><textarea class="field-textarea" id="fiscal-month-notes" style="min-height:70px">${this.escape(meta.notes||'')}</textarea></div>`:`<div class="field-group"><label class="field-label">Fiscal Note</label><div class="locked-field">${this.escape(meta.notes||'—')}</div></div>`}</div></div>`;
   };
 
   App.fiscalChecksHtml = function(month=this.resolveFiscalMonth()){
@@ -10001,20 +10001,20 @@ const App = {
 
   App.fiscalBudgetSummaryHtml = function(month=this.resolveFiscalMonth()){
     const rows=['Personnel','Facility','Program','Administrative'].map(c=>{ const b=this.fiscalCategoryBudget(c), y=this.fiscalCategoryYtd(c,month), rem=b-y, ratio=b?y/b:0; return `<tr><td>${this.escape(c)}</td><td style="text-align:right">${this.fiscalMoney(b)}</td><td style="text-align:right">${this.fiscalMoney(y)}</td><td style="text-align:right" class="${rem<0?'fiscal-over':''}">${this.fiscalMoney(rem)}</td><td style="text-align:right" class="${ratio>1?'fiscal-over':ratio>=.9?'fiscal-near':''}">${this.fiscalPct(ratio)}</td></tr>`; }).join('');
-    return `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Category</th><th style="text-align:right">Contract Budget</th><th style="text-align:right">YTD Actuals</th><th style="text-align:right">Remaining</th><th style="text-align:right">% Spent</th></tr></thead><tbody>${rows}<tr><td><strong>Published Grand Total</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(this.fiscalOfficialTotal())}</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(this.fiscalYtdTotal(month))}</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(this.fiscalOfficialTotal()-this.fiscalYtdTotal(month))}</strong></td><td style="text-align:right"><strong>${this.fiscalPct(this.fiscalOfficialTotal()?this.fiscalYtdTotal(month)/this.fiscalOfficialTotal():0)}</strong></td></tr></tbody></table></div>`;
+    return `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Category</th><th style="text-align:right">Budget</th><th style="text-align:right">YTD Actuals</th><th style="text-align:right">Remaining</th><th style="text-align:right">% Spent</th></tr></thead><tbody>${rows}<tr><td><strong>Grand Total</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(this.fiscalOfficialTotal())}</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(this.fiscalYtdTotal(month))}</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(this.fiscalOfficialTotal()-this.fiscalYtdTotal(month))}</strong></td><td style="text-align:right"><strong>${this.fiscalPct(this.fiscalOfficialTotal()?this.fiscalYtdTotal(month)/this.fiscalOfficialTotal():0)}</strong></td></tr></tbody></table></div>`;
   };
 
   App.fiscalMonthlyReviewHtml = function(){
     const months=this.fiscalMonths();
-    const rows=months.map(m=>{ const total=this.fiscalMonthTotal(m.key), funding=this.fiscalFundingBreakdown(m.key,false), docs=this.fiscalDocsFor(m.key), gl=docs.some(d=>String(d.doc_type||'').toLowerCase()==='general ledger'), st=this.fiscalStatus(m.key), active=m.key===this.resolveFiscalMonth(); return `<tr class="${active?'fiscal-month-row-active':''}"><td><button class="btn btn-ghost btn-sm" data-fiscal-month-link="${m.key}">${this.escape(m.label)}</button></td><td style="text-align:right">${this.fiscalMoney(total)}</td><td style="text-align:right">${this.fiscalMoney(funding.eligible)}</td><td style="text-align:right">${this.fiscalMoney(funding.nonEligible)}</td><td>${gl?'<span class="badge badge-green">GL uploaded</span>':'<span class="badge badge-amber">GL missing</span>'}</td><td>${docs.length}</td><td>${this.fiscalStatusBadge(st)}</td></tr>`; }).join('');
-    return `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Month</th><th style="text-align:right">Invoice</th><th style="text-align:right">AHTF Eligible</th><th style="text-align:right">Not AHTF</th><th>General Ledger</th><th>Backup Files</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    const rows=months.map(m=>{ const total=this.fiscalMonthTotal(m.key), funding=this.fiscalFundingBreakdown(m.key,false), docs=this.fiscalDocsFor(m.key), gl=docs.some(d=>String(d.doc_type||'').toLowerCase()==='general ledger'), st=this.fiscalStatus(m.key), sub=this.fiscalSubmission(m.key), active=m.key===this.resolveFiscalMonth(); return `<tr class="${active?'fiscal-month-row-active':''}"><td><button class="btn btn-ghost btn-sm" data-fiscal-month-link="${m.key}">${this.escape(m.label)}</button></td><td style="text-align:right">${total?this.fiscalMoney(total):'–'}</td><td style="text-align:right">${total?this.fiscalMoney(funding.eligible):'–'}</td><td style="text-align:right">${total?this.fiscalMoney(funding.nonEligible):'–'}</td><td>${gl?'<span class="badge badge-green">Uploaded</span>':(total>0||sub?'<span class="badge badge-amber">Missing</span>':'<span class="field-hint">–</span>')}</td><td>${docs.length||'–'}</td><td>${(total>0||sub)?this.fiscalStatusBadge(st):'<span class="field-hint">–</span>'}</td></tr>`; }).join('');
+    return `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Month</th><th style="text-align:right">Invoice</th><th style="text-align:right">AHTF Eligible</th><th style="text-align:right">Not AHTF</th><th>General Ledger</th><th>Files</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   };
 
   App.fiscalSubmissionPanelHtml = function(month=this.resolveFiscalMonth()){
     const sub=this.fiscalSubmission(month), status=this.fiscalStatus(month), editable=this.fiscalCanEditMonth(month), blocking=this.fiscalBlockingIssues(month), canSubmit=editable && !blocking.length;
     if(this.isAdmin()){
       const reviewable=['submitted','resubmitted'].includes(status);
-      return `<div class="card"><div class="card-header"><div><h2 class="card-title">City Fiscal Review</h2><div class="field-hint">Agency submission is locked while under City review.</div></div>${this.fiscalStatusBadge(status)}</div><div class="card-body">${sub?`<div class="field-hint">Submitted by ${this.escape(sub.submitted_by||'—')} · ${this.escape(this.formatDateTime(sub.submitted_at))}</div>`:'<div class="field-hint">No invoice has been submitted for this month.</div>'}${sub?.review_note?`<div class="notice amber" style="margin-top:12px"><div>!</div><div><strong>Most recent City note</strong><br>${this.escape(sub.review_note)}</div></div>`:''}${reviewable?`<div class="field-group" style="margin-top:14px"><label class="field-label">Review Comment</label><textarea class="field-textarea" id="fiscal-review-note" placeholder="Required when requesting revisions"></textarea></div><div class="fiscal-review-actions"><button class="btn btn-primary" id="btn-fiscal-approve">Approve Invoice</button><button class="btn btn-ghost" id="btn-fiscal-revisions">Request Revisions</button></div>`:''}</div></div>`;
+      return `<div class="card"><div class="card-header"><div><h2 class="card-title">City Review</h2></div>${this.fiscalStatusBadge(status)}</div><div class="card-body">${sub?`<div class="field-hint">Submitted by ${this.escape(sub.submitted_by||'—')} · ${this.escape(this.formatDateTime(sub.submitted_at))}</div>`:'<div class="field-hint">No invoice has been submitted for this month.</div>'}${sub?.review_note?`<div class="notice amber" style="margin-top:12px"><div>!</div><div><strong>Most recent City note</strong><br>${this.escape(sub.review_note)}</div></div>`:''}${reviewable?`<div class="field-group" style="margin-top:14px"><label class="field-label">Review Comment</label><textarea class="field-textarea" id="fiscal-review-note" placeholder="Required when requesting revisions"></textarea></div><div class="fiscal-review-actions"><button class="btn btn-primary" id="btn-fiscal-approve">Approve Invoice</button><button class="btn btn-ghost" id="btn-fiscal-revisions">Request Revisions</button></div>`:''}</div></div>`;
     }
     if(['submitted','resubmitted','approved'].includes(status)) return `<div class="card"><div class="card-header"><div><h2 class="card-title">Submission</h2><div class="field-hint">This month's fiscal record is locked.</div></div>${this.fiscalStatusBadge(status)}</div><div class="card-body"><div class="notice ${status==='approved'?'green':'navy'}"><div>${status==='approved'?'✓':'i'}</div><div>${status==='approved'?'The City approved this monthly invoice.':'The invoice has been submitted to the City and cannot be edited unless revisions are requested.'}</div></div>${sub?.review_note?`<div class="field-hint">City note: ${this.escape(sub.review_note)}</div>`:''}</div></div>`;
     return `<div class="card"><div class="card-header"><div><h2 class="card-title">Certification & Submission</h2><div class="field-hint">Resolve blocking checks and upload the General Ledger before submitting.</div></div>${this.fiscalStatusBadge(status)}</div><div class="card-body">${sub?.review_note?`<div class="notice amber"><div>!</div><div><strong>City requested revisions:</strong><br>${this.escape(sub.review_note)}</div></div>`:''}<label class="checkbox-label" style="align-items:flex-start"><input type="checkbox" id="fiscal-cert-check" style="margin-top:3px"> <span>${this.escape(CERT_TEXT)}</span></label><div style="margin-top:12px"><button class="btn btn-gold" id="btn-fiscal-submit" disabled>${status==='revision_requested'?'Resubmit Monthly Invoice':'Submit Monthly Invoice'}</button>${blocking.length?`<span class="field-hint" style="margin-left:10px">${blocking.length} blocking item${blocking.length===1?'':'s'} remain.</span>`:''}</div></div></div>`;
@@ -10025,7 +10025,7 @@ const App = {
     const catLabels={Personnel:'Personnel Expenses',Facility:'Facility Expenses',Program:'Program Expenses',Administrative:'Administrative / Indirect Costs'};
     const rows=cats.map(c=>`<tr><td>${this.escape(catLabels[c])}</td><td style="text-align:right">${this.fiscalMoney(this.fiscalCategoryMonth(c,month))}</td></tr>`).join('');
     const funding=this.fiscalFundingBreakdown(month,false);
-    const fundingUnclassified=Math.abs(funding.unclassified)>0.005?`<tr><td>Not classified by source workbook</td><td style="text-align:right">${this.fiscalMoney(funding.unclassified)}</td></tr>`:'';
+    const fundingUnclassified=Math.abs(funding.unclassified)>0.005?`<tr><td>Not classified</td><td style="text-align:right">${this.fiscalMoney(funding.unclassified)}</td></tr>`:'';
     const docs=this.fiscalDocsFor(month);
     const backupRows=docs.map(d=>`<tr><td>${this.escape(d.doc_type||'Backup')}</td><td>${this.escape(d.file_name||'file')}</td><td>${this.escape(this.fiscalFormatBytes(d.file_size))}</td><td>${this.escape(d.uploaded_by||'—')}</td></tr>`).join('')||'<tr><td colspan="4">No backup documentation uploaded.</td></tr>';
     // AHTF eligibility is an internal funding classification and is omitted from the
@@ -10039,7 +10039,7 @@ const App = {
       ${fundingBreakdownBlock}
       <div class="fiscal-cert"><strong>Certification</strong><br>${this.escape(CERT_TEXT)}${sub?`<div style="margin-top:8px"><strong>Certified/submitted by:</strong> ${this.escape(sub.certified_by||sub.submitted_by||'—')} · ${this.escape(this.formatDateTime(sub.certified_at||sub.submitted_at))}</div>`:'<div style="margin-top:8px">Draft — not yet certified or submitted.</div>'}</div>
       ${meta.notes?`<div style="margin-top:14px;font-size:11.5px"><strong>Fiscal note:</strong> ${this.escape(meta.notes)}</div>`:''}
-      <div class="fiscal-print-backup" style="margin-top:28px"><h2 style="color:var(--navy);font-size:17px;border-bottom:2px solid var(--gold);padding-bottom:7px">Supporting Documentation Index</h2><p class="field-hint" style="margin:7px 0 10px">Supporting files are retained in the secure fiscal document repository; this page lists the records associated with the invoice.</p><table class="print-table"><thead><tr><th>Type</th><th>File</th><th>Size</th><th>Uploaded By</th></tr></thead><tbody>${backupRows}</tbody></table></div>
+      <div class="fiscal-print-backup" style="margin-top:28px"><h2 style="color:var(--navy);font-size:17px;border-bottom:2px solid var(--gold);padding-bottom:7px">Supporting Documentation Index</h2><p class="field-hint" style="margin:7px 0 10px">Supporting files on record for this invoice.</p><table class="print-table"><thead><tr><th>Type</th><th>File</th><th>Size</th><th>Uploaded By</th></tr></thead><tbody>${backupRows}</tbody></table></div>
     </div>`;
 
     function statusLabel(st){ return ({draft:'Draft',submitted:'Submitted',resubmitted:'Resubmitted',revision_requested:'Revisions Requested',approved:'Approved',returned:'Returned'})[st]||String(st||'Draft').replaceAll('_',' '); }
@@ -10047,21 +10047,21 @@ const App = {
 
   App.renderFiscal = async function(){
     const el=document.getElementById('view-fiscal'); if(!el) return;
-    if(!this.canViewFiscal()){ el.innerHTML='<div class="notice red"><div>!</div><div><strong>Fiscal access is restricted.</strong> Fiscal Reporting is available to Agency Management, Agency-Fiscal, and City Admin users.</div></div>'; return; }
+    if(!this.canViewFiscal()){ el.innerHTML='<div class="notice red"><div>!</div><div><strong>Fiscal access is restricted.</strong> Available to Agency Management, Agency-Fiscal and City admins.</div></div>'; return; }
     if(!this.fiscal.years.length){ el.innerHTML='<div class="notice navy"><div>i</div><div>Loading fiscal workspace…</div></div>'; await this.loadFiscalData(); }
     const month=this.resolveFiscalMonth(), m=this.fiscalMonthRecord(month), status=this.fiscalStatus(month), editable=this.fiscalCanEditMonth(month);
     const years=(this.fiscal.years||[]).map(y=>`<option value="${this.escape(y.fiscal_year)}" ${y.fiscal_year===this.fiscalBudgetYear?'selected':''}>${this.escape(y.budget_label||y.fiscal_year)}</option>`).join('');
     const months=this.fiscalMonths().map(x=>`<option value="${x.key}" ${x.key===month?'selected':''}>${this.escape(x.label)}</option>`).join('');
-    const setupNotice=this.fiscal.setupReady?'':`<div class="notice amber"><div>!</div><div><strong>Fiscal database setup is incomplete.</strong> Budget amounts are intentionally not embedded in the portal. Run the updated Supabase fiscal migration to load the protected FY27 budget and enable fiscal reporting.</div></div>`;
+    const setupNotice=this.fiscal.setupReady?'':`<div class="notice amber"><div>!</div><div><strong>Fiscal setup is incomplete.</strong> Contact the portal administrator.</div></div>`;
     const source=this.fiscalYearRecord().source_name||'Protected fiscal budget record';
-    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Fiscal Reporting</h1><div class="page-subtitle">Monthly actuals, supporting documentation, budget monitoring, invoice generation, and City fiscal review.</div></div>${this.fiscalStatusBadge(status)}</div>
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Fiscal Reporting</h1><div class="page-subtitle">Monthly actuals, backup and invoice review.</div></div>${this.fiscalStatusBadge(status)}</div>
       ${setupNotice}
       <div class="fiscal-toolbar"><div class="fiscal-controls"><label class="fiscal-control">Fiscal Year<select id="fiscal-year-select">${years}</select></label><label class="fiscal-control">Invoice Month<select id="fiscal-month-select">${months}</select></label></div><div class="client-actions">${editable?'<button class="btn btn-primary" id="btn-fiscal-save">Save Fiscal Draft</button>':''}<button class="btn btn-ghost" id="btn-fiscal-print">Print / Save Invoice PDF</button></div></div>
-      <div class="report-summary-strip"><strong>Fiscal calendar:</strong> ${this.escape(this.formatDate(this.fiscalYearStart()))} – ${this.escape(this.formatDate(this.fiscalYearEnd()))} · <strong>Budget source:</strong> ${this.escape(source)} · Fiscal reporting is independent from the program-reporting contract year.</div>
+      
       ${this.fiscalKpisHtml()}
-      <div class="fiscal-tabs"><button class="fiscal-tab ${this.fiscalTab==='data'?'active':''}" data-fiscal-tab="data">1 · Monthly Actuals & Uploads</button><button class="fiscal-tab ${this.fiscalTab==='review'?'active':''}" data-fiscal-tab="review">2 · Budget & Reconciliation</button><button class="fiscal-tab ${this.fiscalTab==='invoice'?'active':''}" data-fiscal-tab="invoice">3 · Invoice Preview</button></div>
+      <div class="fiscal-tabs"><button class="fiscal-tab ${this.fiscalTab==='data'?'active':''}" data-fiscal-tab="data">Monthly Actuals</button><button class="fiscal-tab ${this.fiscalTab==='review'?'active':''}" data-fiscal-tab="review">Reconciliation</button><button class="fiscal-tab ${this.fiscalTab==='invoice'?'active':''}" data-fiscal-tab="invoice">Invoice Preview</button></div>
       <div style="display:${this.fiscalTab==='data'?'block':'none'}">${this.fiscalMetaHtml(month)}<div class="section-label">FY27 Budget Lines · ${this.escape(m?.label||'Selected Month')}</div>${this.fiscalBudgetTableHtml(month)}${this.fiscalDocumentsHtml(month)}</div>
-      <div style="display:${this.fiscalTab==='review'?'block':'none'}"><div class="fiscal-summary-grid"><div class="card"><div class="card-header"><div><h2 class="card-title">Reconciliation & Readiness</h2><div class="field-hint">Errors block submission; warnings require review but do not automatically block.</div></div></div><div class="card-body">${this.fiscalChecksHtml(month)}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Budget vs. Actuals</h2><div class="field-hint">YTD through ${this.escape(m?.label||'selected month')}.</div></div></div><div class="card-body">${this.fiscalBudgetSummaryHtml(month)}</div></div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">AHTF Eligibility</h2><div class="field-hint">Calculated from the allocation formulas in the existing Holloway fiscal workbook, including the 60% / 40% Security split.</div></div></div><div class="card-body">${this.fiscalFundingBreakdownHtml(month)}</div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Monthly Fiscal Review</h2><div class="field-hint">Select a month to review invoice amount, AHTF allocation, GL status, and submission status.</div></div></div><div class="card-body">${this.fiscalMonthlyReviewHtml()}</div></div>${this.fiscalSubmissionPanelHtml(month)}</div>
+      <div style="display:${this.fiscalTab==='review'?'block':'none'}"><div class="fiscal-summary-grid"><div class="card"><div class="card-header"><div><h2 class="card-title">Reconciliation & Readiness</h2><div class="field-hint">Errors block submission.</div></div></div><div class="card-body">${this.fiscalChecksHtml(month)}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Budget vs. Actuals</h2><div class="field-hint">YTD through ${this.escape(m?.label||'selected month')}.</div></div></div><div class="card-body">${this.fiscalBudgetSummaryHtml(month)}</div></div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">AHTF Eligibility</h2><div class="field-hint">Security is split 60% eligible / 40% not eligible.</div></div></div><div class="card-body">${this.fiscalFundingBreakdownHtml(month)}</div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Monthly Fiscal Review</h2><div class="field-hint">Invoice, AHTF and submission status by month.</div></div></div><div class="card-body">${this.fiscalMonthlyReviewHtml()}</div></div>${this.fiscalSubmissionPanelHtml(month)}</div>
       <div style="display:${this.fiscalTab==='invoice'?'block':'none'}">${this.fiscalInvoiceHtml(month)}</div>`;
     this.bindFiscalEvents();
   };
@@ -10131,7 +10131,7 @@ const App = {
   App.showView=function(view){
     if(view==='fiscal' && !this.canViewFiscal()){
       fiscalBaseShowView.call(this,'dashboard');
-      this.toast('Fiscal Reporting is available to Agency Management, Agency-Fiscal, and City Admin users.',{error:true});
+      this.toast('Available to Agency Management, Agency-Fiscal and City admins.',{error:true});
       return;
     }
     fiscalBaseShowView.call(this,view);
@@ -10217,16 +10217,16 @@ const App = {
     if(!lines.length) return `<div class="notice amber"><div>!</div><div>No budget lines are configured for ${this.escape(this.fiscalBudgetYear)}.</div></div>`;
     let html='', lastCat='', lastSub='';
     for(const l of lines){
-      if(l.category!==lastCat){ html+=`<tr class="fiscal-section-row"><td colspan="7">${this.escape(l.category)} Expenses</td></tr>`; lastCat=l.category; lastSub=''; }
-      if(l.subcategory && l.subcategory!==lastSub){ html+=`<tr class="fiscal-subsection-row"><td colspan="7">${this.escape(l.subcategory)}</td></tr>`; lastSub=l.subcategory; }
+      if(l.category!==lastCat){ html+=`<tr class="fiscal-section-row"><td colspan="7">${this.escape(l.category)}</td></tr>`; lastCat=l.category; lastSub=''; }
+      if(l.subcategory && l.subcategory!==lastSub){ const many=new Set(lines.filter(x=>x.category===l.category).map(x=>x.subcategory)).size>1; if(many) html+=`<tr class="fiscal-subsection-row"><td colspan="7">${this.escape(l.subcategory)}</td></tr>`; lastSub=l.subcategory; }
       const a=this.fiscalActualFor(month,l.line_code)||{}, current=Number(a.amount||0), ytd=this.fiscalLineYtd(l.line_code,month), budget=Number(l.approved_budget||0), remaining=budget-ytd, ratio=budget?ytd/budget:0;
       const detail=l.fte_count!=null?`${Number(l.fte_count).toFixed(2)} FTE`:'';
       const remClass=remaining<0?'fiscal-over':ratio>=.9?'fiscal-near':'';
       html+=`<tr data-fiscal-line-row="${this.escape(l.line_code)}"><td><strong>${this.escape(l.line_name)}</strong>${detail?`<div class="field-hint">${this.escape(detail)}</div>`:''}</td><td style="text-align:right">${this.fiscalMoney(budget)}</td><td style="text-align:right">${editable?`<input class="fiscal-amount-input" type="number" step="0.01" min="0" data-fiscal-amount="${this.escape(l.line_code)}" value="${current||''}" aria-label="${this.escape(l.line_name)} current month actual">`:this.fiscalMoney(current)}</td><td style="text-align:right" data-fiscal-ytd="${this.escape(l.line_code)}">${this.fiscalMoney(ytd)}</td><td style="text-align:right" data-fiscal-remaining="${this.escape(l.line_code)}" class="${remClass}">${this.fiscalMoney(remaining)}</td><td style="text-align:right" data-fiscal-percent="${this.escape(l.line_code)}" class="${ratio>1?'fiscal-over':ratio>=.9?'fiscal-near':''}">${this.fiscalPct(ratio)}</td><td>${editable?`<input class="fiscal-note-input" data-fiscal-note="${this.escape(l.line_code)}" value="${this.escape(a.notes||'')}" placeholder="Optional note">`:this.escape(a.notes||'—')}</td></tr>`;
     }
     const totalBudget=this.fiscalOfficialTotal(), totalMonth=this.fiscalMonthTotal(month), totalYtd=this.fiscalYtdTotal(month), totalRatio=totalBudget?totalYtd/totalBudget:0;
-    html+=`<tr class="fiscal-total-row"><td><strong>Published FY27 Grand Total</strong></td><td style="text-align:right">${this.fiscalMoney(totalBudget)}</td><td style="text-align:right" data-fiscal-total-current>${this.fiscalMoney(totalMonth)}</td><td style="text-align:right" data-fiscal-total-ytd>${this.fiscalMoney(totalYtd)}</td><td style="text-align:right" data-fiscal-total-remaining>${this.fiscalMoney(totalBudget-totalYtd)}</td><td style="text-align:right" data-fiscal-total-percent>${this.fiscalPct(totalRatio)}</td><td></td></tr>`;
-    return `<div class="fiscal-budget-wrap"><table class="fiscal-budget-table"><thead><tr><th>Budget Line</th><th style="text-align:right">FY27 Budget</th><th style="text-align:right">Current Month</th><th style="text-align:right">YTD</th><th style="text-align:right">Remaining</th><th style="text-align:right">% Spent</th><th>Notes</th></tr></thead><tbody>${html}</tbody></table></div>`;
+    html+=`<tr class="fiscal-total-row"><td><strong>Grand Total</strong></td><td style="text-align:right">${this.fiscalMoney(totalBudget)}</td><td style="text-align:right" data-fiscal-total-current>${this.fiscalMoney(totalMonth)}</td><td style="text-align:right" data-fiscal-total-ytd>${this.fiscalMoney(totalYtd)}</td><td style="text-align:right" data-fiscal-total-remaining>${this.fiscalMoney(totalBudget-totalYtd)}</td><td style="text-align:right" data-fiscal-total-percent>${this.fiscalPct(totalRatio)}</td><td></td></tr>`;
+    return `<div class="fiscal-budget-wrap"><table class="fiscal-budget-table"><thead><tr><th>Budget Line</th><th style="text-align:right">Budget</th><th style="text-align:right">This Month</th><th style="text-align:right">YTD</th><th style="text-align:right">Remaining</th><th style="text-align:right">% Spent</th><th>Notes</th></tr></thead><tbody>${html}</tbody></table></div>`;
   };
 
   App.refreshFiscalLive = function(changedLineCode=null){
@@ -10306,8 +10306,8 @@ const App = {
   };
   App.fiscalCityPaymentHtml = function(){
     if(!this.isAdmin()) return '';
-    if(!this.fiscal.paymentSetupReady) return `<div class="notice amber"><div>!</div><div><strong>City payment tracking setup is incomplete.</strong> Run the updated fiscal migration to create the protected FY27 funding-plan and payment tables.</div></div>`;
-    return `<div id="fiscal-city-payment-kpis-live">${this.fiscalCityPaymentKpisHtml()}</div><div class="fiscal-payment-layout"><div class="card"><div class="card-header"><div><h2 class="card-title">FY27 Program Cost Plan</h2><div class="field-hint">Rounded program-cost plan used for City payment tracking.</div></div></div><div class="card-body">${this.fiscalProgramCostPlanHtml()}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">FY27 Funding Plan</h2><div class="field-hint">Annual funding sources, account numbers, invoice allocations, and remaining balances.</div></div></div><div class="card-body" id="fiscal-funding-plan-live">${this.fiscalFundingPlanHtml()}</div></div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Invoice Payment Tracker</h2><div class="field-hint">City Admin only · record how each monthly invoice is paid across the FY27 funding plan.</div></div><button class="btn btn-primary" id="btn-save-fiscal-payments">Save Payment Tracking</button></div><div class="card-body">${this.fiscalPaymentTrackerHtml()}<div class="fiscal-payment-help">The <strong>Unallocated</strong> column should reach $0 when an invoice has been fully assigned to funding sources. AHTF entries are flagged if they exceed the invoice's calculated AHTF-eligible amount. Funding-plan balances update immediately as allocations are entered.</div></div></div>`;
+    if(!this.fiscal.paymentSetupReady) return `<div class="notice amber"><div>!</div><div><strong>Payment tracking isn’t set up yet.</strong></div></div>`;
+    return `<div id="fiscal-city-payment-kpis-live">${this.fiscalCityPaymentKpisHtml()}</div><div class="fiscal-payment-layout"><div class="card"><div class="card-header"><div><h2 class="card-title">FY27 Program Cost Plan</h2><div class="field-hint">Program cost plan.</div></div></div><div class="card-body">${this.fiscalProgramCostPlanHtml()}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">FY27 Funding Plan</h2><div class="field-hint">Funding sources and remaining balances.</div></div></div><div class="card-body" id="fiscal-funding-plan-live">${this.fiscalFundingPlanHtml()}</div></div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Invoice Payment Tracker</h2><div class="field-hint">How each invoice is paid across funding sources.</div></div><button class="btn btn-primary" id="btn-save-fiscal-payments">Save Payment Tracking</button></div><div class="card-body">${this.fiscalPaymentTrackerHtml()}<div class="fiscal-payment-help">The <strong>Unallocated</strong> column should reach $0 when an invoice has been fully assigned to funding sources. AHTF entries are flagged if they exceed the invoice's calculated AHTF-eligible amount. Funding-plan balances update immediately as allocations are entered.</div></div></div>`;
   };
   App.refreshFiscalPaymentLive = function(){
     if(!this.isAdmin())return;
@@ -10398,15 +10398,15 @@ const App = {
   const baseFiscalRender=App.renderFiscal;
   App.renderFiscal = async function(){
     const el=document.getElementById('view-fiscal'); if(!el)return;
-    if(!this.canViewFiscal()){el.innerHTML='<div class="notice red"><div>!</div><div><strong>Fiscal access is restricted.</strong> Fiscal Reporting is available to Agency Management, Agency-Fiscal, and City Admin users.</div></div>';return;}
+    if(!this.canViewFiscal()){el.innerHTML='<div class="notice red"><div>!</div><div><strong>Fiscal access is restricted.</strong> Available to Agency Management, Agency-Fiscal and City admins.</div></div>';return;}
     if(!this.fiscal.years.length){el.innerHTML='<div class="notice navy"><div>i</div><div>Loading fiscal workspace…</div></div>';await this.loadFiscalData();}
     const month=this.resolveFiscalMonth(),m=this.fiscalMonthRecord(month),status=this.fiscalStatus(month),editable=this.fiscalCanEditMonth(month);
     const years=(this.fiscal.years||[]).map(y=>`<option value="${this.escape(y.fiscal_year)}" ${y.fiscal_year===this.fiscalBudgetYear?'selected':''}>${this.escape(y.budget_label||y.fiscal_year)}</option>`).join('');
     const months=this.fiscalMonths().map(x=>`<option value="${x.key}" ${x.key===month?'selected':''}>${this.escape(x.label)}</option>`).join('');
-    const setupNotice=this.fiscal.setupReady?'':`<div class="notice amber"><div>!</div><div><strong>Fiscal database setup is incomplete.</strong> Budget amounts are intentionally not embedded in the portal. Run the updated Supabase fiscal migration to load the protected FY27 budget and enable fiscal reporting.</div></div>`;
+    const setupNotice=this.fiscal.setupReady?'':`<div class="notice amber"><div>!</div><div><strong>Fiscal setup is incomplete.</strong> Contact the portal administrator.</div></div>`;
     const source=this.fiscalYearRecord().source_name||'Protected fiscal budget record';
     if(!this.isAdmin()&&this.fiscalTab==='payments')this.fiscalTab='data';
-    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Fiscal Reporting</h1><div class="page-subtitle">Monthly actuals, supporting documentation, budget monitoring, invoice generation, and City fiscal review.</div></div>${this.fiscalStatusBadge(status)}</div>${setupNotice}<div class="fiscal-toolbar"><div class="fiscal-controls"><label class="fiscal-control">Fiscal Year<select id="fiscal-year-select">${years}</select></label><label class="fiscal-control">Invoice Month<select id="fiscal-month-select">${months}</select></label></div><div class="client-actions">${editable?'<button class="btn btn-primary" id="btn-fiscal-save">Save Fiscal Draft</button>':''}<button class="btn btn-ghost" id="btn-fiscal-export">Export Fiscal Report</button><button class="btn btn-ghost" id="btn-fiscal-print">Print / Save Invoice PDF</button></div></div><div class="report-summary-strip"><strong>Fiscal calendar:</strong> ${this.escape(this.formatDate(this.fiscalYearStart()))} – ${this.escape(this.formatDate(this.fiscalYearEnd()))} · <strong>Budget source:</strong> ${this.escape(source)} · Fiscal reporting is independent from the program-reporting contract year.</div><div id="fiscal-kpis-live">${this.fiscalKpisHtml()}</div><div class="fiscal-tabs"><button class="fiscal-tab ${this.fiscalTab==='data'?'active':''}" data-fiscal-tab="data">1 · Monthly Actuals & Uploads</button><button class="fiscal-tab ${this.fiscalTab==='review'?'active':''}" data-fiscal-tab="review">2 · Budget & Reconciliation</button><button class="fiscal-tab ${this.fiscalTab==='invoice'?'active':''}" data-fiscal-tab="invoice">3 · Invoice Preview</button>${this.isAdmin()?`<button class="fiscal-tab ${this.fiscalTab==='payments'?'active':''}" data-fiscal-tab="payments">4 · City Payment Tracking</button>`:''}</div><div style="display:${this.fiscalTab==='data'?'block':'none'}">${this.fiscalMetaHtml(month)}<div class="section-label">FY27 Budget Lines · ${this.escape(m?.label||'Selected Month')}<span class="fiscal-live-note">Calculations update live</span></div>${this.fiscalBudgetTableHtml(month)}${this.fiscalDocumentsHtml(month)}</div><div style="display:${this.fiscalTab==='review'?'block':'none'}"><div class="fiscal-summary-grid"><div class="card"><div class="card-header"><div><h2 class="card-title">Reconciliation & Readiness</h2><div class="field-hint">Errors block submission; warnings require review but do not automatically block.</div></div></div><div class="card-body" id="fiscal-checks-live">${this.fiscalChecksHtml(month)}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Budget vs. Actuals</h2><div class="field-hint">YTD through ${this.escape(m?.label||'selected month')}.</div></div></div><div class="card-body" id="fiscal-budget-summary-live">${this.fiscalBudgetSummaryHtml(month)}</div></div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">AHTF Eligibility</h2><div class="field-hint">Calculated from the allocation formulas in the existing Holloway fiscal workbook, including the 60% / 40% Security split.</div></div></div><div class="card-body" id="fiscal-funding-live">${this.fiscalFundingBreakdownHtml(month)}</div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Monthly Fiscal Review</h2><div class="field-hint">Select a month to review invoice amount, AHTF allocation, GL status, and submission status.</div></div></div><div class="card-body" id="fiscal-monthly-review-live">${this.fiscalMonthlyReviewHtml()}</div></div><div id="fiscal-submission-live">${this.fiscalSubmissionPanelHtml(month)}</div></div><div id="fiscal-invoice-live" style="display:${this.fiscalTab==='invoice'?'block':'none'}">${this.fiscalInvoiceHtml(month)}</div>${this.isAdmin()?`<div style="display:${this.fiscalTab==='payments'?'block':'none'}">${this.fiscalCityPaymentHtml()}</div>`:''}`;
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Fiscal Reporting</h1><div class="page-subtitle">Monthly actuals, backup and invoice review.</div></div>${this.fiscalStatusBadge(status)}</div>${setupNotice}<div class="fiscal-toolbar"><div class="fiscal-controls"><label class="fiscal-control">Fiscal Year<select id="fiscal-year-select">${years}</select></label><label class="fiscal-control">Invoice Month<select id="fiscal-month-select">${months}</select></label></div><div class="client-actions">${editable?'<button class="btn btn-primary" id="btn-fiscal-save">Save Fiscal Draft</button>':''}<button class="btn btn-ghost" id="btn-fiscal-export">Export Fiscal Report</button><button class="btn btn-ghost" id="btn-fiscal-print">Print / Save Invoice PDF</button></div></div><div id="fiscal-kpis-live">${this.fiscalKpisHtml()}</div><div class="fiscal-tabs"><button class="fiscal-tab ${this.fiscalTab==='data'?'active':''}" data-fiscal-tab="data">Monthly Actuals</button><button class="fiscal-tab ${this.fiscalTab==='review'?'active':''}" data-fiscal-tab="review">Reconciliation</button><button class="fiscal-tab ${this.fiscalTab==='invoice'?'active':''}" data-fiscal-tab="invoice">Invoice Preview</button>${this.isAdmin()?`<button class="fiscal-tab ${this.fiscalTab==='payments'?'active':''}" data-fiscal-tab="payments">Payments</button>`:''}</div><div style="display:${this.fiscalTab==='data'?'block':'none'}">${this.fiscalMetaHtml(month)}<div class="section-label">FY27 Budget Lines · ${this.escape(m?.label||'Selected Month')}</div>${this.fiscalBudgetTableHtml(month)}${this.fiscalDocumentsHtml(month)}</div><div style="display:${this.fiscalTab==='review'?'block':'none'}"><div class="fiscal-summary-grid"><div class="card"><div class="card-header"><div><h2 class="card-title">Reconciliation & Readiness</h2><div class="field-hint">Errors block submission.</div></div></div><div class="card-body" id="fiscal-checks-live">${this.fiscalChecksHtml(month)}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Budget vs. Actuals</h2><div class="field-hint">YTD through ${this.escape(m?.label||'selected month')}.</div></div></div><div class="card-body" id="fiscal-budget-summary-live">${this.fiscalBudgetSummaryHtml(month)}</div></div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">AHTF Eligibility</h2><div class="field-hint">Security is split 60% eligible / 40% not eligible.</div></div></div><div class="card-body" id="fiscal-funding-live">${this.fiscalFundingBreakdownHtml(month)}</div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Monthly Fiscal Review</h2><div class="field-hint">Invoice, AHTF and submission status by month.</div></div></div><div class="card-body" id="fiscal-monthly-review-live">${this.fiscalMonthlyReviewHtml()}</div></div><div id="fiscal-submission-live">${this.fiscalSubmissionPanelHtml(month)}</div></div><div id="fiscal-invoice-live" style="display:${this.fiscalTab==='invoice'?'block':'none'}">${this.fiscalInvoiceHtml(month)}</div>${this.isAdmin()?`<div style="display:${this.fiscalTab==='payments'?'block':'none'}">${this.fiscalCityPaymentHtml()}</div>`:''}`;
     this.bindFiscalEvents();
   };
 
@@ -10628,12 +10628,12 @@ const App = {
     const transRows=this.dashboardBarRows(d.trans,total,{sort:false});
     const langRows=this.dashboardBarRows(d.lang,total);
     return `<div class="demographics-dashboard-grid">
-      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Age</div><div class="field-hint">Year-to-date participants</div></div><div class="demo-dashboard-meta">n=${total}</div></div>${ageRows}</div>
-      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Race / Ethnicity</div><div class="field-hint">Count and share of people served YTD</div></div><div class="demo-dashboard-meta">n=${total}</div></div>${raceRows}</div>
-      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Gender Identity</div><div class="field-hint">Uses the identity recorded on the client intake record</div></div><div class="demo-dashboard-meta">n=${total}</div></div>${genderRows}</div>
-      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Transgender Experience</div><div class="field-hint">Tracked separately from gender identity</div></div><div class="demo-dashboard-meta">${d.transRecorded} of ${total} recorded</div></div><div class="demo-dashboard-hero"><span class="big">${d.transYes}</span><span class="small">trans-identifying / transgender-experience “Yes” · ${yesPct(d.transYes)}% of people served YTD</span></div>${transRows}</div>
-      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Primary Language</div><div class="field-hint">Year-to-date participants</div></div><div class="demo-dashboard-meta">n=${total}</div></div>${langRows}</div>
-      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Additional Participant Characteristics</div><div class="field-hint">Based on intake records</div></div></div><div class="demo-mini-grid"><div class="demo-mini"><div class="name">Living with a Disability</div><div class="number">${d.disabilityYes}</div><div class="note">${yesPct(d.disabilityYes)}% of people served · ${d.disabilityRecorded}/${total} recorded</div></div><div class="demo-mini"><div class="name">Veterans</div><div class="number">${d.veteranYes}</div><div class="note">${yesPct(d.veteranYes)}% of people served · ${d.veteranRecorded}/${total} recorded</div></div></div></div>
+      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Age</div></div><div class="demo-dashboard-meta">n=${total}</div></div>${ageRows}</div>
+      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Race / Ethnicity</div></div><div class="demo-dashboard-meta">n=${total}</div></div>${raceRows}</div>
+      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Gender Identity</div></div><div class="demo-dashboard-meta">n=${total}</div></div>${genderRows}</div>
+      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Transgender Experience</div></div><div class="demo-dashboard-meta">${d.transRecorded} of ${total} recorded</div></div><div class="demo-dashboard-hero"><span class="big">${d.transYes}</span><span class="small">trans-identifying / transgender-experience “Yes” · ${yesPct(d.transYes)}% of people served YTD</span></div>${transRows}</div>
+      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Primary Language</div></div><div class="demo-dashboard-meta">n=${total}</div></div>${langRows}</div>
+      <div class="demo-dashboard-card"><div class="demo-dashboard-head"><div><div class="demo-dashboard-title">Additional Participant Characteristics</div></div></div><div class="demo-mini-grid"><div class="demo-mini"><div class="name">Living with a Disability</div><div class="number">${d.disabilityYes}</div><div class="note">${yesPct(d.disabilityYes)}% of people served · ${d.disabilityRecorded}/${total} recorded</div></div><div class="demo-mini"><div class="name">Veterans</div><div class="number">${d.veteranYes}</div><div class="note">${yesPct(d.veteranYes)}% of people served · ${d.veteranRecorded}/${total} recorded</div></div></div></div>
     </div>`;
   };
 
@@ -10653,11 +10653,11 @@ const App = {
     el.innerHTML=`<div class="page-header"><div><h1 class="page-title">${this.isAdmin()?'City Admin Dashboard':'Program Dashboard'}</h1><div class="page-subtitle">${this.escape(this.programName())} · ${this.escape(this.fyLabel())} · Year-to-date contract performance${fiscalOnly?' · Fiscal access':''}</div></div><div style="display:flex;gap:10px;">${headerActions}</div></div>
       <div class="dashboard-ytd-intro"><div><div class="section-label" style="margin:0">Contract Performance — Year to Date</div><div class="dashboard-ytd-period">${this.escape(ContractPeriods.longDate(ContractPeriods.parse(this.fyStart())))} – ${this.escape(this.formatDate(through))}</div></div>${fiscalOnly?'':this.renderAttentionChip(q)}</div>
       ${this.renderYtdContractPerformance(q)}
-      <div class="dashboard-section-head"><h2>Contract Goals &amp; Progress</h2><div class="hint">YTD measures are cumulative; services and income remain current-quarter measures to match the contract-reporting basis.</div></div>
+      <div class="dashboard-section-head"><h2>Contract Goals &amp; Progress</h2><div class="hint">Services and income are current quarter.</div></div>
       ${this.renderYtdContractGoals(q)}
-      <div class="dashboard-section-head"><h2>Housing Outcomes — Year to Date</h2><div class="hint">Length of stay is calculated from client entry through recorded exit.</div></div>
+      <div class="dashboard-section-head"><h2>Housing Outcomes — Year to Date</h2></div>
       ${this.renderYtdHousingOutcomes(q)}
-      <div class="dashboard-section-head"><h2>Participant Demographics — Year to Date</h2><div class="hint">Unduplicated participants served during the contract year.</div></div>
+      <div class="dashboard-section-head"><h2>Participant Demographics — Year to Date</h2></div>
       ${this.renderYtdDemographics(q)}
       ${fiscalOnly?'':this.renderYtdOperationalDetail(q)}`;
     this.bindSubmitBundleButton(el);
@@ -10974,8 +10974,7 @@ const App = {
       </div>
       <div class="form-section">
         <div class="form-section-title">Income Sources</div>
-        <div class="field-hint" style="margin-bottom:10px;">List each source separately. CalFresh and other non-cash
-          benefits are recorded here but excluded from the cash income total, matching HMIS.</div>
+        <div class="field-hint" style="margin-bottom:10px;">List each source. Non-cash benefits like CalFresh are excluded from the cash total.</div>
         <div id="inc-sources">${rowsHtml}</div>
         <button type="button" class="btn btn-ghost btn-sm" id="inc-add-source">+ Add Source</button>
         <div id="inc-totals" style="margin-top:14px;padding-top:12px;border-top:1px solid #e5e7eb;"></div>
@@ -11120,7 +11119,7 @@ const App = {
         <td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-income-client="${this.escape(r.client_id)}">Record Reading</button><button class="btn btn-ghost btn-sm" data-income-open-client="${this.escape(r.client_id)}">Open Client</button></div></td>
       </tr>`).join('') : `<tr><td colspan="6" class="empty-table-state">${this.escape(emptyMsg)}</td></tr>`}</tbody></table></div>`;
 
-    el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Income Tracking</h1><div class="page-subtitle">Readings are taken every two months. Each one records cash income by source; CalFresh and other non-cash benefits are tracked separately and excluded from the cash total.</div></div></div>
+    el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Income Tracking</h1><div class="page-subtitle">Readings every two months. Non-cash benefits are excluded from the cash total.</div></div></div>
       <div class="kpi-row">${kpis}</div>
       <div class="dashboard-section-head"><h2>In Program</h2><div class="hint">Baselines first \u2014 nothing downstream can be computed without them.</div></div>
       ${table(inProgram, 'No in-program clients on file.')}
@@ -11348,7 +11347,7 @@ const App = {
     };
 
     return `<div class="referral-step-head"><h3>Referral for ${esc(st.agencyName||'your agency')}</h3><span class="referral-progress">Step 2 of 2</span></div>
-      <p class="field-hint" style="margin-bottom:18px;">Every field and every criterion below is required. The form cannot be submitted until it is complete.</p>
+      <p class="field-hint" style="margin-bottom:18px;">All fields are required.</p>
 
       <div class="form-section"><div class="form-section-title">Referring Agency and Case Manager Information</div>
         <div class="client-form-grid">${TEXT_FIELDS.slice(0,4).map(field).join('')}</div></div>
@@ -11365,7 +11364,7 @@ const App = {
           field({...f, value: f.key==='certification_date' || f.key==='date_submitted' ? todayStr() : ''})).join('')}</div></div>
 
       <div class="form-section"><div class="form-section-title">Additional Supporting Information</div>
-        <p class="field-hint" style="margin-bottom:10px;">Optional. Anything that supports housing efforts for your referral — verification of income, subsidies, or other supportive services.</p>
+        <p class="field-hint" style="margin-bottom:10px;">Optional. Income verification, subsidies or other supporting documents.</p>
         <input type="file" id="file-supporting" data-doc="supporting" class="ref-file" multiple accept=".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx">
         ${st.files.supporting ? `<div class="referral-doc-note">${st.files.supporting.length||1} file(s) selected</div>` : ''}
       </div>
@@ -11593,7 +11592,7 @@ const App = {
 
     el.innerHTML = `<div class="page-header">
         <div><h1 class="page-title">Referrals</h1>
-          <div class="page-subtitle">Referrals submitted by partner agencies through the public referral page.</div></div>
+          <div class="page-subtitle">Referrals from partner agencies.</div></div>
         ${this.isAdmin?.() ? `<button class="btn btn-gold" id="btn-referral-codes">Manage Agency Codes</button>` : ''}
       </div>
       <div class="table-filter-row" style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
@@ -12280,7 +12279,7 @@ const App = {
     return `<div class="card" style="margin-top:22px">
       <div class="card-header">
         <div><h2 class="card-title">Bed night census</h2>
-        <div class="field-hint">Generated from stays and absences. This is the participant-level record behind each billed night.</div></div>
+        <div class="field-hint">Billed nights by participant.</div></div>
         <div class="client-actions">
           <select class="field-select" id="census-month" style="max-width:190px">
             ${months.map(m => `<option value="${m.value}" ${m.value===month?'selected':''}>${esc(m.label)}</option>`).join('')}
@@ -12670,7 +12669,7 @@ const App = {
         </div>
         <div class="field-group"><label class="field-label" for="pipe-affiliation-notes">Notes</label>
           <textarea id="pipe-affiliation-notes" class="field-textarea">${esc(r.weho_affiliation_notes || '')}</textarea>
-          <div class="field-hint">Affiliation determines whether City funds may be charged for this participant, so record how it was established, not just that it was.</div></div>
+          <div class="field-hint">Record how affiliation was established.</div></div>
       </div>
 
       <div class="form-section">
@@ -12824,8 +12823,7 @@ const App = {
           <div class="field-group"><label class="field-label" for="logref-party-contact">Their contact</label>
             <input type="text" class="field-input" id="logref-party-contact" placeholder="Phone or email"></div>
         </div>
-        <div class="field-hint">The acknowledgement and determination clocks start from the date received, so enter the date the
-          referral actually reached the program rather than today&rsquo;s date if they differ.</div>
+        <div class="field-hint">Service-level clocks start from this date.</div>
       </div>
 
       <div class="form-section"><div class="form-section-title">Community Member</div>
@@ -13094,7 +13092,7 @@ const App = {
 
       <div class="card" style="margin-top:16px"><div class="card-header">
           <div><h2 class="card-title">Beds and Occupancy</h2>
-            <div class="field-hint">Bed status by reserved category, as nights across the whole month rather than a single day.</div></div>
+            <div class="field-hint">Nights by bed status for the month.</div></div>
         </div><div class="card-body">
           <div class="mr-grid">
             ${stat('Beds in service', num(r?.beds_total), `${num(r?.reserved_men_beds)} men &middot; ${num(r?.reserved_women_beds)} women &middot; ${num(r?.ffs_beds)} fee-for-service`)}
@@ -13108,7 +13106,7 @@ const App = {
 
       <div class="card" style="margin-top:22px"><div class="card-header">
           <div><h2 class="card-title">Referrals and Admissions</h2>
-            <div class="field-hint">Counted against the section&nbsp;4 service levels for referrals received this month.</div></div>
+            <div class="field-hint">Section&nbsp;4 service levels for referrals received this month.</div></div>
         </div><div class="card-body">
           <div class="mr-grid">
             ${stat('Referrals received', num(r?.referrals_received), 'all sources')}
@@ -13144,7 +13142,7 @@ const App = {
 
       <div class="card" style="margin-top:22px"><div class="card-header">
           <div><h2 class="card-title">Narrative</h2>
-            <div class="field-hint">The two parts of this report that are not computed.</div></div>
+            <div class="field-hint">Written sections.</div></div>
         </div><div class="card-body">
           <div class="field-group"><label class="field-label" for="mr-narrative">Program narrative</label>
             <textarea id="mr-narrative" class="field-textarea" style="min-height:120px" ${canEdit?'':'disabled'}
@@ -13756,7 +13754,7 @@ const App = {
             </button>`;
           }).join('')}
         </div>
-        ${!(st.programs||[]).length ? `<div class="notice amber" style="margin-top:16px;margin-bottom:0;"><div>!</div><div><strong>No programs are currently assigned to this agency code.</strong><br>This code must be granted access to a program by the City before a referral can be submitted.</div></div>` : ''}
+        ${!(st.programs||[]).length ? `<div class="notice amber" style="margin-top:16px;margin-bottom:0;"><div>!</div><div><strong>This agency code isn’t assigned to a program.</strong> Contact the City.</div></div>` : ''}
         ${st.busy?'<p class="field-hint" style="margin-top:14px;">Loading the form&hellip;</p>':''}
         ${st.error?`<p class="referral-error">${esc(st.error)}</p>`:''}
       </section>
@@ -14183,8 +14181,7 @@ const App = {
       const row = (label, value) => `<div class="field-hint" style="margin-bottom:4px;">${esc(label)}:
         <strong>${esc(value || '—')}</strong></div>`;
       section.innerHTML = `<div class="form-section-title">Intake Details</div>
-        <div class="field-hint" style="margin-bottom:8px;">This program does not use an eligibility checklist on the referral
-          form, so nothing was attested to here. Eligibility is settled in the pipeline below.</div>
+        <div class="field-hint" style="margin-bottom:8px;">No eligibility checklist for this program.</div>
         ${row('Client gender', (GENDERS[r.requested_gender_category] || r.requested_gender_category))}
         ${r.requested_designation ? row('Bed type assigned by program', (DESIGNATIONS[r.requested_designation] || r.requested_designation)) : ''}
         ${row('West Hollywood affiliation', r.weho_affiliation)}`;
@@ -14265,7 +14262,7 @@ const App = {
         <div class="reason-list">${programs.map(p => `<label class="reason-row">
             <input type="checkbox" class="rc-program" value="${esc(p.id)}" ${p.id === this.program?.id ? 'checked' : ''}>
             <span>${esc(p.name)}</span></label>`).join('')}</div>
-        <div class="field-hint">The agency chooses between these when they submit. A code with no program cannot be used.</div>
+        <div class="field-hint">A code with no program can’t be used.</div>
       </div>`;
       issueSection.insertBefore(wrap.firstElementChild, issueBtn);
     }
@@ -14634,7 +14631,7 @@ const App = {
 
       <div class="card" style="margin-top:16px"><div class="card-header">
           <div><h2 class="card-title">Invoice Details</h2>
-            <div class="field-hint">The number, PO and vendor are the City&rsquo;s; everything below the line comes from the census.</div></div>
+            <div class="field-hint">Number, PO and vendor are set by the City.</div></div>
         </div><div class="card-body">
           <div class="client-form-grid">
             <div class="field-group"><label class="field-label" for="ffs-number">Invoice number</label>
@@ -14665,7 +14662,7 @@ const App = {
               <div class="mr-stat-sub">${ytd ? this.ffsMoney(ytd) + ' billed this contract year' : 'first invoice this year'}</div></div>
           </div>
           <div class="field-hint" style="margin-top:10px">${cap == null
-            ? 'No annual fee-for-service cap is on file, so cumulative spend is shown without one. An unenforced limit should not look like a satisfied one.'
+            ? 'No annual cap on file.'
             : 'Annual cap ' + this.ffsMoney(cap) + '.'}</div>
           ${inv?.generated_at ? `<div class="mr-generated">Lines generated from the census
             ${this.formatDate(this.dateOnly(inv.generated_at))}${inv.generated_by ? ' by ' + esc(inv.generated_by) : ''}.</div>`
@@ -14679,7 +14676,7 @@ const App = {
 
       <div class="card" style="margin-top:22px"><div class="card-header">
           <div><h2 class="card-title">Invoice Preview</h2>
-            <div class="field-hint">This is what prints, including the participant-level detail section&nbsp;13.2 requires.</div></div>
+            <div class="field-hint">Printed invoice, with participant detail (section&nbsp;13.2).</div></div>
         </div><div class="card-body">${this.ffsInvoiceHtml(month)}</div></div>`;
 
     el.querySelector('#ffs-month')?.addEventListener('change', e => {
@@ -16438,9 +16435,9 @@ const App = {
       });
       if(rules.indirect_cap_pct!=null && total>0 && admin/total*100>rules.indirect_cap_pct) blocking.push(`Administrative/indirect costs would be ${(admin/total*100).toFixed(1)}% of the budget, above the ${rules.indirect_cap_pct}% cap.`);
       if(!Object.values(d.lines).some(l=>Number(l.change||0)!==0)) blocking.push('Enter at least one requested change.');
-      if(!String(d.preparedBy||'').trim()) warnings.push('Add who prepared this request.');
+      if(!String(d.preparedBy||'').trim()) warnings.push('Add who prepared the request.');
       if(d.requestType!=='closeout' && this.bmPastDeadline()) blocking.push('The routine modification deadline has passed. Select "Close-out modification" to submit.');
-      if(!String(d.comments||'').trim()) warnings.push('Add a budget modification narrative summarizing what is changing and why.');
+      if(!String(d.comments||'').trim()) warnings.push('Add a narrative.');
       return {blocking,warnings};
     };
 
@@ -16460,8 +16457,6 @@ const App = {
       if(ch>0 && r.subcategory==='Salaries') f.push('<span class="badge badge-navy" title="Handbook: no retroactive salary adjustment without written City approval. Confirm whether this increase covers months already worked.">Salary increase: retroactive?</span>');
       if(ch!==0 && /equipment/i.test(r.line_name||'')) f.push('<span class="badge badge-gray" title="Handbook: the City limits equipment to $500 or less per unit.">$500/unit equipment limit</span>');
       if(r.revised<r.spent-0.004) f.push('<span class="badge badge-red">Below spent</span>');
-      if(pace.months && ch>0 && r.spent<=0) f.push('<span class="badge badge-gray" title="Nothing has been spent on this line yet this year">No spending yet</span>');
-      else if(pace.months && ch>0 && r.projected<r.approved) f.push(`<span class="badge badge-navy" title="At the current pace this line is projected to spend ${this.bmPlain(r.projected)}, less than its current budget">Pace below budget</span>`);
       if(pace.months && ch<0 && r.projected>r.revised+0.5) f.push(`<span class="badge badge-red" title="At the current pace this line is projected to spend ${this.bmPlain(r.projected)}, more than the revised budget">Pace above revised</span>`);
       if(r.adjusted) f.push(`<span class="badge badge-navy" title="Requested ${this.bmPlain(r.adjusted.requested)}">City adjusted</span>`);
       if(r.locked && ch!==0) f.push('<span class="badge badge-red">Locked line</span>');
@@ -16514,16 +16509,16 @@ const App = {
         const revCell = cityEdit
           ? `<td class="bm-adj"><input class="num" type="number" step="1" min="0" data-bm-adj="${this.escape(r.line_code)}" value="${Math.round(this.bmAdj?.[r.line_code]??r.revised)}" aria-label="City-approved amount for ${this.escape(r.line_name)}"></td>`
           : `<td class="num" data-bm-revised="${this.escape(r.line_code)}">${this.bmMoney(r.revised,{dashZero:true})}${r.adjusted?`<div class="field-hint" style="font-weight:400">City adjusted</div>`:''}</td>`;
-        const cbtn = versionId ? ` <button type="button" class="bm-cbtn ${r.comments?'has':''}" data-bm-thread="${this.escape(r.line_code)}" title="Comments">💬${r.comments?' '+r.comments:''}</button>` : '';
+        const cbtn = versionId && (changed || r.comments) ? ` <button type="button" class="bm-cbtn ${r.comments?'has':''}" data-bm-thread="${this.escape(r.line_code)}" title="Comments" aria-label="Comments on ${this.escape(r.line_name)}">💬${r.comments?' '+r.comments:''}</button>` : '';
         const reasonCell = editable
           ? `<td class="bm-in"><div style="display:flex;gap:6px;align-items:center"><input data-bm-note="${this.escape(r.line_code)}" value="${this.escape(r.note||'')}" aria-label="Reason for ${this.escape(r.line_name)}">${cbtn}</div></td>`
           : `<td><div style="display:flex;justify-content:space-between;gap:6px;align-items:flex-start"><div>${this.escape(r.note||'')}${r.adjusted?.note?`<div class="field-hint">City: ${this.escape(r.adjusted.note)}</div>`:''}</div>${cbtn}</div>${cityEdit?`<input class="field-input" style="margin-top:4px;font-size:12px;padding:4px 7px;${(Math.round(this.bmAdj?.[r.line_code]??r.revised)!==Math.round(this.bmAdjBase?.[r.line_code]??r.revised)||this.bmAdjNotes?.[r.line_code])?'':'display:none'}" data-bm-adjnote="${this.escape(r.line_code)}" placeholder="City note for this adjustment (optional)" value="${this.escape(this.bmAdjNotes?.[r.line_code]||'')}">`:''}${(r.flags||[]).length?`<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${r.flags.join('')}</div>`:''}</td>`;
-        const extra = compare ? `<td class="num">${pct(r.change,r.approved)}</td><td class="num">${this.bmMoney(r.spent,{dashZero:true})}${ofRev(r.spent,r.revised)}</td><td class="num">${this.bmMoney(r.projected,{dashZero:true})}${ofRev(r.projected,r.revised)}</td>` : '';
+        const extra = compare ? `<td class="num">${pct(r.change,r.approved)}</td><td class="num">${this.bmMoney(r.spent,{dashZero:true})}</td><td class="num"${r.projected>r.revised+0.5?' style="color:#B42318;font-weight:700" title="Projected to exceed the revised budget"':''}>${this.bmMoney(r.projected,{dashZero:true})}</td>` : '';
         return `<tr class="${changed?'bm-changed':''}"><td>${this.escape(r.line_name)}${r.locked?' <span title="Locked by contract">🔒</span>':''}</td><td class="num">${this.bmMoney(r.approved)}</td>${changeCell}${revCell}${extra}${reasonCell}</tr>${thread(r)}`;
       };
       const totalRow=(cls,label,rs,key)=>{
         const ch=sum(rs,'change'), ap=sum(rs,'approved'), rv=sum(rs,'revised'), sp=sum(rs,'spent'), pj=sum(rs,'projected');
-        const extra = compare ? `<td class="num">${pct(ch,ap)}</td><td class="num">${this.bmMoney(sp,{dashZero:true})}${ofRev(sp,rv,true)}</td><td class="num">${this.bmMoney(pj,{dashZero:true})}${ofRev(pj,rv,true)}</td>` : '';
+        const extra = compare ? `<td class="num">${pct(ch,ap)}</td><td class="num">${this.bmMoney(sp,{dashZero:true})}</td><td class="num">${this.bmMoney(pj,{dashZero:true})}</td>` : '';
         return `<tr class="${cls}"><td>${label}</td><td class="num">${this.bmMoney(ap)}</td><td class="num" data-bm-tchange="${key}">${this.bmMoney(ch,{dashZero:true})}</td><td class="num" data-bm-trevised="${key}">${this.bmMoney(rv)}</td>${extra}<td></td></tr>`;
       };
       let body='';
@@ -16545,9 +16540,9 @@ const App = {
         ? '<col style="width:23%"><col style="width:9%"><col style="width:10%"><col style="width:9%"><col style="width:7%"><col style="width:9%"><col style="width:9%"><col>'
         : '<col style="width:34%"><col style="width:12%"><col style="width:13%"><col style="width:12%"><col>';
       const pace=this.bmPace();
-      const extraHead = compare ? `<th>% Change</th><th>Spent to Date<br><span style="font-weight:400">(posted actuals)</span></th><th>Projected<br>Year-End<br><span style="font-weight:400">(at current pace)</span></th>` : '';
+      const extraHead = compare ? `<th>% Change</th><th>Spent to Date</th><th>Projected<br>Year-End</th>` : '';
       const table=`<table class="bm-form"><colgroup>${cols}</colgroup><thead><tr><th>Position / Expense Category</th><th>${this.bmFyShort()} Approved<br>Budget</th><th>Requested Change<br>(Ascencia, +/–)</th><th>${cityEdit?'City-Approved<br>Amount':'Revised Budget'}</th>${extraHead}<th>Reason for Change (Ascencia)</th></tr></thead><tbody>${body}</tbody></table>`;
-      const paceNote = compare ? `<div class="field-hint" style="margin-top:6px">${pace.months?`Projected year-end = spent to date ÷ ${pace.months} month${pace.months>1?'s':''} of posted actuals (${pace.label}) × ${pace.total}. Early in the year, billing lags can understate the pace.`:'No actuals have been posted yet, so year-end projections are not available.'}</div>` : '';
+      const paceNote = compare ? `<div class="field-hint" style="margin-top:6px">${pace.months?`Projected year-end: spent to date ÷ ${pace.months} month${pace.months>1?'s':''} (${pace.label}) × ${pace.total}.`:'No actuals posted yet.'}</div>` : '';
       return (scroll?`<div class="bm-scroll">${table}</div>`:`<div class="client-table-wrap">${table}</div>`)+paceNote;
     };
 
@@ -16557,7 +16552,7 @@ const App = {
       const st=this.bmViewState(); const mode=st.mode;
       const changed=rows.filter(r=>Math.round(r.change)!==0).length;
       const seg=(attr,val,cur,label)=>`<button type="button" class="${cur===val?'active':''}" data-${attr}="${val}" aria-pressed="${cur===val}">${label}</button>`;
-      const bar=`<div class="bm-toolbar"><div><span class="lbl">View</span><span class="bm-seg">${seg('bm-mode','standard',mode,'Standard')}${seg('bm-mode','complete',mode,'Complete')}</span></div><div><span class="lbl">Lines</span><span class="bm-seg">${seg('bm-filter','all',st.filter,`All lines (${rows.length})`)}${seg('bm-filter','changed',st.filter,`Changed only (${changed})`)}</span></div><div class="field-hint">${mode==='complete'?'Complete view adds % change, spent to date and projected year-end.':'Standard view matches the City form.'}${st.filter==='changed'?' Totals still reflect the full budget.':''}</div></div>`;
+      const bar=`<div class="bm-toolbar"><div><span class="lbl">View</span><span class="bm-seg">${seg('bm-mode','standard',mode,'Standard')}${seg('bm-mode','complete',mode,'Complete')}</span></div><div><span class="lbl">Lines</span><span class="bm-seg">${seg('bm-filter','all',st.filter,`All lines (${rows.length})`)}${seg('bm-filter','changed',st.filter,`Changed only (${changed})`)}</span></div>${st.filter==='changed'?'<div class="field-hint">Totals include all lines.</div>':''}</div>`;
       return bar+this.bmFormTableHtml(rows,{...opts, compare:mode==='complete', onlyChanged:st.filter==='changed'});
     };
 
@@ -16572,10 +16567,9 @@ const App = {
       const tile=(t,val,s)=>`<div class="bm-tile"><div class="t">${t}</div><div class="v">${val}</div><div class="s">${s}</div></div>`;
       return `<div class="bm-tiles">
         ${tile('Lines changed',`${changed.length} <span style="font-size:13px;font-weight:600;color:#5B6573">of ${rows.length}</span>`, `${changed.filter(r=>r.change>0).length} up · ${changed.filter(r=>r.change<0).length} down`)}
-        ${tile('Funds moved',this.bmPlain(inc),`${total?(inc/total*100).toFixed(1):0}% of the budget · net ${this.bmPlain(inc+dec)}`)}
-        ${tile('Category shifts',cat.length,this.escape(cat.join(' · ')||'None'))}
-        ${tile('Flags for review',flagged.length,this.escape(Object.entries(kinds).map(([k,n])=>`${n} ${k.toLowerCase()}`).join(' · ')||'None'))}
-        ${tile('Discussion',comments,comments?'comments on this request':'no comments yet')}
+        ${tile('Funds moved',this.bmPlain(inc),`${total?(inc/total*100).toFixed(1):0}% of the budget`)}
+        ${tile('Large changes',rows.filter(r=>(r.flags||[]).some(f=>f.includes('Large change'))).length,'over the review threshold')}
+        ${tile('Comments',comments,comments?'on this request':'none yet')}
       </div>`;
     };
 
@@ -16598,7 +16592,7 @@ const App = {
       const cmax=Math.max(1,...cats.map(c=>Math.abs(c.ch)));
       const catRows=cats.map(c=>`<tr><td>${this.escape(c.cat)}</td><td class="num">${plain(c.ap)}</td><td class="num">${plain(c.rv)}</td><td class="num">${this.bmMoney(c.ch,{dashZero:true})}</td><td style="width:34%"><div style="display:flex;align-items:center;height:14px"><div style="flex:1;display:flex;justify-content:flex-end">${c.ch<0?`<div style="width:${Math.abs(c.ch)/cmax*100}%;height:10px;background:#C0504D;border-radius:3px 0 0 3px"></div>`:''}</div><div style="width:1px;height:14px;background:#9AA4B2"></div><div style="flex:1">${c.ch>0?`<div style="width:${c.ch/cmax*100}%;height:10px;background:#2F5496;border-radius:0 3px 3px 0"></div>`:''}</div></div></td></tr>`).join('');
       const more = (dec.length>LIMIT||inc.length>LIMIT) ? `<button type="button" class="btn btn-ghost btn-sm" data-bm-flowall="${this.escape(key)}">${showAll?'Show top 5':'Show all lines'}</button>` : '';
-      return `<div class="card" style="margin:0 0 16px;box-shadow:none;border:1px solid var(--border)"><div class="card-header" style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><h2 class="card-title">Where the Changes Come From</h2><div class="field-hint">Decreases free up funds that pay for the increases. Net ${plain(incT+decT)}.</div></div>${more}</div><div class="card-body">
+      return `<div style="margin:6px 0 18px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px"><div class="section-label" style="margin:0">Where the changes come from</div>${more}</div><div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px">${col('Sources','Lines decreased',dec,'#C0504D',decT)}${col('Uses','Lines increased',inc,'#2F5496',incT)}</div>
         <div class="section-label" style="margin-top:16px">Net shift by category</div>
         <div class="client-table-wrap"><table class="bm-form"><thead><tr><th>Category</th><th>Approved</th><th>Revised</th><th>Net Change</th><th><span style="opacity:.85">← decrease · increase →</span></th></tr></thead><tbody>${catRows}</tbody></table></div>
@@ -16616,17 +16610,18 @@ const App = {
       return `<div class="section-label" style="margin-top:16px">Funding-source impact (AHTF eligibility)</div>
         <div class="client-table-wrap"><table class="bm-form"><thead><tr><th>Eligibility</th><th>Approved</th><th>Revised</th><th>Change</th></tr></thead><tbody>
         ${line('AHTF eligible',0)}${line('Not AHTF eligible',1)}${(t.a[2]||t.r[2])?line('Not classified',2):''}</tbody></table></div>
-        <div class="field-hint" style="margin-top:6px">${moved===0?'This modification does not change the AHTF-eligible share of the budget.':`AHTF-eligible costs ${moved>0?'increase':'decrease'} by ${this.bmPlain(Math.abs(moved))}. Check grant claims and the funding plan.`} Uses each line's AHTF share from the fiscal workbook (split lines rounded to whole dollars).</div>`;
+        <div class="field-hint" style="margin-top:6px">${moved===0?'No change to AHTF-eligible costs.':`AHTF-eligible costs ${moved>0?'increase':'decrease'} by ${this.bmPlain(Math.abs(moved))}.`}</div>`;
     };
 
     // ------------------------------------------------- form header (cover)
-    App.bmCoverHtml = function(v, {editable=false}={}){
+    App.bmCoverHtml = function(v, {editable=false, title=false}={}){
       const ym=this.budgetMods.yearMeta||{}, d=this.bmDraft, m=this.bmMeta(v);
       const vendor=ym.vendor_number || (this.fiscal.monthMeta||[]).find(x=>x.vendor_number)?.vendor_number || '';
       const preparedBy = editable ? `<input id="bm-prepared-by" value="${this.escape(d.preparedBy||'')}" aria-label="Prepared by">` : this.escape(m.prepared_by||'—');
       const datePrepared = editable ? `<input id="bm-date-prepared" type="date" value="${this.escape(this.dateOnly(d.datePrepared)||'')}" aria-label="Date prepared">` : this.escape(m.date_prepared?this.formatDate(m.date_prepared):'—');
       const reqNo = v ? this.bmRequestNo(v) : this.bmRequestNo({version_no:1e9});
-      return `<div style="text-align:center;margin-bottom:14px"><div class="bm-title">BUDGET MODIFICATION REQUEST</div><div style="font-weight:700;margin-top:4px">${this.escape(this.program?.name||'Holloway Interim Housing Program')} — ${this.escape(this.bmFyLabel())} Operating Budget</div><div class="field-hint">City of West Hollywood, Human Services Division &nbsp;|&nbsp; Operated by ${this.escape(this.bmAgency())}</div></div>
+      const head = title ? `<div style="text-align:center;margin-bottom:14px"><div class="bm-title">BUDGET MODIFICATION REQUEST</div><div style="font-weight:700;margin-top:4px">${this.escape(this.program?.name||'Holloway Interim Housing Program')} — ${this.escape(this.bmFyLabel())} Operating Budget</div><div class="field-hint">City of West Hollywood, Human Services Division &nbsp;|&nbsp; Operated by ${this.escape(this.bmAgency())}</div></div>` : '';
+      return `${head}
         <div class="bm-cover"><span class="k">Contract No.:</span><span>${this.escape(ym.contract_number||'—')}</span><span class="k">Fiscal Year:</span><span>${this.escape(this.bmFyLong())}</span>
         <span class="k">Vendor No.:</span><span>${this.escape(vendor||'—')}</span><span class="k">Service Location:</span><span>${this.escape(ym.service_location||'—')}</span>
         <span class="k">Prepared by:</span><span>${preparedBy}</span><span class="k">Date Prepared:</span><span>${datePrepared}</span>
@@ -16650,7 +16645,7 @@ const App = {
       const curTxt = cur ? `<strong>Version ${cur.version_no} · ${this.escape(this.bmRequestNo(cur))}</strong> · approved ${this.escape(this.formatDate(cur.effective_date||cur.reviewed_at))} · ${this.bmMoney(this.bmApprovedTotal())}` : `<strong>No versioned budget yet.</strong> Version 1 is recorded automatically when the first modification is started.`;
       const openTxt = open ? `<div class="notice ${open.status==='returned'?'red':open.status==='submitted'?'amber':'navy'}" style="margin:12px 0 0"><div>i</div><div><strong>${this.escape(this.bmRequestNo(open))} · ${this.escape(BM_LABEL[open.status])}</strong>${open.status==='returned'&&open.review_note?` — City comment: “${this.escape(open.review_note)}”`:''}${open.status==='submitted'?` · submitted ${this.escape(this.formatDateTime(open.submitted_at))}`:''}${this.bmAwaitingSecond(open)?' · <strong>first approval given; awaiting second City approval</strong>':''}</div></div>`:'';
       const dl=this.bmDeadlineText(); const dlHtml=dl?`<div class="field-hint" style="margin-top:10px">🗓 ${dl}</div>`:'';
-      return `<div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Budget in Effect</h2><div class="field-hint">Invoicing, Budget vs. Actuals and exports all use the current approved version. Each invoice records the version it was submitted against.</div></div></div><div class="card-body">${curTxt}${openTxt}${dlHtml}</div></div>`;
+      return `<div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Budget in Effect</h2></div></div><div class="card-body">${curTxt}${openTxt}${dlHtml}</div></div>`;
     };
 
     App.bmIssuesHtml = function(){
@@ -16690,11 +16685,11 @@ const App = {
       return `<div class="card" style="margin-bottom:18px"><div class="card-body">
         ${open?this.bmExportButtonsHtml(open):''}
         ${this.bmCoverHtml(open,{editable:true})}
-        <div class="bm-toolbar" style="margin-top:12px"><div><span class="lbl">Request type</span><span class="bm-seg"><button type="button" class="${d.requestType!=='closeout'?'active':''}" data-bm-type="routine" ${this.bmPastDeadline()?'disabled title="The routine deadline has passed"':''}>Routine</button><button type="button" class="${d.requestType==='closeout'?'active':''}" data-bm-type="closeout">Close-out modification</button></span></div><div class="field-hint">${d.requestType==='closeout'?'Close-out modifications are minor year-end adjustments. They are subject to City approval, can be disallowed, and cannot be revised once the final report is received.':'Call your City Program Administrator to discuss the modification before submitting.'}</div></div>
+        <div class="bm-toolbar" style="margin-top:12px"><div><span class="lbl">Request type</span><span class="bm-seg"><button type="button" class="${d.requestType!=='closeout'?'active':''}" data-bm-type="routine" ${this.bmPastDeadline()?'disabled title="The routine deadline has passed"':''}>Routine</button><button type="button" class="${d.requestType==='closeout'?'active':''}" data-bm-type="closeout">Close-out modification</button></span></div><div class="field-hint">${d.requestType==='closeout'?'Minor year-end adjustment. The City may disallow it, and it can’t be revised after the final report.':'Discuss with your City Program Administrator before submitting.'}</div></div>
         ${this.bmHowToHtml()}
-        ${open&&comments?`<div class="notice navy" style="margin-top:12px"><div>i</div><div>There ${comments===1?'is 1 comment':'are '+comments+' comments'} on this request. Lines with comments show a highlighted 💬 button.</div></div>`:''}
+        ${open&&comments?`<div class="notice navy" style="margin-top:12px"><div>i</div><div>${comments===1?'1 comment':comments+' comments'} on this request. Look for the highlighted 💬 buttons.</div></div>`:''}
         <div style="margin-top:16px">${this.bmFormTableHtml(this.bmDraftRows().map(r=>({...r,comments:open?(this.budgetMods.comments[open.id]||[]).filter(c=>c.line_code===r.line_code).length:0})),{editable:true, versionId:open?.id||null})}</div>
-        <div class="field-group" style="margin-top:14px"><label class="field-label" for="bm-comments">Budget modification narrative</label><div class="field-hint" style="margin-bottom:4px">Summarize what is changing and why, as in the handbook's narrative letter (Attachment I). You can also attach the signed letter under Supporting documents.</div><textarea id="bm-comments" class="field-textarea" rows="3">${this.escape(d.comments||'')}</textarea></div>
+        <div class="field-group" style="margin-top:14px"><label class="field-label" for="bm-comments">Budget modification narrative</label><div class="field-hint" style="margin-bottom:4px">What’s changing and why. A signed letter can be attached below.</div><textarea id="bm-comments" class="field-textarea" rows="3">${this.escape(d.comments||'')}</textarea></div>
         <label style="display:flex;gap:8px;align-items:center;margin:8px 0 14px;font-size:13px"><input type="checkbox" id="bm-amendment" ${d.isAmendment?'checked':''}> This is a contract amendment (the grand total or locked lines change)</label>
         ${open?this.bmFilesHtml(open):'<div class="field-hint">Save the draft to attach supporting documents.</div>'}
         <div id="bm-issues-wrap" style="margin-top:14px">${this.bmIssuesHtml()}</div>
@@ -16716,15 +16711,15 @@ const App = {
         const approveLabel = needsSecond ? (first ? 'Give second approval' : 'Give first approval') : `Approve ${this.escape(this.bmRequestNo(open))}`;
         const blockedMine = needsSecond && first && String(first.signer_email||'').toLowerCase()===me;
         const adjBar = adjusting
-          ? `<div class="notice navy" style="margin:12px 0"><div>i</div><div class="bm-noticebar" style="flex:1"><span><strong>Adjusting amounts.</strong> Edit the blue City-Approved Amount cells; the request must still balance. Ascencia's requested amounts stay on record.</span><span><button class="btn btn-primary btn-sm" id="bm-adj-save">Save adjustments</button> <button class="btn btn-ghost btn-sm" id="bm-adj-cancel">Cancel</button></span></div></div>`
-          : (!first?`<button class="btn btn-ghost" id="bm-adj-start">Adjust amounts before approving</button>`:'');
+          ? `<div class="notice navy" style="margin:12px 0"><div>i</div><div class="bm-noticebar" style="flex:1"><span><strong>Adjusting amounts.</strong> The request must still balance; requested amounts stay on record.</span><span><button class="btn btn-primary btn-sm" id="bm-adj-save">Save adjustments</button> <button class="btn btn-ghost btn-sm" id="bm-adj-cancel">Cancel</button></span></div></div>`
+          : '';
         review = `${adjBar}<div class="bm-sign">
-          ${needsSecond?`<div class="field-hint" style="margin-bottom:8px">This request moves at least ${this.bmPlain(this.bmRules().second_threshold)}, so it needs approval from two different City admins.${first?` First approval: ${this.escape(first.signer_name)} on ${this.escape(this.formatDateTime(first.signed_at))}.`:''}</div>`:''}
+          ${needsSecond?`<div class="field-hint" style="margin-bottom:8px">Needs approval from two City admins (moves ${this.bmPlain(this.bmRules().second_threshold)} or more).${first?` First approval: ${this.escape(first.signer_name)} on ${this.escape(this.formatDateTime(first.signed_at))}.`:''}</div>`:''}
           <div class="field-group"><label class="field-label" for="bm-review-note">City review comment <span class="field-hint">(required to return)</span></label><textarea id="bm-review-note" class="field-textarea" rows="3" placeholder="Notes for ${this.escape(this.bmAgency())}"></textarea></div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0"><label class="field-label" for="bm-approver" style="margin:0">Approved by (full name)</label><input type="text" id="bm-approver" value="${this.escape(this.bmMyName())}"></div>
-          ${adjusting?'':`<div class="client-actions"><button class="btn btn-primary" id="bm-approve" ${blockedMine?'disabled title="A different City admin must give the second approval"':''}>${approveLabel}</button><button class="btn btn-ghost" id="bm-return">Return for Changes</button></div>`}
-          ${blockedMine?'<div class="field-hint">You gave the first approval. A different City admin must give the second approval.</div>':''}
-          <div class="field-hint" style="margin-top:8px">${adjusting?'Save or cancel your adjustments to continue.':'Approving makes the revised budget the one used for invoicing and reporting right away. The current version is kept in history.'}</div></div>`;
+          ${adjusting?'':`<div class="client-actions"><button class="btn btn-primary" id="bm-approve" ${blockedMine?'disabled title="A different City admin must give the second approval"':''}>${approveLabel}</button><button class="btn btn-ghost" id="bm-return">Return for Changes</button>${!first?'<button class="btn btn-ghost" id="bm-adj-start">Adjust amounts</button>':''}</div>`}
+          ${blockedMine?'<div class="field-hint">A different City admin must give the second approval.</div>':''}
+          <div class="field-hint" style="margin-top:8px">${adjusting?'Save or cancel your adjustments.':'Takes effect immediately for invoicing and reporting.'}</div></div>`;
       } else if(this.bmCanDraft()){
         review = `<div class="client-actions" style="margin-top:14px"><button class="btn btn-ghost" id="bm-withdraw">Withdraw to Make Changes</button></div>`;
       }
@@ -16735,12 +16730,12 @@ const App = {
         ${this.bmExportButtonsHtml(open)}
         ${this.bmCoverHtml(open)}
         ${this.bmSummaryHtml(rows, open)}
-        ${this.bmRequestType(open)==='closeout'?`<div class="notice amber"><div>!</div><div><strong>Close-out modification.</strong> Minor year-end adjustment; the City may disallow it, and it cannot be revised once the final report is received.</div></div>`:''}
-        ${open.justification?`<div class="report-summary-strip" style="margin-bottom:12px"><strong>Narrative:</strong> ${this.escape(open.justification)}</div>`:'<div class="field-hint" style="margin-bottom:10px">No narrative was provided with this request.</div>'}
+        ${this.bmRequestType(open)==='closeout'?`<div class="notice amber"><div>!</div><div><strong>Close-out modification.</strong> The City may disallow it, and it can’t be revised after the final report.</div></div>`:''}
+        ${open.justification?`<div class="report-summary-strip" style="margin-bottom:12px"><strong>Narrative:</strong> ${this.escape(open.justification)}</div>`:''}
         ${this.bmFlowHtml(rows,'open')}
         ${adjusting?`<div class="field-hint" style="margin-bottom:6px"><span class="bm-legend city"></span>Blue fill: City-approved amount.</div>`:''}
         ${tableHtml}
-        ${this.bmFilesHtml(open)}${this.bmSignoffsHtml(open)}${review}</div></div>`;
+        ${(this.budgetMods.attachments[open.id]||[]).length?this.bmFilesHtml(open):''}${this.bmSignoffsHtml(open)}${review}</div></div>`;
     };
 
     // ------------------------------------------------- history
@@ -16757,7 +16752,7 @@ const App = {
         const detail=isOpen?`<div style="margin-top:12px">${v.is_baseline?'':this.bmExportButtonsHtml(v)}${v.justification?`<div class="report-summary-strip" style="margin-bottom:10px"><strong>Narrative:</strong> ${this.escape(v.justification)}</div>`:''}${v.review_note?`<div class="report-summary-strip" style="margin-bottom:10px"><strong>City comment:</strong> ${this.escape(v.review_note)}</div>`:''}${v.is_baseline?'':this.bmSummaryHtml(rows,v)+this.bmFlowHtml(rows,v.id)}${v.is_baseline?this.bmFormTableHtml(rows,{scroll:true}):this.bmViewTableHtml(rows,{versionId:v.id})}${inv?`<div class="field-hint" style="margin-top:8px">Invoices submitted against this version: ${inv}</div>`:''}${this.bmFilesHtml(v)}${this.bmSignoffsHtml(v)}<div class="section-label" style="margin-top:12px">Activity</div>${log.map(g=>`<div class="field-hint">${this.escape(this.formatDateTime(g.created_at))} · <strong>${this.escape(g.action.replaceAll('_',' '))}</strong>${g.acted_by?' · '+this.escape(g.acted_by):''}${g.note?' — '+this.escape(g.note):''}</div>`).join('')||'<div class="field-hint">No activity recorded.</div>'}</div>`:'';
         return `<div style="border-top:1px solid var(--border);padding:12px 0" data-bm-version="${this.escape(v.id)}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><strong>Version ${v.version_no} · ${this.escape(this.bmRequestNo(v))}</strong>${!v.is_baseline&&this.bmRequestType(v)==='closeout'?' <span class="badge badge-gray">Close-out</span>':''} <span class="badge ${BM_BADGE[v.status]||'badge-gray'}">${this.escape(BM_LABEL[v.status]||v.status)}</span><div class="field-hint">${meta}</div></div><button class="btn btn-ghost btn-sm" data-bm-expand="${this.escape(v.id)}">${isOpen?'Hide details':'View details'}</button></div>${detail}</div>`;
       }).join('');
-      return `<div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Budget History</h2><div class="field-hint">Every version, what changed and why, who acted, and which invoices used it.</div></div></div><div class="card-body" style="padding-top:0">${items}</div></div>`;
+      return `<div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Budget History</h2></div></div><div class="card-body" style="padding-top:0">${items}</div></div>`;
     };
 
     // ------------------------------------------------- rules (City admin)
@@ -16766,7 +16761,7 @@ const App = {
       const r=this.bmRules(), lines=this.fiscal.budgetLines||[];
       const locks=lines.map(b=>`<label style="font-weight:400;color:inherit;display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" data-bm-lock="${this.escape(b.line_code)}" ${r.locked.includes(b.line_code)?'checked':''}> ${this.escape(b.line_name)}</label>`).join('');
       return `<div class="card"><div class="card-body"><details class="bm-details" ${this.bmRulesOpen?'open':''} id="bm-rules-details"><summary>Budget modification rules (City)</summary>
-        <div class="field-hint" style="margin-top:6px">These apply to every request for ${this.escape(this.bmFyLabel())}. Leave a field blank to turn that rule off.</div>
+        <div class="field-hint" style="margin-top:6px">Applies to all ${this.escape(this.bmFyLabel())} requests. Leave blank to turn a rule off.</div>
         <div class="bm-rules">
           <div><label for="bm-r-pct">Flag changes over (%)</label><input id="bm-r-pct" type="number" min="0" step="1" value="${r.flag_pct}"></div>
           <div><label for="bm-r-min">…and at least ($)</label><input id="bm-r-min" type="number" min="0" step="100" value="${r.flag_min_amount}"></div>
@@ -16794,7 +16789,7 @@ const App = {
       let work='';
       if(open?.status==='submitted') work=this.bmSubmittedHtml(open);
       else if(open && this.bmCanDraft()) work=this.bmEditorHtml();
-      else if(open) work=`<div class="notice navy"><div>i</div><div>${this.escape(this.bmAgency())} is preparing ${this.escape(this.bmRequestNo(open))}. It will appear here for review once submitted.</div></div>`;
+      else if(open) work=`<div class="notice navy"><div>i</div><div>${this.escape(this.bmAgency())} is preparing ${this.escape(this.bmRequestNo(open))}.</div></div>`;
       else if(this.bmDraft?.started && this.bmCanDraft()) work=this.bmEditorHtml();
       else if(this.bmCanDraft()) work=`<div class="client-actions" style="margin-bottom:18px"><button class="btn btn-primary" id="bm-start">Start a Budget Modification Request</button></div>`;
       return this.bmNoticeHtml()+this.bmCurrentHtml()+work+this.bmHistoryHtml()+this.bmRulesHtml();
@@ -17016,7 +17011,7 @@ const App = {
         .field-hint{color:#5B6573;font-size:11px} .badge{display:inline-block;border-radius:999px;padding:1px 7px;font-size:10px;font-weight:700;background:#EEF1F5;margin:1px}
         .client-table-wrap{border:1px solid #D6DAE0;border-radius:8px;overflow:hidden} .bm-sign{border:1px solid #D6DAE0;border-radius:8px;padding:10px 12px;margin-top:12px} .section-label{font-weight:800;text-transform:uppercase;font-size:11px;letter-spacing:.05em;color:#1F3864;margin:8px 0}
         @media print{body{margin:0} tr{page-break-inside:avoid} .bm-form th{-webkit-print-color-adjust:exact;print-color-adjust:exact} .bm-form td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-      </style></head><body>${this.bmCoverHtml(v)}<div style="margin-top:14px">${table}</div>${v.review_note?`<div class="bm-sign"><strong>City comment:</strong> ${this.escape(v.review_note)}</div>`:''}${this.bmSignoffsHtml(v)}<div class="field-hint" style="margin-top:12px">Printed ${this.escape(new Date().toLocaleString())} from the Holloway Reporting Portal · Status: ${this.escape(BM_LABEL[v.status]||v.status)}</div><script>window.onload=()=>{window.print();}<\/script></body></html>`);
+      </style></head><body>${this.bmCoverHtml(v,{title:true})}<div style="margin-top:14px">${table}</div>${v.review_note?`<div class="bm-sign"><strong>City comment:</strong> ${this.escape(v.review_note)}</div>`:''}${this.bmSignoffsHtml(v)}<div class="field-hint" style="margin-top:12px">Printed ${this.escape(new Date().toLocaleString())} from the Holloway Reporting Portal · Status: ${this.escape(BM_LABEL[v.status]||v.status)}</div><script>window.onload=()=>{window.print();}<\/script></body></html>`);
       w.document.close();
     };
 
@@ -17163,7 +17158,7 @@ const App = {
     // --- view routing
     const baseShow = App.showView;
     App.showView = function(view){
-      if((view==='budget'||view==='payments') && !this.canViewFiscal?.()){ baseShow.call(this,'dashboard'); this.toast('Budget is available to Agency Management, Agency-Fiscal, and City Admin users.',{error:true}); return; }
+      if((view==='budget'||view==='payments') && !this.canViewFiscal?.()){ baseShow.call(this,'dashboard'); this.toast('Available to Agency Management, Agency-Fiscal and City admins.',{error:true}); return; }
       if(view==='payments' && !this.isAdmin()){ baseShow.call(this,'budget'); return; }
       baseShow.call(this, view);
       if(view==='budget'||view==='payments'){
@@ -17183,7 +17178,7 @@ const App = {
       const el=document.getElementById('view-fiscal'); if(!el) return;
       el.querySelector('[data-fiscal-tab="payments"]')?.remove();
       const t=el.querySelector('.page-title'); if(t) t.textContent='Invoices';
-      const st=el.querySelector('.page-subtitle'); if(st) st.textContent='Monthly actuals, supporting documentation, reconciliation, invoice generation, and City invoice review.';
+      const st=el.querySelector('.page-subtitle'); if(st) st.textContent='Monthly actuals, backup and invoice review.';
       if(this.fiscalTab==='review' && this.fiscal?.setupReady){
         if(!this.budgetMods) await this.loadBudgetVersions();
         const cur=this.bmCurrentVersion(), open=this.bmOpenVersion();
@@ -17221,7 +17216,7 @@ const App = {
         body+=tot('bm-total',sec.total,rs); });
       body+=tot('bm-grand','GRAND TOTAL',rows);
       const head=`<th>Position / Expense Category</th><th>Budget</th><th>Spent to Date</th><th>% Spent</th><th>Projected<br>Year-End</th><th>Remaining</th>${open?`<th>Pending<br><span style="font-weight:400">${this.escape(this.bmRequestNo(open))}</span></th>`:''}`;
-      const note=pace.months?`Projected year-end = spent to date ÷ ${pace.months} month${pace.months>1?'s':''} of posted actuals (${pace.label}) × ${pace.total}. Early in the year, billing lags can understate the pace.`:'No actuals have been posted yet.';
+      const note=pace.months?`Projected year-end: spent to date ÷ ${pace.months} month${pace.months>1?'s':''} (${pace.label}) × ${pace.total}.`:'No actuals posted yet.';
       return `<div class="bm-scroll"><table class="bm-form bm-li"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div><div class="field-hint" style="margin-top:6px">${note}</div>`;
     };
 
@@ -17258,9 +17253,9 @@ const App = {
       if(this.budgetTab==='mods'){
         if(open?.status==='submitted') content=this.bmSubmittedHtml(open);
         else if(open && this.bmCanDraft()) content=this.bmEditorHtml();
-        else if(open) content=`<div class="notice navy"><div>i</div><div>${this.escape(this.bmAgency())} is preparing ${this.escape(this.bmRequestNo(open))}. It will appear here for review once submitted.</div></div>`;
+        else if(open) content=`<div class="notice navy"><div>i</div><div>${this.escape(this.bmAgency())} is preparing ${this.escape(this.bmRequestNo(open))}.</div></div>`;
         else if(this.bmDraft?.started && this.bmCanDraft()) content=this.bmEditorHtml();
-        else content=`<div class="card"><div class="card-body" style="text-align:center;padding:28px 18px"><div style="font-weight:800;color:var(--navy);font-size:15px">No modification in progress</div><div class="field-hint" style="margin:6px auto 14px;max-width:520px">${this.isAdmin()?`${this.escape(this.bmAgency())} submits budget modification requests here. You'll see them in this tab and in the Review Queue.`:'Request a modification to move funds between budget lines. Call your City Program Administrator first to discuss it.'}${dl?` Routine modifications are due by ${this.escape(new Date(this.dateOnly(dl)+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}))}.`:''}</div>${this.bmCanDraft()?'<button class="btn btn-primary" id="bm-start">Request a modification</button>':''}</div></div>`;
+        else content=`<div class="card"><div class="card-body" style="text-align:center;padding:28px 18px"><div style="font-weight:800;color:var(--navy);font-size:15px">No modification in progress</div><div class="field-hint" style="margin:6px auto 14px;max-width:520px">${this.isAdmin()?`Requests from ${this.escape(this.bmAgency())} appear here and in the Review Queue.`:'Move funds between budget lines. Discuss with your City Program Administrator first.'}${dl?` Routine modifications are due by ${this.escape(new Date(this.dateOnly(dl)+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}))}.`:''}</div>${this.bmCanDraft()?'<button class="btn btn-primary" id="bm-start">Request a modification</button>':''}</div></div>`;
       }
       if(this.budgetTab==='history') content=this.bmHistoryHtml()||'<div class="field-hint">No versions yet.</div>';
       if(this.budgetTab==='rules'){ this.bmRulesOpen=true; content=this.bmRulesHtml(); }
@@ -17289,7 +17284,7 @@ const App = {
       const el=document.getElementById('view-payments'); if(!el) return;
       if(!this.isAdmin()){ el.innerHTML='<div class="notice red"><div>!</div><div><strong>Payments are available to City admins.</strong></div></div>'; return; }
       if(!this.fiscal?.years?.length) await this.loadFiscalData();
-      el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Payments</h1><div class="page-subtitle">City payment tracking and funding-source allocation for approved invoices.</div></div><div class="client-actions">${this.bmFySelectHtml('pay-fy')}</div></div>${this.fiscalCityPaymentHtml()}`;
+      el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Payments</h1><div class="page-subtitle">Payment status and funding allocation by invoice.</div></div><div class="client-actions">${this.bmFySelectHtml('pay-fy')}</div></div>${this.fiscalCityPaymentHtml()}`;
       this.bmBindFySelect(el,'pay-fy');
       el.querySelectorAll('[data-payment-status]').forEach(x=>x.addEventListener('change',()=>{const p=this.ensureFiscalPayment(x.dataset.paymentStatus);p.payment_status=x.value;this._fiscalPaymentDirty=true;this.refreshFiscalPaymentLive();}));
       el.querySelectorAll('[data-payment-date]').forEach(x=>x.addEventListener('input',()=>{const p=this.ensureFiscalPayment(x.dataset.paymentDate);p.payment_date=x.value;this._fiscalPaymentDirty=true;}));
