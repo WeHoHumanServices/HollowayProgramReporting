@@ -335,7 +335,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 @media print {
   body { background:white; color:#111; }
-  #app, #login-screen, #loading-screen, .confirm-modal, .form-overlay, .error-chip { display:none !important; }
+  #app, #login-screen, #loading-screen, .confirm-modal, .form-overlay, .error-chip, #toast-region, .toast-region, .toast { display:none !important; }
   .print-report { display:block !important; padding:28px; }
   @page { margin: .55in; }
 }
@@ -6037,7 +6037,7 @@ const App = {
     const voluntarySummary = Object.entries(voluntaryCounts).map(([k,v]) => `${this.escape(k)}: ${v}`).join(' · ') || 'No detailed exit rows recorded.';
 
     document.getElementById('print-report').innerHTML = `
-      <div class="print-page-header"><strong>${this.escape(this.programName())}</strong> · ${this.escape(this.fyLabel())} · Generated ${new Date().toLocaleDateString()}</div>
+      <div class="print-page-header"><strong>${this.escape(this.programName())}</strong> · ${this.escape(this.fyLabel())}</div>
 
       <div class="print-cover">
         <div class="print-brand">
@@ -6048,8 +6048,7 @@ const App = {
         </div>
         <div class="print-meta">
           <strong>Reporting Period</strong><br>${this.quarters[q].period}<br><br>
-          <strong>Status</strong><br>${this.escape(status)}<br><br>
-          <strong>Generated</strong><br>${new Date().toLocaleString()}
+          <strong>Status</strong><br>${this.escape(status)}
         </div>
       </div>
 
@@ -9455,8 +9454,7 @@ const App = {
       row('Resubmitted', b.resubmitted_at ? this.formatDateTime(b.resubmitted_at) : ''),
       row('Revisions requested', b.revision_count ? String(b.revision_count) : ''),
       row('Accepted by City', b.accepted_at ? this.formatDateTime(b.accepted_at) : ''),
-      row('Current status', status),
-      row('Report generated', new Date().toLocaleString())
+      row('Current status', status)
     ].filter(Boolean).join('');
 
     return `<div class="print-section"><h2>Submission Record</h2>
@@ -10089,7 +10087,7 @@ const App = {
   };
 
   App.saveFiscalDraft = async function(silent=false){
-    if(!this.fiscal.setupReady){ this.toast('Fiscal setup is incomplete. Contact the portal administrator.',{error:true}); return false; }
+    if(!this.fiscal.setupReady){ this.toast('Run the fiscal Supabase migration before saving fiscal data.',{error:true}); return false; }
     if(!this.fiscalCanEditMonth()){ this.toast('This fiscal month is locked for editing.',{error:true}); return false; }
     const month=this.resolveFiscalMonth(); const rows=(this.fiscal.budgetLines||[]).map(l=>({program_id:this.program.id,fiscal_year:this.fiscalBudgetYear,invoice_month:month,line_code:l.line_code,amount:Number(document.querySelector(`[data-fiscal-amount="${CSS.escape(l.line_code)}"]`)?.value||0),notes:document.querySelector(`[data-fiscal-note="${CSS.escape(l.line_code)}"]`)?.value?.trim()||'',updated_by:this.user?.email||'',updated_at:new Date().toISOString()}));
     const meta=this.collectFiscalMeta();
@@ -15769,8 +15767,7 @@ const App = {
         <div class="print-meta">
           <strong>Reporting Period</strong><br>${esc(monthPeriod(month, this))}<br><br>
           <strong>Status</strong><br>${esc(this.mrStatusLabel(status))}<br><br>
-          <strong>Due to the City</strong><br>${this.formatDate(due)}<br><br>
-          <strong>Generated</strong><br>${new Date().toLocaleString()}
+          <strong>Due to the City</strong><br>${this.formatDate(due)}
         </div>
       </div>
       ${draft}
@@ -15870,7 +15867,7 @@ const App = {
     this.printAs?.(this.printFileLabel('Monthly Operating Report', monthLabel(month)));
     target.innerHTML =
       `<div class="print-page-header"><strong>${esc(this.programName())}</strong> &middot; Monthly Operating Report
-       &middot; ${esc(monthLabel(month))} &middot; Generated ${new Date().toLocaleDateString()}</div>`
+       &middot; ${esc(monthLabel(month))}</div>`
       + this.monthlyPrintHtml(month);
     window.print();
   };
@@ -17387,7 +17384,7 @@ const App = {
           <input type="file" id="fdoc-file-${group}" accept="${ACCEPT}" multiple aria-label="${group === 'gl' ? 'General Ledger files' : 'Supporting documentation files'}">
           <button type="button" class="btn btn-ghost btn-sm" data-fdoc-upload="${group}">Upload</button>
         </div>
-        <div class="fdoc-drop-hint">Drag files here or choose them &middot; PDF, Excel or CSV, up to 20 MB</div>
+        <div class="fdoc-drop-hint">Choose or drag files here &middot; PDF, XLSX, XLS or CSV &middot; up to 20 MB each</div>
       </div>` : '';
 
     const glList = gl.length ? gl.map(d => this.fiscalDocRowHtml(d, editable)).join('')
@@ -17407,7 +17404,8 @@ const App = {
       ${SUPPORT_TYPES.map(t => `<option>${esc(t)}</option>`).join('')}</select>`;
 
     return `<div class="card" style="margin-top:18px"><div class="card-header">
-        <div><h2 class="card-title">Backup Documentation</h2></div>
+        <div><h2 class="card-title">Supporting Documentation</h2>
+          <div class="field-hint">The General Ledger is required before the month can be submitted. Add any other backup under Supporting Documentation.</div></div>
         <div class="fdoc-head-actions">
           <button class="btn btn-ghost btn-sm" id="btn-fiscal-zip" ${docs.length ? '' : 'disabled'}>Download all (.zip)</button>
         </div>
@@ -17416,13 +17414,13 @@ const App = {
         <div class="fdoc-grid">
           <div class="fdoc-panel">
             <div class="fdoc-panel-head"><div><div class="fdoc-panel-title">General Ledger</div>
-              <div class="fdoc-panel-sub">Required to submit</div></div>
+              <div class="fdoc-panel-sub">Required &middot; one per month is typical</div></div>
               ${gl.length ? '<span class="badge badge-green">Uploaded</span>' : '<span class="badge badge-amber">Required</span>'}</div>
             <div class="fdoc-panel-body">${drop('gl')}${glList}</div>
           </div>
           <div class="fdoc-panel">
             <div class="fdoc-panel-head"><div><div class="fdoc-panel-title">Supporting Documentation</div>
-              <div class="fdoc-panel-sub">Payroll, receipts, allocations and other backup</div></div>
+              <div class="fdoc-panel-sub">Payroll, check register, receipts, allocations and other backup</div></div>
               <span class="badge badge-gray">${sup.length} file${sup.length===1?'':'s'}</span></div>
             <div class="fdoc-panel-body">${drop('support', typeSelect)}${supList}</div>
           </div>
@@ -17446,7 +17444,7 @@ const App = {
 
     const bad = files.filter(f => !/\.(pdf|csv|xlsx|xls)$/i.test(f.name) || f.size > MAX_BYTES);
     if (bad.length){
-      this.fdocMsg(`Not uploaded (PDF, Excel or CSV under 20 MB only): ${bad.map(f => f.name).join(', ')}`, 'err');
+      this.fdocMsg(`Not uploaded — must be PDF, XLSX, XLS or CSV under 20 MB: ${bad.map(f => f.name).join(', ')}`, 'err');
       return;
     }
 
@@ -17493,8 +17491,8 @@ const App = {
     this._jszipLoading = new Promise((resolve, reject) => {
       const s = document.createElement('script');
       s.src = JSZIP_URL;
-      s.onload = () => window.JSZip ? resolve(window.JSZip) : reject(new Error('The zip download couldn’t start.'));
-      s.onerror = () => { this._jszipLoading = null; reject(new Error('The zip download couldn’t start. Check your connection and try again.')); };
+      s.onload = () => window.JSZip ? resolve(window.JSZip) : reject(new Error('Zip library did not load.'));
+      s.onerror = () => { this._jszipLoading = null; reject(new Error('Zip library could not be loaded. Check your connection.')); };
       document.head.appendChild(s);
     });
     return this._jszipLoading;
@@ -17555,10 +17553,10 @@ const App = {
       setTimeout(() => URL.revokeObjectURL(url), 2000);
       const ok = docs.length - failed;
       this.fdocMsg(failed
-        ? `Downloaded ${ok} of ${docs.length} files. ${failed} couldn’t be retrieved; see the index in the zip.`
+        ? `Downloaded ${ok} of ${docs.length} files. ${failed} could not be retrieved — see the index CSV in the zip.`
         : `Downloaded ${ok} file${ok===1?'':'s'}.`, failed ? 'err' : 'ok');
     } catch (e){
-      this.fdocMsg('Couldn’t build the zip: ' + (e?.message || e), 'err');
+      this.fdocMsg('Could not build the zip: ' + (e?.message || e), 'err');
     } finally { reset(); }
   };
 
