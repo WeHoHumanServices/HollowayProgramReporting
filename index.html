@@ -17582,6 +17582,663 @@ const App = {
   };
 })();
 
+(function(){
+  /* ==========================================================================
+     CDBG — Housing Navigator salary and benefits (Holloway only)
+
+     Shown only for programs with a holloway_cdbg_settings row for the fiscal
+     year. Agency staff enter the navigator's payroll each month; the database
+     charges CDBG first (view holloway_cdbg_charges) until the CDBG budget is
+     used up. CDBG is invoiced quarterly with a General Ledger, payroll
+     register and timesheets, and the City approves or returns each quarter.
+
+     The standard invoice is checked too: Housing Navigation salary there may
+     not exceed what is left after CDBG for that month. The database enforces
+     the same rule when a standard invoice is submitted.
+     ========================================================================== */
+
+  const BUCKET = 'holloway-cdbg-documents';
+  const REQUIRED_DOCS = ['General Ledger','Payroll Register','Timesheets'];
+  const DOC_TYPES = [...REQUIRED_DOCS, 'Other Backup'];
+  const MAX_BYTES = 20 * 1024 * 1024;
+  const ACCEPT = '.pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg';
+  const CERT = 'I certify that the Housing Navigator salary and benefits charged to CDBG on this invoice were paid during the period shown, are supported by the General Ledger, payroll register and timesheets submitted with it, and have not been billed to the City through any other invoice or funding source.';
+  const esc = s => App.escape(s ?? '');
+  const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const r2 = v => Math.round(num(v) * 100) / 100;
+
+  App.cdbg = { key:null, settings:null, charges:[], subs:[], docs:[], log:[] };
+  App.cdbgQuarter = null;
+  App.cdbgDraft = {};          // invoice_month -> edited fields
+  App._cdbgDirty = false;
+
+  /* ------------------------------------------------------------------ style */
+  const st = document.createElement('style');
+  st.textContent = `
+    .cdbg-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:14px 0 18px}
+    @media(max-width:1000px){.cdbg-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    .cdbg-kpi{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+    .cdbg-kpi-label{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gray-500)}
+    .cdbg-kpi-value{font-size:20px;font-weight:800;color:var(--navy);margin-top:4px}
+    .cdbg-kpi-sub{font-size:11px;color:var(--gray-500);margin-top:2px}
+    .cdbg-bar{height:6px;border-radius:6px;background:var(--gray-100);overflow:hidden;margin-top:8px}
+    .cdbg-bar > span{display:block;height:100%;background:var(--navy)}
+    .cdbg-table td,.cdbg-table th{vertical-align:middle}
+    .cdbg-table input.field-input{min-height:34px;padding:6px 8px;font-size:12.5px}
+    .cdbg-table .num{text-align:right;white-space:nowrap}
+    .cdbg-table .cdbg-charge{font-weight:800;color:var(--navy)}
+    .cdbg-table tfoot td{font-weight:800;border-top:2px solid var(--border)}
+    .cdbg-split{font-size:11px;color:var(--gray-500)}
+    .cdbg-req{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+    .cdbg-req span{font-size:11.5px;font-weight:700;border-radius:999px;padding:4px 10px;border:1px solid var(--border)}
+    .cdbg-req .ok{background:#EAF6EF;border-color:#B7DFC6;color:#1A5735}
+    .cdbg-req .miss{background:#FDF3DC;border-color:#F0C96B;color:#7A5200}
+    .cdbg-grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-top:16px}
+    @media(max-width:1000px){.cdbg-grid2{grid-template-columns:1fr}}
+    .cdbg-issue{font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--gray-100);display:flex;gap:8px}
+    .cdbg-issue:last-child{border-bottom:0}
+    .cdbg-issue b{flex-shrink:0;width:16px;text-align:center}
+    .cdbg-issue.err b{color:var(--red)} .cdbg-issue.ok b{color:var(--green)}
+    .cdbg-cert{background:#F8FAFC;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--gray-700);margin:10px 0}
+  `;
+  document.head.appendChild(st);
+
+  /* -------------------------------------------------------------- nav + view */
+  (function addNav(){
+    if (document.getElementById('nav-cdbg')) return;
+    const after = document.getElementById('nav-budget') || document.getElementById('nav-fiscal');
+    if (!after) return;
+    after.insertAdjacentHTML('afterend',
+      `<div class="sidebar-item" id="nav-cdbg" data-view="cdbg" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V10l8-6 8 6v11"/><path d="M9 21v-6h6v6"/><path d="M12 8.5v3M10.5 10h3"/></svg>CDBG</div>`);
+    const sec = document.createElement('section'); sec.id = 'view-cdbg'; sec.className = 'view-section';
+    (document.getElementById('view-payments') || document.getElementById('view-budget') || document.getElementById('view-fiscal'))?.after(sec);
+  })();
+
+  App.cdbgKey = function(){ return `${this.program?.id||''}|${this.fiscalBudgetYear||''}`; };
+
+  App.cdbgRefreshNav = async function(){
+    const nav = document.getElementById('nav-cdbg'); if (!nav) return;
+    const ok = this.program?.id && this.programHas?.('has_fiscal') && this.canViewFiscal?.();
+    if (!ok){ nav.style.display = 'none'; return; }
+    try {
+      const { data } = await this.sb.from('holloway_cdbg_settings').select('fiscal_year').eq('program_id', this.program.id).gt('budget_amount', 0).limit(1);
+      nav.style.display = (data && data.length) ? 'flex' : 'none';
+    } catch(_) { nav.style.display = 'none'; }
+    const section = nav.closest('.sidebar-section');
+    if (section && nav.style.display === 'flex') section.style.display = '';
+  };
+
+  const baseSidebar = App.renderSidebarForRole;
+  App.renderSidebarForRole = function(){
+    baseSidebar.call(this);
+    this.cdbgRefreshNav();
+  };
+
+  const baseShow = App.showView;
+  App.showView = function(view){
+    if (view !== 'cdbg') return baseShow.call(this, view);
+    if (!this.canViewFiscal?.()){ baseShow.call(this, 'dashboard'); this.toast('Available to Agency Management, Agency-Fiscal and City admins.', {error:true}); return; }
+    this.view = 'cdbg';
+    document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+    document.getElementById('view-cdbg')?.classList.add('active');
+    document.querySelectorAll('.sidebar-item[data-view]').forEach(i => i.classList.toggle('active', i.dataset.view === 'cdbg'));
+    this.renderCdbg();
+  };
+
+  /* -------------------------------------------------------------------- data */
+  App.loadCdbg = async function(force=false){
+    const key = this.cdbgKey();
+    if (!force && this.cdbg.key === key) return this.cdbg;
+    const pid = this.program?.id, fy = this.fiscalBudgetYear;
+    const out = { key, settings:null, charges:[], subs:[], docs:[], log:[], error:null };
+    if (!pid || !fy){ this.cdbg = out; return out; }
+    const s = await this.sb.from('holloway_cdbg_settings').select('*').eq('program_id', pid).eq('fiscal_year', fy).maybeSingle();
+    if (s.error){ out.error = s.error.message; this.cdbg = out; return out; }
+    out.settings = s.data && Number(s.data.budget_amount) > 0 ? s.data : null;
+    if (out.settings){
+      const [c, sub, d, l] = await Promise.all([
+        this.sb.from('holloway_cdbg_charges').select('*').eq('program_id', pid).eq('fiscal_year', fy).order('invoice_month'),
+        this.sb.from('holloway_cdbg_submissions').select('*').eq('program_id', pid).eq('fiscal_year', fy).order('quarter_start'),
+        this.sb.from('holloway_cdbg_documents').select('*').eq('program_id', pid).eq('fiscal_year', fy).order('uploaded_at'),
+        this.sb.from('holloway_cdbg_status_log').select('*').eq('program_id', pid).eq('fiscal_year', fy).order('created_at', {ascending:false})
+      ]);
+      const err = [c, sub, d, l].find(x => x.error);
+      if (err) out.error = err.error.message;
+      out.charges = c.data || []; out.subs = sub.data || []; out.docs = d.data || []; out.log = l.data || [];
+    }
+    this.cdbg = out;
+    return out;
+  };
+
+  /* ---------------------------------------------------------------- quarters */
+  App.cdbgQuarterStartOf = function(monthKey){
+    const [y, m] = String(monthKey).slice(0,7).split('-').map(Number);
+    return `${y}-${String(Math.floor((m-1)/3)*3+1).padStart(2,'0')}-01`;
+  };
+  App.cdbgQuarters = function(){
+    const map = new Map();
+    (this.fiscalMonths?.() || []).forEach(m => {
+      const q = this.cdbgQuarterStartOf(m.key);
+      if (!map.has(q)) map.set(q, { start:q, months:[] });
+      map.get(q).months.push(m);
+    });
+    return [...map.values()].map((q, i) => {
+      const first = q.months[0], last = q.months[q.months.length-1];
+      const short = d => new Date(d + 'T12:00:00').toLocaleDateString('en-US', {month:'short'});
+      return { ...q, n:i+1, label:`Q${i+1}`, range:`${short(first.key)}–${short(last.key)} ${String(last.key).slice(0,4)}`,
+               period:`${this.formatDate(first.start)} – ${this.formatDate(last.end)}` };
+    });
+  };
+  App.cdbgResolveQuarter = function(){
+    const qs = this.cdbgQuarters(); if (!qs.length) return null;
+    if (this.cdbgQuarter && qs.some(q => q.start === this.cdbgQuarter)) return qs.find(q => q.start === this.cdbgQuarter);
+    // Default: the earliest quarter not yet approved that has ended or is under way.
+    const today = this.localDate();
+    const pick = qs.find(q => q.months[0].start <= today && this.cdbgSub(q.start)?.status !== 'approved') || qs[0];
+    this.cdbgQuarter = pick.start;
+    return pick;
+  };
+  App.cdbgSub = function(qStart){ return (this.cdbg.subs || []).find(s => this.dateOnly(s.quarter_start) === qStart) || null; };
+  App.cdbgQuarterOpen = function(qStart){ const s = this.cdbgSub(qStart); return !s || s.status === 'revision_requested'; };
+  App.cdbgCanEdit = function(qStart){ return this.canEditFiscal?.() && this.cdbgQuarterOpen(qStart); };
+  App.cdbgStatusOf = function(qStart){ return this.cdbgSub(qStart)?.status || 'draft'; };
+
+  /* ------------------------------------------------------------ calculation */
+  // Mirrors the holloway_cdbg_charges view so the screen updates as you type.
+  // The database view stays the source of truth for submission.
+  App.cdbgRows = function(){
+    const saved = new Map((this.cdbg.charges || []).map(c => [this.dateOnly(c.invoice_month), c]));
+    const keys = new Set([...saved.keys(), ...Object.keys(this.cdbgDraft)]);
+    const rows = [...keys].sort().map(k => {
+      const s = saved.get(k) || {}, d = this.cdbgDraft[k] || {};
+      const pick = f => (f in d) ? d[f] : s[f];
+      return { invoice_month:k, saved:saved.has(k),
+        employee_name:pick('employee_name') || '', hours_worked:pick('hours_worked'),
+        salary_paid:r2(pick('salary_paid')), benefits_paid:r2(pick('benefits_paid')),
+        benefits_excluded_from_standard:!!pick('benefits_excluded_from_standard'), notes:pick('notes') || '' };
+    });
+    const budget = num(this.cdbg.settings?.budget_amount);
+    let before = 0;
+    rows.forEach(r => {
+      r.paid_total = r2(r.salary_paid + r.benefits_paid);
+      r.cdbg_total = r2(Math.min(r.paid_total, Math.max(0, budget - before)));
+      r.cdbg_salary = r2(Math.min(r.salary_paid, r.cdbg_total));
+      r.cdbg_benefits = r2(r.cdbg_total - r.cdbg_salary);
+      r.standard_salary_allowed = r2(r.salary_paid - r.cdbg_salary);
+      before += r.paid_total;
+      r.remaining_after = r2(Math.max(0, budget - before));
+    });
+    return rows;
+  };
+  App.cdbgRowFor = function(monthKey){ return this.cdbgRows().find(r => r.invoice_month === monthKey) || null; };
+  App.cdbgChargedThrough = function(monthKey){ return this.cdbgRows().filter(r => !monthKey || r.invoice_month <= monthKey).reduce((s, r) => s + r.cdbg_total, 0); };
+
+  /* ---------------------------------------------------------------- render */
+  App.renderCdbg = async function(){
+    const el = document.getElementById('view-cdbg'); if (!el) return;
+    if (!this.fiscal?.years?.length){ el.innerHTML = '<div class="notice navy"><div>i</div><div>Loading CDBG…</div></div>'; await this.loadFiscalData(this.fiscalBudgetYear); }
+    await this.loadCdbg();
+    if (this.cdbg.error){ el.innerHTML = `<div class="notice red"><div>!</div><div>Could not load CDBG data: ${esc(this.cdbg.error)}</div></div>`; return; }
+    if (!this.cdbg.settings){
+      el.innerHTML = `<div class="page-header"><div><h1 class="page-title">CDBG</h1></div></div><div class="notice navy"><div>i</div><div>CDBG is not set up for ${esc(this.programName())} in ${esc(this.fiscalYearLabel())}.</div></div>`;
+      return;
+    }
+    const set = this.cdbg.settings, q = this.cdbgResolveQuarter(), qs = this.cdbgQuarters();
+    const status = this.cdbgStatusOf(q.start), editable = this.cdbgCanEdit(q.start), sub = this.cdbgSub(q.start);
+    const rows = this.cdbgRows(), budget = num(set.budget_amount);
+    const charged = rows.reduce((s, r) => s + r.cdbg_total, 0), remaining = Math.max(0, budget - charged);
+    const qRows = q.months.map(m => rows.find(r => r.invoice_month === m.key) || { invoice_month:m.key, saved:false, salary_paid:0, benefits_paid:0, paid_total:0, cdbg_total:0, cdbg_salary:0, cdbg_benefits:0, standard_salary_allowed:0, employee_name:'', hours_worked:null, notes:'', benefits_excluded_from_standard:false });
+    const qTotal = qRows.reduce((s, r) => s + r.cdbg_total, 0);
+    const approved = (this.cdbg.subs || []).filter(s => s.status === 'approved').reduce((t, s) => t + num(s.cdbg_total), 0);
+    const pct = budget ? Math.min(100, Math.round(charged / budget * 100)) : 0;
+    const years = (this.fiscal.years || []).map(y => `<option value="${esc(y.fiscal_year)}" ${y.fiscal_year === this.fiscalBudgetYear ? 'selected' : ''}>${esc(y.budget_label || y.fiscal_year)}</option>`).join('');
+    const qOpts = qs.map(x => `<option value="${x.start}" ${x.start === q.start ? 'selected' : ''}>${esc(x.label)} · ${esc(x.range)}</option>`).join('');
+    const exhaustedNote = remaining <= 0.005 && charged > 0
+      ? `<div class="notice green" style="margin-bottom:14px"><div>✓</div><div><strong>The CDBG budget is fully charged.</strong> Bill any further ${esc(set.position_label)} salary on the standard monthly invoice.</div></div>` : '';
+    const reviewNote = sub?.status === 'revision_requested' && sub.review_note
+      ? `<div class="notice amber" style="margin-bottom:14px"><div>!</div><div><strong>Revisions requested:</strong> ${esc(sub.review_note)}</div></div>` : '';
+
+    el.innerHTML = `
+      <div class="page-header"><div><h1 class="page-title">CDBG · ${esc(set.position_label)}</h1>
+        <div class="page-subtitle">Salary and benefits are charged to CDBG first, then invoiced quarterly. Account ${esc(set.account_number || '—')}.</div></div>
+        ${this.fiscalStatusBadge(status)}</div>
+      <div class="fiscal-toolbar"><div class="fiscal-controls">
+          <label class="fiscal-control">Fiscal Year<select id="cdbg-year">${years}</select></label>
+          <label class="fiscal-control">Quarter<select id="cdbg-quarter">${qOpts}</select></label></div>
+        <div class="client-actions">${editable ? '<button class="btn btn-primary" id="cdbg-save">Save CDBG Draft</button>' : ''}
+          <button class="btn btn-ghost" id="cdbg-print">Print / Save CDBG Invoice PDF</button></div></div>
+      <div class="cdbg-kpis">
+        <div class="cdbg-kpi"><div class="cdbg-kpi-label">CDBG Budget</div><div class="cdbg-kpi-value">${this.fiscalMoney(budget)}</div><div class="cdbg-kpi-sub">${esc(this.fiscalYearLabel())}</div></div>
+        <div class="cdbg-kpi"><div class="cdbg-kpi-label">Charged to Date</div><div class="cdbg-kpi-value" id="cdbg-kpi-charged">${this.fiscalMoney(charged)}</div><div class="cdbg-bar"><span id="cdbg-kpi-bar" style="width:${pct}%"></span></div></div>
+        <div class="cdbg-kpi"><div class="cdbg-kpi-label">Remaining</div><div class="cdbg-kpi-value" id="cdbg-kpi-remaining">${this.fiscalMoney(remaining)}</div><div class="cdbg-kpi-sub">Left before the standard invoice takes over</div></div>
+        <div class="cdbg-kpi"><div class="cdbg-kpi-label">${esc(q.label)} CDBG Invoice</div><div class="cdbg-kpi-value" id="cdbg-kpi-quarter">${this.fiscalMoney(qTotal)}</div><div class="cdbg-kpi-sub">${esc(q.range)}</div></div>
+        <div class="cdbg-kpi"><div class="cdbg-kpi-label">Approved by City</div><div class="cdbg-kpi-value">${this.fiscalMoney(approved)}</div><div class="cdbg-kpi-sub">${(this.cdbg.subs||[]).filter(s=>s.status==='approved').length} of ${qs.length} quarters</div></div>
+      </div>
+      ${reviewNote}${exhaustedNote}
+      <div class="card"><div class="card-header"><div><h2 class="card-title">Monthly Payroll · ${esc(q.label)}</h2>
+        <div class="field-hint">Enter what was actually paid to the ${esc(set.position_label)} each month. The portal charges CDBG first; only what's left can go on the standard invoice.</div></div></div>
+        <div class="card-body"><div class="client-table-wrap"><table class="client-table cdbg-table">
+          <thead><tr><th>Month</th><th>Employee</th><th class="num">Hours</th><th class="num">Salary Paid</th><th class="num">Benefits Paid</th>
+            <th class="num">Charged to CDBG</th><th class="num">Standard Invoice<br><span style="font-weight:400">salary allowed</span></th><th>Benefits off<br>standard invoice</th></tr></thead>
+          <tbody>${qRows.map(r => this.cdbgRowHtml(r, editable)).join('')}</tbody>
+          <tfoot><tr><td colspan="3">Quarter total</td><td class="num" id="cdbg-t-sal">${this.fiscalMoney(qRows.reduce((s,r)=>s+r.salary_paid,0))}</td><td class="num" id="cdbg-t-ben">${this.fiscalMoney(qRows.reduce((s,r)=>s+r.benefits_paid,0))}</td><td class="num cdbg-charge" id="cdbg-t-cdbg">${this.fiscalMoney(qTotal)}</td><td class="num" id="cdbg-t-std">${this.fiscalMoney(qRows.reduce((s,r)=>s+r.standard_salary_allowed,0))}</td><td></td></tr></tfoot>
+        </table></div>
+        <div class="field-hint" style="margin-top:8px">CDBG covers salary first, then benefits. Benefits charged to CDBG must be left off the standard invoice's benefit lines; tick the box to confirm for each month.</div>
+      </div></div>
+      <div class="cdbg-grid2">
+        ${this.cdbgDocsHtml(q, editable)}
+        ${this.cdbgSubmitHtml(q, editable)}
+      </div>
+      ${this.cdbgYearHtml(qs)}`;
+    this.bindCdbgEvents(q);
+  };
+
+  App.cdbgRowHtml = function(r, editable){
+    const mLabel = new Date(r.invoice_month + 'T12:00:00').toLocaleDateString('en-US', {month:'long', year:'numeric'});
+    const k = r.invoice_month;
+    const inp = (f, v, type='number', extra='') => `<input class="field-input" data-cdbg-month="${k}" data-cdbg-field="${f}" type="${type}" ${type==='number'?'min="0" step="0.01" inputmode="decimal"':''} value="${esc(v ?? '')}" ${extra}>`;
+    const split = r.cdbg_total ? `<div class="cdbg-split">${this.fiscalMoney(r.cdbg_salary)} salary${r.cdbg_benefits ? ` · ${this.fiscalMoney(r.cdbg_benefits)} benefits` : ''}</div>` : '';
+    const needBox = r.cdbg_benefits > 0;
+    return `<tr data-cdbg-row="${k}">
+      <td><strong>${esc(mLabel)}</strong>${r.saved ? '' : '<div class="cdbg-split">Not entered</div>'}</td>
+      <td>${editable ? inp('employee_name', r.employee_name, 'text', 'placeholder="Name"') : esc(r.employee_name || '—')}</td>
+      <td class="num">${editable ? inp('hours_worked', r.hours_worked) : esc(r.hours_worked ?? '—')}</td>
+      <td class="num">${editable ? inp('salary_paid', r.saved || r.salary_paid ? r.salary_paid : '') : this.fiscalMoney(r.salary_paid)}</td>
+      <td class="num">${editable ? inp('benefits_paid', r.saved || r.benefits_paid ? r.benefits_paid : '') : this.fiscalMoney(r.benefits_paid)}</td>
+      <td class="num"><span class="cdbg-charge" data-cdbg-out="charge">${this.fiscalMoney(r.cdbg_total)}</span><div data-cdbg-out="split">${split}</div></td>
+      <td class="num" data-cdbg-out="std">${this.fiscalMoney(r.standard_salary_allowed)}</td>
+      <td>${editable
+          ? `<label style="display:flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox" data-cdbg-month="${k}" data-cdbg-field="benefits_excluded_from_standard" ${r.benefits_excluded_from_standard ? 'checked' : ''}> Confirmed</label><div class="cdbg-split" data-cdbg-out="boxhint">${needBox && !r.benefits_excluded_from_standard ? 'Required: CDBG covers benefits this month' : ''}</div>`
+          : (r.benefits_excluded_from_standard ? 'Confirmed' : (needBox ? '<span style="color:var(--red)">Not confirmed</span>' : '—'))}</td>
+    </tr>`;
+  };
+
+  App.cdbgDocsFor = function(qStart){ return (this.cdbg.docs || []).filter(d => this.dateOnly(d.quarter_start) === qStart); };
+
+  App.cdbgDocsHtml = function(q, editable){
+    const docs = this.cdbgDocsFor(q.start);
+    const have = new Set(docs.map(d => d.doc_type));
+    const chips = REQUIRED_DOCS.map(t => `<span class="${have.has(t) ? 'ok' : 'miss'}">${have.has(t) ? '✓' : '•'} ${esc(t)}</span>`).join('');
+    let list = '', last = null;
+    DOC_TYPES.forEach(t => docs.filter(d => d.doc_type === t).forEach(d => {
+      if (t !== last){ list += `<div class="fdoc-type">${esc(t)}</div>`; last = t; }
+      list += `<div class="fdoc-file"><div><div class="fdoc-file-name">${esc(d.file_name)}</div><div class="fdoc-file-meta">${esc(this.fiscalFormatBytes(d.file_size))} · ${esc(d.uploaded_by || '—')} · ${esc(this.formatDateTime(d.uploaded_at))}</div></div>
+        <div class="client-actions"><button class="btn btn-ghost btn-sm" data-cdbg-open-doc="${esc(d.id)}">Open</button>${editable ? `<button class="btn btn-ghost btn-sm" data-cdbg-delete-doc="${esc(d.id)}">Delete</button>` : ''}</div></div>`;
+    }));
+    if (!list) list = '<div class="fdoc-empty">No CDBG backup uploaded for this quarter.</div>';
+    return `<div class="card"><div class="card-header"><div><h2 class="card-title">CDBG Backup · ${esc(q.label)}</h2>
+        <div class="field-hint">General Ledger, payroll register and timesheets are required for each quarter.</div></div>
+        <button class="btn btn-ghost btn-sm" id="cdbg-zip" ${docs.length ? '' : 'disabled'}>Download all (.zip)</button></div>
+      <div class="card-body"><div class="cdbg-req">${chips}</div>
+        ${editable ? `<div class="fdoc-drop" id="cdbg-drop"><div class="fdoc-drop-row">
+            <select class="field-select" id="cdbg-doc-type" aria-label="Document type">${DOC_TYPES.map(t => `<option ${!have.has(t) && REQUIRED_DOCS.includes(t) && t === REQUIRED_DOCS.find(x => !have.has(x)) ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
+            <input type="file" id="cdbg-doc-file" accept="${ACCEPT}" multiple aria-label="CDBG backup files">
+            <button type="button" class="btn btn-ghost btn-sm" id="cdbg-upload">Upload</button></div>
+          <div class="fdoc-drop-hint">Choose or drag files here · PDF, XLSX, XLS, CSV, PNG or JPG · up to 20 MB each</div></div>` : ''}
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">${list}</div>
+        <p class="fdoc-msg" id="cdbg-doc-msg"></p></div></div>`;
+  };
+
+  App.cdbgIssues = function(q){
+    const rows = this.cdbgRows(), qRows = q.months.map(m => rows.find(r => r.invoice_month === m.key));
+    const savedRows = (this.cdbg.charges || []).filter(c => this.dateOnly(c.quarter_start) === q.start);
+    const docs = new Set(this.cdbgDocsFor(q.start).map(d => d.doc_type));
+    const qTotal = qRows.reduce((s, r) => s + (r?.cdbg_total || 0), 0);
+    const unconfirmed = qRows.filter(r => r && r.cdbg_benefits > 0 && !r.benefits_excluded_from_standard);
+    const missingDocs = REQUIRED_DOCS.filter(t => !docs.has(t));
+    return [
+      { ok: savedRows.length >= q.months.length, label: `Payroll entered for ${savedRows.length} of ${q.months.length} months.` },
+      { ok: qTotal > 0, label: qTotal > 0 ? `CDBG charges this quarter: ${this.fiscalMoney(qTotal)}.` : 'No CDBG charges this quarter.' },
+      { ok: !unconfirmed.length, label: unconfirmed.length ? `Confirm benefits are off the standard invoice for ${unconfirmed.length} month${unconfirmed.length===1?'':'s'}.` : 'Benefits confirmations complete.' },
+      { ok: !missingDocs.length, label: missingDocs.length ? `Missing backup: ${missingDocs.join(', ')}.` : 'General Ledger, payroll register and timesheets uploaded.' }
+    ];
+  };
+
+  App.cdbgSubmitHtml = function(q, editable){
+    const sub = this.cdbgSub(q.start), status = this.cdbgStatusOf(q.start);
+    const log = (this.cdbg.log || []).filter(l => this.dateOnly(l.quarter_start) === q.start).slice(0, 6);
+    const logHtml = log.length ? `<div class="section-label" style="margin-top:14px">History</div>` + log.map(l =>
+      `<div class="cdbg-issue"><b>·</b><div><strong>${esc(({submitted:'Submitted',resubmitted:'Resubmitted',revision_requested:'Revisions requested',approved:'Approved'})[l.action] || l.action)}</strong> · ${esc(this.formatDateTime(l.created_at))} · ${esc(l.acted_by || '')}${l.note ? `<div class="field-hint">${esc(l.note)}</div>` : ''}</div></div>`).join('') : '';
+    const fyShort = String(this.fiscalBudgetYear || '').replace(/^FY\d{2}(\d{2})-(\d{2})$/, 'FY$2');
+    const defNo = sub?.invoice_number || `CDBG-${fyShort}-${q.label}`;
+
+    if (this.isAdmin()){
+      const canReview = ['submitted','resubmitted'].includes(status), canReturn = status === 'approved';
+      return `<div class="card"><div class="card-header"><div><h2 class="card-title">City Review · ${esc(q.label)}</h2>
+          <div class="field-hint">${sub ? `Invoice ${esc(sub.invoice_number || '—')} dated ${esc(this.formatDate(sub.invoice_date))} · certified by ${esc(sub.certified_by || '—')}` : 'Not yet submitted by the agency.'}</div></div>${this.fiscalStatusBadge(status)}</div>
+        <div class="card-body">${sub ? `<div class="cdbg-issue ok"><b>$</b><div>CDBG total <strong>${this.fiscalMoney(sub.cdbg_total)}</strong> (${this.fiscalMoney(sub.cdbg_salary_total)} salary · ${this.fiscalMoney(sub.cdbg_benefits_total)} benefits)</div></div>` : ''}
+          ${canReview || canReturn ? `<div class="field-group" style="margin-top:10px"><label class="field-label">Comment ${canReview ? '(required to request revisions)' : '(required)'}</label><textarea class="field-textarea" id="cdbg-review-note" style="min-height:70px"></textarea></div>
+            <div class="client-actions">${canReview ? '<button class="btn btn-primary" id="cdbg-approve">Approve</button>' : ''}<button class="btn btn-ghost" id="cdbg-return">Request revisions</button></div>` : ''}
+          ${logHtml}</div></div>`;
+    }
+
+    if (!editable){
+      return `<div class="card"><div class="card-header"><div><h2 class="card-title">Quarterly CDBG Invoice · ${esc(q.label)}</h2>
+          <div class="field-hint">${sub ? `Submitted ${esc(this.formatDateTime(sub.submitted_at))} by ${esc(sub.certified_by || sub.submitted_by || '—')}.` : 'Read only.'}</div></div>${this.fiscalStatusBadge(status)}</div>
+        <div class="card-body">${sub ? `<div class="cdbg-issue ok"><b>$</b><div>Invoice ${esc(sub.invoice_number || '—')} · ${this.fiscalMoney(sub.cdbg_total)}</div></div>` : ''}${logHtml}</div></div>`;
+    }
+
+    const issues = this.cdbgIssues(q), blocked = issues.some(i => !i.ok);
+    return `<div class="card"><div class="card-header"><div><h2 class="card-title">Submit Quarterly CDBG Invoice · ${esc(q.label)}</h2>
+        <div class="field-hint">Submit after the quarter ends, once all three months of payroll are entered.</div></div>${this.fiscalStatusBadge(status)}</div>
+      <div class="card-body">
+        ${issues.map(i => `<div class="cdbg-issue ${i.ok ? 'ok' : 'err'}"><b>${i.ok ? '✓' : '!'}</b><div>${esc(i.label)}</div></div>`).join('')}
+        <div class="form-row" style="margin-top:12px">
+          <div class="field-group"><label class="field-label">Invoice #</label><input class="field-input" id="cdbg-inv-no" value="${esc(defNo)}"></div>
+          <div class="field-group"><label class="field-label">Invoice Date</label><input class="field-input" id="cdbg-inv-date" type="date" value="${esc(sub?.invoice_date || this.localDate())}"></div></div>
+        <div class="field-group"><label class="field-label">Certified by (full name)</label><input class="field-input" id="cdbg-signer" value="${esc(sub?.certified_by || '')}" placeholder="Your name"></div>
+        <div class="cdbg-cert">${esc(CERT)}</div>
+        <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-bottom:10px"><input type="checkbox" id="cdbg-cert-check"> I certify the statement above.</label>
+        <button class="btn btn-primary" id="cdbg-submit" disabled data-blocked="${blocked ? '1' : ''}">${status === 'revision_requested' ? 'Resubmit' : 'Submit'} ${esc(q.label)} CDBG Invoice</button>
+        ${logHtml}</div></div>`;
+  };
+
+  App.cdbgYearHtml = function(qs){
+    const rows = this.cdbgRows();
+    const body = qs.map(q => {
+      const sub = this.cdbgSub(q.start), st = this.cdbgStatusOf(q.start);
+      const live = q.months.reduce((s, m) => s + (rows.find(r => r.invoice_month === m.key)?.cdbg_total || 0), 0);
+      return `<tr><td><button class="btn btn-ghost btn-sm" data-cdbg-goto="${q.start}">${esc(q.label)}</button> ${esc(q.range)}</td>
+        <td class="num">${this.fiscalMoney(sub ? sub.cdbg_total : live)}</td><td>${this.fiscalStatusBadge(st)}</td>
+        <td>${sub?.submitted_at ? esc(this.formatDate(sub.submitted_at)) : '—'}</td><td>${sub?.reviewed_at && st === 'approved' ? esc(this.formatDate(sub.reviewed_at)) : '—'}</td></tr>`;
+    }).join('');
+    return `<div class="card" style="margin-top:16px"><div class="card-header"><div><h2 class="card-title">${esc(this.fiscalYearLabel())} CDBG Invoices</h2><div class="field-hint">One invoice per quarter.</div></div></div>
+      <div class="card-body"><div class="client-table-wrap"><table class="client-table cdbg-table"><thead><tr><th>Quarter</th><th class="num">CDBG Amount</th><th>Status</th><th>Submitted</th><th>Approved</th></tr></thead><tbody>${body}</tbody></table></div></div></div>`;
+  };
+
+  /* ------------------------------------------------------- live recalculation */
+  App.cdbgRefreshLive = function(q){
+    const el = document.getElementById('view-cdbg'); if (!el) return;
+    const rows = this.cdbgRows(), budget = num(this.cdbg.settings?.budget_amount);
+    const charged = rows.reduce((s, r) => s + r.cdbg_total, 0);
+    let t = { sal:0, ben:0, cdbg:0, std:0 };
+    q.months.forEach(m => {
+      const r = rows.find(x => x.invoice_month === m.key); const tr = el.querySelector(`[data-cdbg-row="${m.key}"]`);
+      if (!r || !tr) return;
+      t.sal += r.salary_paid; t.ben += r.benefits_paid; t.cdbg += r.cdbg_total; t.std += r.standard_salary_allowed;
+      tr.querySelector('[data-cdbg-out="charge"]').textContent = this.fiscalMoney(r.cdbg_total);
+      tr.querySelector('[data-cdbg-out="split"]').innerHTML = r.cdbg_total ? `<div class="cdbg-split">${this.fiscalMoney(r.cdbg_salary)} salary${r.cdbg_benefits ? ` · ${this.fiscalMoney(r.cdbg_benefits)} benefits` : ''}</div>` : '';
+      tr.querySelector('[data-cdbg-out="std"]').textContent = this.fiscalMoney(r.standard_salary_allowed);
+      const hint = tr.querySelector('[data-cdbg-out="boxhint"]'); if (hint) hint.textContent = r.cdbg_benefits > 0 && !r.benefits_excluded_from_standard ? 'Required: CDBG covers benefits this month' : '';
+    });
+    const set = (id, v) => { const x = document.getElementById(id); if (x) x.textContent = this.fiscalMoney(v); };
+    set('cdbg-t-sal', t.sal); set('cdbg-t-ben', t.ben); set('cdbg-t-cdbg', t.cdbg); set('cdbg-t-std', t.std);
+    set('cdbg-kpi-charged', charged); set('cdbg-kpi-remaining', Math.max(0, budget - charged)); set('cdbg-kpi-quarter', t.cdbg);
+    const bar = document.getElementById('cdbg-kpi-bar'); if (bar) bar.style.width = (budget ? Math.min(100, Math.round(charged / budget * 100)) : 0) + '%';
+  };
+
+  /* ------------------------------------------------------------------ events */
+  App.bindCdbgEvents = function(q){
+    const el = document.getElementById('view-cdbg'); if (!el) return;
+    const leave = () => !this._cdbgDirty || window.confirm('Discard unsaved CDBG changes?');
+    el.querySelector('#cdbg-year')?.addEventListener('change', async e => {
+      if (!leave()){ e.target.value = this.fiscalBudgetYear; return; }
+      this._cdbgDirty = false; this.cdbgDraft = {}; this.cdbgQuarter = null;
+      await this.loadFiscalData(e.target.value); this.renderCdbg();
+    });
+    el.querySelector('#cdbg-quarter')?.addEventListener('change', e => {
+      if (!leave()){ e.target.value = q.start; return; }
+      this._cdbgDirty = false; this.cdbgDraft = {}; this.cdbgQuarter = e.target.value; this.renderCdbg();
+    });
+    el.querySelectorAll('[data-cdbg-goto]').forEach(b => b.addEventListener('click', () => {
+      if (!leave()) return; this._cdbgDirty = false; this.cdbgDraft = {}; this.cdbgQuarter = b.dataset.cdbgGoto; this.renderCdbg(); window.scrollTo(0, 0);
+    }));
+    el.querySelectorAll('[data-cdbg-field]').forEach(inp => {
+      const ev = inp.type === 'checkbox' ? 'change' : 'input';
+      inp.addEventListener(ev, () => {
+        const k = inp.dataset.cdbgMonth, f = inp.dataset.cdbgField;
+        const d = this.cdbgDraft[k] || (this.cdbgDraft[k] = {});
+        d[f] = inp.type === 'checkbox' ? inp.checked : (inp.type === 'number' ? (inp.value === '' ? null : Number(inp.value)) : inp.value);
+        this._cdbgDirty = true;
+        this.cdbgRefreshLive(q);
+      });
+    });
+    el.querySelector('#cdbg-save')?.addEventListener('click', () => this.saveCdbg(q));
+    el.querySelector('#cdbg-print')?.addEventListener('click', () => this.printCdbgInvoice(q));
+    el.querySelector('#cdbg-zip')?.addEventListener('click', () => this.downloadCdbgZip(q));
+    el.querySelector('#cdbg-upload')?.addEventListener('click', () => this.uploadCdbgDocs(q));
+    const zone = el.querySelector('#cdbg-drop');
+    if (zone){
+      zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('is-over'); });
+      zone.addEventListener('dragleave', () => zone.classList.remove('is-over'));
+      zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('is-over'); if (e.dataTransfer?.files?.length) this.uploadCdbgDocs(q, e.dataTransfer.files); });
+    }
+    el.querySelectorAll('[data-cdbg-open-doc]').forEach(b => b.addEventListener('click', () => this.openCdbgDoc(b.dataset.cdbgOpenDoc)));
+    el.querySelectorAll('[data-cdbg-delete-doc]').forEach(b => b.addEventListener('click', () => this.deleteCdbgDoc(b.dataset.cdbgDeleteDoc)));
+    const cert = el.querySelector('#cdbg-cert-check'), btn = el.querySelector('#cdbg-submit');
+    cert?.addEventListener('change', () => { if (btn) btn.disabled = !cert.checked || !!btn.dataset.blocked; });
+    btn?.addEventListener('click', () => this.submitCdbg(q));
+    el.querySelector('#cdbg-approve')?.addEventListener('click', () => this.reviewCdbg(q, 'approved'));
+    el.querySelector('#cdbg-return')?.addEventListener('click', () => this.reviewCdbg(q, 'revision_requested'));
+  };
+
+  /* ------------------------------------------------------------------ actions */
+  App.saveCdbg = async function(q, silent=false){
+    if (!this.cdbgCanEdit(q.start)){ this.toast('This CDBG quarter is locked.', {error:true}); return false; }
+    const pid = this.program.id, fy = this.fiscalBudgetYear, who = this.user?.email || '';
+    const saved = new Map((this.cdbg.charges || []).map(c => [this.dateOnly(c.invoice_month), c]));
+    const rows = Object.entries(this.cdbgDraft).filter(([k]) => q.months.some(m => m.key === k)).map(([k, d]) => {
+      const s = saved.get(k) || {}, pick = f => (f in d) ? d[f] : s[f];
+      return { program_id:pid, fiscal_year:fy, invoice_month:k,
+        employee_name:(pick('employee_name') || '').trim() || null,
+        hours_worked:pick('hours_worked') === null || pick('hours_worked') === undefined || pick('hours_worked') === '' ? null : num(pick('hours_worked')),
+        salary_paid:r2(pick('salary_paid')), benefits_paid:r2(pick('benefits_paid')),
+        benefits_excluded_from_standard:!!pick('benefits_excluded_from_standard'),
+        notes:pick('notes') || null, updated_by:who, updated_at:new Date().toISOString() };
+    });
+    const bad = rows.find(r => r.salary_paid < 0 || r.benefits_paid < 0);
+    if (bad){ this.toast('Amounts cannot be negative.', {error:true}); return false; }
+    if (rows.length){
+      const { error } = await this.sb.from('holloway_cdbg_months').upsert(rows, { onConflict:'program_id,fiscal_year,invoice_month' });
+      if (error){ this.toast('Could not save CDBG payroll: ' + error.message, {error:true}); return false; }
+    }
+    this.cdbgDraft = {}; this._cdbgDirty = false;
+    await this.loadCdbg(true);
+    if (!silent){ this.toast('CDBG payroll saved.'); this.renderCdbg(); }
+    return true;
+  };
+
+  App.uploadCdbgDocs = async function(q, fileList){
+    const msg = (t, k) => { const m = document.getElementById('cdbg-doc-msg'); if (m){ m.textContent = t || ''; m.className = 'fdoc-msg' + (k ? ' ' + k : ''); } };
+    if (!this.cdbgCanEdit(q.start)){ this.toast('This CDBG quarter is locked.', {error:true}); return; }
+    const files = [...(fileList || document.getElementById('cdbg-doc-file')?.files || [])];
+    if (!files.length){ msg('Choose at least one file to upload.', 'err'); return; }
+    const type = document.getElementById('cdbg-doc-type')?.value || 'Other Backup';
+    const bad = files.filter(f => !/\.(pdf|csv|xlsx|xls|png|jpe?g)$/i.test(f.name) || f.size > MAX_BYTES);
+    if (bad.length){ msg(`Not uploaded — must be PDF, XLSX, XLS, CSV, PNG or JPG under 20 MB: ${bad.map(f => f.name).join(', ')}`, 'err'); return; }
+    if (this._cdbgDirty && !(await this.saveCdbg(q, true))) return;
+    const pid = this.program.id, fy = this.fiscalBudgetYear, failed = [];
+    for (let i = 0; i < files.length; i++){
+      const f = files[i]; msg(`Uploading ${i+1} of ${files.length}: ${f.name}…`);
+      const path = `${pid}/${fy}/${q.start}/${Date.now()}_${i}_${f.name.replace(/[^a-zA-Z0-9._-]+/g, '_')}`;
+      const up = await this.sb.storage.from(BUCKET).upload(path, f, { upsert:false, contentType:f.type || undefined });
+      if (up.error){ failed.push(`${f.name} (${up.error.message})`); continue; }
+      const { error } = await this.sb.from('holloway_cdbg_documents').insert({ program_id:pid, fiscal_year:fy, quarter_start:q.start, doc_type:type,
+        file_name:f.name, file_size:f.size, mime_type:f.type || '', storage_path:path, uploaded_by:this.user?.email || '' });
+      if (error){ await this.sb.storage.from(BUCKET).remove([path]); failed.push(`${f.name} (${error.message})`); }
+    }
+    await this.loadCdbg(true); this.renderCdbg();
+    const done = files.length - failed.length;
+    if (failed.length) msg(`${done} of ${files.length} uploaded. Failed: ${failed.join('; ')}`, 'err');
+    else { msg(`${done} file${done===1?'':'s'} uploaded as ${type}.`, 'ok'); this.toast('CDBG backup uploaded.'); }
+  };
+
+  App.openCdbgDoc = async function(id){
+    const d = (this.cdbg.docs || []).find(x => String(x.id) === String(id)); if (!d) return;
+    const { data, error } = await this.sb.storage.from(BUCKET).createSignedUrl(d.storage_path, 3600);
+    if (error || !data?.signedUrl){ this.toast('Could not open the file: ' + (error?.message || 'no link'), {error:true}); return; }
+    window.open(data.signedUrl, '_blank', 'noopener');
+  };
+
+  App.deleteCdbgDoc = async function(id){
+    const d = (this.cdbg.docs || []).find(x => String(x.id) === String(id)); if (!d) return;
+    if (!window.confirm(`Delete ${d.file_name}?`)) return;
+    const { error } = await this.sb.from('holloway_cdbg_documents').delete().eq('id', d.id);
+    if (error){ this.toast('Could not delete: ' + error.message, {error:true}); return; }
+    await this.sb.storage.from(BUCKET).remove([d.storage_path]);
+    await this.loadCdbg(true); this.renderCdbg(); this.toast('File deleted.');
+  };
+
+  App.downloadCdbgZip = async function(q){
+    const docs = this.cdbgDocsFor(q.start); if (!docs.length) return;
+    const btn = document.getElementById('cdbg-zip'); if (btn){ btn.disabled = true; btn.textContent = 'Preparing…'; }
+    try {
+      const JSZip = await this.loadJSZip(); const zip = new JSZip(); const used = new Set();
+      const index = [['Folder','File','Document Type','Uploaded By','Uploaded At','Included']];
+      for (const d of docs){
+        const folder = `${String(DOC_TYPES.indexOf(d.doc_type)+1).padStart(2,'0')} ${d.doc_type}`;
+        let name = (d.file_name || 'file').replace(/[\\/:*?"<>|]+/g, '_'), n = 2, path = `${folder}/${name}`;
+        while (used.has(path.toLowerCase())){ const dot = name.lastIndexOf('.'); path = `${folder}/${dot > 0 ? name.slice(0,dot) + ` (${n})` + name.slice(dot) : name + ` (${n})`}`; n++; }
+        used.add(path.toLowerCase());
+        const { data, error } = await this.sb.storage.from(BUCKET).download(d.storage_path);
+        if (!error && data) zip.file(path, data);
+        index.push([folder, path.split('/').pop(), d.doc_type, d.uploaded_by || '', this.formatDateTime(d.uploaded_at), error || !data ? 'No — could not be retrieved' : 'Yes']);
+      }
+      zip.file('00 Document Index.csv', '﻿' + index.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\r\n'));
+      const blob = await zip.generateAsync({ type:'blob', compression:'DEFLATE' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = `${this.programName()} CDBG Backup ${this.cdbgQuarters().find(x => x.start === q.start)?.label || ''} ${this.fiscalBudgetYear}.zip`.replace(/[\\/:*?"<>|]+/g, '_');
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch(e){ this.toast('Could not build the zip: ' + (e?.message || e), {error:true}); }
+    finally { if (btn){ btn.disabled = false; btn.textContent = 'Download all (.zip)'; } }
+  };
+
+  App.submitCdbg = async function(q){
+    if (this._cdbgDirty && !(await this.saveCdbg(q, true))) return;
+    const no = document.getElementById('cdbg-inv-no')?.value?.trim(), date = document.getElementById('cdbg-inv-date')?.value, signer = document.getElementById('cdbg-signer')?.value?.trim();
+    if (!no || !date || !signer){ this.toast('Enter the invoice number, invoice date and your name.', {error:true}); return; }
+    const { error } = await this.sb.rpc('submit_holloway_cdbg_invoice', { p_program_id:this.program.id, p_fiscal_year:this.fiscalBudgetYear, p_quarter_start:q.start, p_invoice_number:no, p_invoice_date:date, p_signer_name:signer });
+    if (error){ this.toast(error.message, {error:true, duration:7000}); return; }
+    await this.loadCdbg(true); this.renderCdbg(); this.toast('Quarterly CDBG invoice submitted.');
+  };
+
+  App.reviewCdbg = async function(q, action){
+    const note = document.getElementById('cdbg-review-note')?.value?.trim() || null;
+    if (action === 'revision_requested' && !note){ this.toast('Add a comment explaining what needs to change.', {error:true}); return; }
+    const { error } = await this.sb.rpc('review_holloway_cdbg_invoice', { p_program_id:this.program.id, p_fiscal_year:this.fiscalBudgetYear, p_quarter_start:q.start, p_action:action, p_note:note });
+    if (error){ this.toast(error.message, {error:true, duration:7000}); return; }
+    await this.loadCdbg(true); this.renderCdbg(); this.toast(action === 'approved' ? 'CDBG invoice approved.' : 'Revisions requested.');
+  };
+
+  /* ------------------------------------------------------------------ print */
+  App.printCdbgInvoice = function(q){
+    if (this._cdbgDirty){ this.toast('Save the CDBG draft before printing.', {error:true}); return; }
+    const target = document.getElementById('print-report'); if (!target) return;
+    const set = this.cdbg.settings, sub = this.cdbgSub(q.start), status = this.cdbgStatusOf(q.start), rows = this.cdbgRows();
+    const qRows = q.months.map(m => ({ m, r: rows.find(r => r.invoice_month === m.key) }));
+    const tot = f => qRows.reduce((s, x) => s + (x.r?.[f] || 0), 0);
+    const budget = num(set.budget_amount), through = q.months[q.months.length-1].key;
+    const charged = this.cdbgChargedThrough(through), prior = charged - tot('cdbg_total');
+    const docs = this.cdbgDocsFor(q.start);
+    const money = v => this.fiscalMoney(v);
+    const statusLabel = ({draft:'Draft — not submitted',submitted:'Submitted',resubmitted:'Resubmitted',revision_requested:'Revisions requested',approved:'Approved by City'})[status] || status;
+    target.innerHTML = `
+      <div class="print-page-header"><strong>${esc(this.programName())}</strong> · ${esc(this.fiscalYearLabel())} · CDBG Invoice ${esc(q.label)}</div>
+      <div class="print-cover" style="page-break-after:auto">
+        <div class="print-brand">
+          <img class="print-logo" src="https://www.governmentjobs.com/AgencyPages/weho/agencyImages/download/weho_white_on_blue.jpg" alt="City of West Hollywood logo" />
+          <div class="print-title">${esc(this.programName())}</div>
+          <div style="font-size:13px;margin-top:4px;">CDBG Quarterly Invoice · ${esc(set.position_label)} · ${esc(q.label)}</div>
+          <div style="font-size:11px;color:#666;margin-top:6px;">City of West Hollywood · Human Services Division</div>
+        </div>
+        <div class="print-meta">
+          <strong>Service Period</strong><br>${esc(q.period)}<br><br>
+          <strong>Invoice #</strong><br>${esc(sub?.invoice_number || '—')}<br><br>
+          <strong>Invoice Date</strong><br>${esc(sub?.invoice_date ? this.formatDate(sub.invoice_date) : '—')}<br><br>
+          <strong>Account</strong><br>${esc(set.account_number || '—')}<br><br>
+          <strong>Status</strong><br>${esc(statusLabel)}
+        </div>
+      </div>
+      <div class="print-section print-first"><h2>Charges by Month</h2>
+        <table class="print-table"><thead><tr><th>Month</th><th>Employee</th><th style="text-align:right">Hours</th><th style="text-align:right">Salary Paid</th><th style="text-align:right">Benefits Paid</th><th style="text-align:right">CDBG Salary</th><th style="text-align:right">CDBG Benefits</th><th style="text-align:right">CDBG Total</th></tr></thead>
+        <tbody>${qRows.map(({m, r}) => `<tr><td>${esc(m.label)}</td><td>${esc(r?.employee_name || '—')}</td><td style="text-align:right">${esc(r?.hours_worked ?? '—')}</td><td style="text-align:right">${money(r?.salary_paid || 0)}</td><td style="text-align:right">${money(r?.benefits_paid || 0)}</td><td style="text-align:right">${money(r?.cdbg_salary || 0)}</td><td style="text-align:right">${money(r?.cdbg_benefits || 0)}</td><td style="text-align:right"><strong>${money(r?.cdbg_total || 0)}</strong></td></tr>`).join('')}
+          <tr><td colspan="3"><strong>Total this invoice</strong></td><td style="text-align:right"><strong>${money(tot('salary_paid'))}</strong></td><td style="text-align:right"><strong>${money(tot('benefits_paid'))}</strong></td><td style="text-align:right"><strong>${money(tot('cdbg_salary'))}</strong></td><td style="text-align:right"><strong>${money(tot('cdbg_benefits'))}</strong></td><td style="text-align:right"><strong>${money(tot('cdbg_total'))}</strong></td></tr></tbody></table></div>
+      <div class="print-section" style="page-break-before:auto"><h2>CDBG Budget Status</h2>
+        <table class="print-table"><tbody>
+          <tr><td style="width:50%">CDBG budget (${esc(this.fiscalYearLabel())})</td><td style="text-align:right">${money(budget)}</td></tr>
+          <tr><td>Charged in prior quarters</td><td style="text-align:right">${money(prior)}</td></tr>
+          <tr><td>This invoice</td><td style="text-align:right">${money(tot('cdbg_total'))}</td></tr>
+          <tr><td><strong>Charged through ${esc(q.months[q.months.length-1].label)}</strong></td><td style="text-align:right"><strong>${money(charged)}</strong></td></tr>
+          <tr><td><strong>Remaining CDBG balance</strong></td><td style="text-align:right"><strong>${money(Math.max(0, budget - charged))}</strong></td></tr>
+        </tbody></table>
+        <p style="font-size:11px;color:#555;margin-top:8px">${esc(set.position_label)} salary and benefits are charged to CDBG first. Amounts not covered by CDBG are billed on the standard monthly invoice.</p></div>
+      <div class="print-section" style="page-break-before:auto"><h2>Supporting Documentation</h2>
+        <table class="print-table"><thead><tr><th>Type</th><th>File</th><th>Uploaded By</th><th>Uploaded</th></tr></thead><tbody>
+          ${docs.length ? docs.map(d => `<tr><td>${esc(d.doc_type)}</td><td>${esc(d.file_name)}</td><td>${esc(d.uploaded_by || '—')}</td><td>${esc(this.formatDate(d.uploaded_at))}</td></tr>`).join('') : '<tr><td colspan="4">No backup uploaded.</td></tr>'}
+        </tbody></table></div>
+      <div class="print-section" style="page-break-before:auto"><h2>Certification</h2>
+        <p style="font-size:12px">${esc(sub?.certification_text || CERT)}</p>
+        <table class="print-table"><tbody>
+          <tr><td style="width:34%">Certified by</td><td>${esc(sub?.certified_by || '')}</td></tr>
+          <tr><td>Submitted</td><td>${sub?.submitted_at ? esc(this.formatDateTime(sub.submitted_at)) : 'Not yet submitted'}</td></tr>
+          ${sub?.status === 'approved' ? `<tr><td>Approved by City</td><td>${esc(this.formatDateTime(sub.reviewed_at))}</td></tr>` : ''}
+        </tbody></table></div>`;
+    window.print();
+  };
+
+  /* --------------------------------------- standard invoice: CDBG first check */
+  App.cdbgStandardCheck = function(month){
+    const set = this.cdbg?.settings;
+    if (!set || this.cdbg.key !== this.cdbgKey()) return null;
+    const key = this.dateOnly(month);
+    const std = (this.fiscal?.actuals || []).filter(a => a.line_code === set.salary_line_code && this.dateOnly(a.invoice_month) === key).reduce((s, a) => s + num(a.amount), 0);
+    const row = this.cdbgRowFor(key);
+    const usedBefore = this.cdbgRows().filter(r => r.invoice_month < key).reduce((s, r) => s + r.cdbg_total, 0);
+    const left = Math.max(0, num(set.budget_amount) - usedBefore);
+    const label = `CDBG first (${set.position_label})`;
+    if (std <= 0.005){
+      return { label, severity:'ok', detail: row ? `${this.fiscalMoney(row.cdbg_total)} charged to CDBG this month; no ${set.position_label} salary on this invoice.` : `No ${set.position_label} salary on this invoice.`, fix:'No action needed.' };
+    }
+    if (row){
+      const over = std > row.standard_salary_allowed + 0.005;
+      return { label, severity: over ? 'error' : 'ok',
+        detail: `${this.fiscalMoney(std)} ${set.position_label} salary on this invoice · ${this.fiscalMoney(row.standard_salary_allowed)} allowed after ${this.fiscalMoney(row.cdbg_salary)} CDBG salary.`,
+        fix: over ? `Reduce the ${set.position_label} salary to ${this.fiscalMoney(row.standard_salary_allowed)} or less. The rest is billed on the CDBG invoice.` : 'No action needed.' };
+    }
+    return { label, severity: left > 0.005 ? 'error' : 'ok',
+      detail: left > 0.005 ? `${this.fiscalMoney(std)} ${set.position_label} salary on this invoice, but CDBG still has ${this.fiscalMoney(left)} available and this month's payroll isn't in the CDBG section.` : `CDBG budget is fully charged; ${this.fiscalMoney(std)} ${set.position_label} salary may be billed here.`,
+      fix: left > 0.005 ? `Enter this month's ${set.position_label} payroll in the CDBG section first.` : 'No action needed.' };
+  };
+
+  const baseChecks = App.fiscalReconciliationChecks;
+  App.fiscalReconciliationChecks = function(month=this.resolveFiscalMonth()){
+    const checks = baseChecks.call(this, month);
+    const c = this.cdbgStandardCheck(month); if (c) checks.push(c);
+    return checks;
+  };
+
+  // Load CDBG data before the standard invoice screens draw, so the check above
+  // has it. Programs without CDBG load one empty settings query.
+  const baseRender = App.renderFiscal;
+  App.renderFiscal = async function(){
+    if (this.program?.id && this.cdbg.key !== this.cdbgKey()){ try { await this.loadCdbg(); } catch(_) {} }
+    return baseRender.call(this);
+  };
+
+  /* ---------------------------------------------------- City review queue */
+  const baseAdminReview = App.renderAdminReview;
+  App.renderAdminReview = function(){
+    baseAdminReview.call(this);
+    if (!this.isAdmin() || !this.program?.id) return;
+    const pid = this.program.id;
+    this.sb.from('holloway_cdbg_submissions').select('*').eq('program_id', pid).in('status', ['submitted','resubmitted']).order('submitted_at').then(({ data }) => {
+      const el = document.getElementById('view-admin-review'); if (!el || !data?.length || el.querySelector('#cdbg-review-card')) return;
+      const qLabel = s => { const m = Number(String(s.quarter_start).slice(5,7)); return `Q${((Math.floor((m-1)/3) + 2) % 4) + 1}`; };
+      const card = document.createElement('div'); card.className = 'card'; card.id = 'cdbg-review-card'; card.style.marginBottom = '18px';
+      card.innerHTML = `<div class="card-header"><div><h2 class="card-title">CDBG invoices</h2><div class="field-hint">Quarterly CDBG invoices waiting for City review.</div></div></div>
+        <div class="card-body"><div class="client-table-wrap"><table class="client-table"><thead><tr><th>Quarter</th><th style="text-align:right">CDBG Amount</th><th>Status</th><th>Submitted</th><th></th></tr></thead><tbody>
+        ${data.map(s => `<tr><td><strong>${esc(qLabel(s))}</strong> · ${esc(String(s.fiscal_year).replace(/^FY/,'FY '))}<div class="field-hint">Invoice ${esc(s.invoice_number || '—')}</div></td><td style="text-align:right">${this.fiscalMoney(s.cdbg_total)}</td><td>${this.fiscalStatusBadge(s.status)}</td><td>${esc(this.formatDateTime(s.submitted_at))}</td><td style="text-align:right"><button class="btn btn-primary btn-sm" data-cdbg-review="${esc(s.fiscal_year)}|${esc(s.quarter_start)}">Review</button></td></tr>`).join('')}
+        </tbody></table></div></div>`;
+      const header = el.querySelector('.page-header'); if (header) header.after(card); else el.prepend(card);
+      card.querySelectorAll('[data-cdbg-review]').forEach(b => b.addEventListener('click', async () => {
+        const [fy, qs] = b.dataset.cdbgReview.split('|');
+        if (this.fiscalBudgetYear !== fy) await this.loadFiscalData(fy);
+        this.cdbgQuarter = qs; this.cdbgDraft = {}; this._cdbgDirty = false; this.showView('cdbg');
+      }));
+    });
+  };
+})();
+
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 </body>
