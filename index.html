@@ -6375,6 +6375,10 @@ const App = {
     const existing=(this.data.housingFollowUps||[]).find(f=>f.client_id===cur.clientId && f.followup_type===cur.type)||{};
     const payload={ id: existing.id || (crypto.randomUUID?crypto.randomUUID():'fu_'+Date.now()), program_id:this.program.id, fiscal_year:this.fiscalYear, client_id:cur.clientId, followup_type:cur.type, due_date:document.getElementById('fu-due').value||null, completed_date:document.getElementById('fu-completed').value||null, housing_status:document.getElementById('fu-status').value||null, stable_at_followup:document.getElementById('fu-stable').value||null, contact_method:document.getElementById('fu-method').value||null, notes:document.getElementById('fu-notes').value.trim()||null, status:'completed', updated_by:this.user?.email||null, updated_at:new Date().toISOString() };
     if(!payload.housing_status){ document.getElementById('followup-save-state').textContent='Housing status is required.'; return; }
+    // 6- and 12-month checks measure housing at that point after exit, so they cannot be completed before they are due.
+    const fuMonths={'6-month':6,'12-month':12}[cur.type];
+    const fuEarliest=fuMonths&&c.exit_date?this.addMonthsDate(this.dateOnly(c.exit_date),fuMonths):null;
+    if(fuEarliest&&payload.completed_date&&payload.completed_date<fuEarliest){ document.getElementById('followup-save-state').textContent=`This ${cur.type} follow-up is not due until ${this.formatDate(fuEarliest)}. Log earlier contact as a case note.`; return; }
     const {error}=await this.sb.from('holloway_housing_followups').upsert(payload,{onConflict:'id'});
     if(error){ document.getElementById('followup-save-state').textContent='Save failed: '+error.message; return; }
     document.getElementById('followup-save-state').textContent='Saved.'; await this.loadAll(); this.closeForm('followup'); this.showView('housing-followups');
