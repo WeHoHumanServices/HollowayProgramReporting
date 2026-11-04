@@ -2118,6 +2118,10 @@ const CONFIG = {
   // bare percentage. Source: ANNUAL_GOALS phExitsAnnual description.
   PH_RATE_TARGET: 30,
 
+  // Annual permanent housing placement goal. A fixed number: it does not move
+  // with enrollment. The 30% rate above is reported separately.
+  PH_PLACEMENT_GOAL: 12,
+
   /* BENCHMARKS — what "good" means for each headline metric.
    *
    *   contract   the figure the City actually holds this agency to. This and
@@ -2250,7 +2254,7 @@ const CONFIG = {
   },
 
   ANNUAL_GOALS: [
-    { key:'phExitsAnnual',      label:'Permanent Housing Exits',      desc:'Progress toward a 30% permanent housing exit benchmark for people served YTD, capped at 12 placements for the year.', target:null, unit:' exits' },
+    { key:'phExitsAnnual',      label:'Permanent Housing Exits',      desc:'Permanent housing placements this contract year, measured against the fixed annual goal of 12.', target:null, unit:' exits' },
     { key:'suppServicesAnnual', label:'Supportive Services Engagement', desc:'Quarterly count of participants engaged in supportive services.',                target:null, unit:' people' },
     { key:'incomeAnnual',       label:'Income / Benefits Stability',    desc:'Participants who increased or maintained income/benefits this quarter.',         target:null, unit:' people' },
     { key:'occupancyAnnual',    label:'Occupancy / Utilization',        desc:'Bed nights occupied compared with available bed nights YTD.',                    target:null, unit:' bed nights' },
@@ -7875,12 +7879,10 @@ const App = {
   // ---- Income visibility -------------------------------------------------
   App.annualGoals = function(q){
     const s = this.reportScope(q);
-    const persons = this.calcPersonsYtd(q) || 0;
-    const phBenchmark = Math.min(12, Math.max(1, Math.round(persons * 0.30)));
     const bedAvail = this.calcScopeYtd(q, 'bedNightsAvail') || 0;
     const bedOcc = this.calcScopeYtd(q, 'bedNightsOcc') || 0;
     const dynamic = {
-      phExitsAnnual:      { actual: this.calcScopeYtd(q,'phExits') || 0, target: phBenchmark },
+      phExitsAnnual:      { actual: this.calcScopeYtd(q,'phExits') || 0, target: CONFIG.PH_PLACEMENT_GOAL },
       suppServicesAnnual: { actual: Number(s.suppServicesEngaged || 0), target: Math.max(1, Number(s.residentsServed || s.activeResidents || 0)) },
       incomeAnnual:       { actual: Number(s.incomeIncrease || 0) + Number(s.incomeMaintained || 0), target: Math.max(1, Number(s.residentsServed || s.activeResidents || 0)) },
       occupancyAnnual:    { actual: bedOcc, target: Math.max(1, bedAvail) },
@@ -9372,7 +9374,7 @@ const App = {
   // Which of the derived goals are cumulative for the contract year, and
   // which the portal computes on the current quarter only.
   const GOAL_BASIS = {
-    phExitsAnnual:      'Year to date · benchmark 30% of persons served, capped at 12',
+    phExitsAnnual:      'Year to date · fixed annual goal of 12 placements',
     occupancyAnnual:    'Year to date · bed nights occupied of available',
     suppServicesAnnual: 'This quarter · participants engaged of residents served',
     incomeAnnual:       'This quarter · increased or maintained, of residents served',
@@ -10557,7 +10559,7 @@ const App = {
     },
     performance(app){
       const through=this.throughDate(app), served=this.ytdClients(app).length, housing=this.housing(app), occ=this.occupancy(app), ret=this.retention(app);
-      const phTarget=Math.min(12,Math.max(1,Math.round(served*.30)));
+      const phTarget=CONFIG.PH_PLACEMENT_GOAL;
       const current=(app.data.clients||[]).filter(c=>app.clientStatus(c,through)==='Active').length;
       return {through,served,housing,occ,ret,phTarget,current,capacity:app.bedCapacity()};
     }
@@ -10595,7 +10597,7 @@ const App = {
     const servicesActual=Number(s.suppServicesEngaged||0), servicesTarget=Math.max(1,Number(s.residentsServed||s.activeResidents||0));
     const incomeActual=Number(s.incomeIncrease||0)+Number(s.incomeMaintained||0), incomeTarget=Math.max(1,Number(s.residentsServed||s.activeResidents||0));
     const goals=[
-      {name:'Permanent Housing Placements',basis:'Year to date · 30% of people served, capped at 12',actual:p.housing.permanent.length,target:p.phTarget,display:`${p.housing.permanent.length} of ${p.phTarget}`},
+      {name:'Permanent Housing Placements',basis:'Year to date · fixed annual goal of 12 placements',actual:p.housing.permanent.length,target:p.phTarget,display:`${p.housing.permanent.length} of ${p.phTarget}`},
       {name:'Occupancy / Utilization',basis:'Year to date · bed nights occupied of available',actual:p.occ.occupied,target:p.occ.available,display:p.occ.rate==null?'—':p.occ.rate+'%'},
       {name:'Supportive Services Engagement',basis:`Current reporting quarter · ${q}`,actual:servicesActual,target:servicesTarget,display:`${servicesActual} of ${servicesTarget}`},
       {name:'Income / Benefits Stability',basis:`Current reporting quarter · ${q}`,actual:incomeActual,target:incomeTarget,display:`${incomeActual} of ${incomeTarget}`}
