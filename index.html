@@ -18245,6 +18245,546 @@ const App = {
   };
 })();
 
+(function(){
+  /* ==========================================================================
+     Year-End Archive — City admin only.
+
+     One .zip for a fiscal year (Jul–Jun) or a contract year (Oct–Sep) of the
+     program on screen:
+       1 Program               de-identified client, service and exit data;
+                               quarterly reports; submission log; HMIS roster
+                               uploads; monthly operating reports
+       2 Fiscal                monthly invoices; actuals, payments and funding
+                               ledgers; budget versions; CDBG and bed-night
+                               invoices
+       3 Backup Documentation  every invoice, CDBG and budget-modification file
+                               in storage for the period, including uploads
+                               missing from the documents tables
+
+     The two calendars do not line up, so the archive loads each contract year
+     and each fiscal year that overlaps the chosen period, takes the quarters
+     and months that fall inside it, and then restores the year that was on
+     screen. Reports and invoices come from the portal's own print views.
+
+     De-identified: client records are keyed by HMIS ID only. Names, case notes,
+     incident reports, referral attachments and free-text notes are left out.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+  const safe = s => String(s ?? '').replace(/[–—]/g, '-').replace(/#/g, '').replace(/[\\/:*?"<>|%]+/g, '_').replace(/\s+/g, ' ').trim() || 'file';
+  const inside = (s, e, r) => !!s && !!e && s >= r.start && e <= r.end;
+  const overlaps = (s, e, r) => !!s && !!e && s <= r.end && e >= r.start;
+  const monthLabel = key => new Date(String(key).slice(0,10) + 'T12:00:00').toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  const shortDate = d => new Date(String(d).slice(0,10) + 'T12:00:00').toLocaleDateString('en-US', { month:'short', year:'numeric' });
+
+  // Column labels and raw keys that could identify a client or carry free text.
+  const PII_COLUMN = /notes?\b|narrative|comment|client.?name|first.?name|last.?name|full.?name|date.?of.?birth|\bdob\b|ssn|social.?security|phone|e-?mail|street|mailing|home.?address/i;
+  const deidentify = rows => (rows || []).map(r => {
+    const out = {};
+    Object.keys(r || {}).forEach(k => { if (!PII_COLUMN.test(k)) out[k] = r[k]; });
+    return out;
+  });
+
+  const cellText = v => {
+    if (v instanceof Date) return isNaN(v) ? '' : v.toISOString().slice(0,10);
+    if (v == null) return '';
+    return typeof v === 'object' ? JSON.stringify(v) : String(v);
+  };
+  const toCsv = rows => {
+    if (!rows || !rows.length) return '';
+    const head = [...new Set(rows.flatMap(r => Object.keys(r)))];
+    const cell = v => { v = cellText(v); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+    return '﻿' + [head.map(cell).join(','), ...rows.map(r => head.map(k => cell(r[k])).join(','))].join('\r\n');
+  };
+  const addCsv = (folder, name, rows) => { if (rows && rows.length) folder.file(name, toCsv(rows)); return (rows || []).length; };
+
+  /* ----------------------------------------------------------- navigation */
+
+  (function addNav(){
+    const access = document.getElementById('nav-access');
+    if (!access || document.getElementById('nav-archive')) return;
+    access.insertAdjacentHTML('afterend',
+      `<div class="sidebar-item" id="nav-archive" data-view="archive" style="display:none;"><svg class="si-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/></svg>Year-End Archive</div>`);
+    const sec = document.createElement('section');
+    sec.id = 'view-archive'; sec.className = 'view-section';
+    (document.getElementById('view-access') || document.querySelector('.view-section:last-of-type'))?.after(sec);
+  })();
+
+  const baseSidebar = App.renderSidebarForRole;
+  App.renderSidebarForRole = function(){
+    baseSidebar.call(this);
+    const nav = document.getElementById('nav-archive');
+    if (nav) nav.style.display = this.isAdmin() ? 'flex' : 'none';
+  };
+
+  const baseShow = App.showView;
+  App.showView = function(view){
+    if (this._archiveBusy && view !== 'archive'){ this.toast('The archive is still being built. Wait for it to finish.', {error:true}); return; }
+    if (view === 'archive' && !this.isAdmin()){ baseShow.call(this, 'dashboard'); this.toast('City admin only.', {error:true}); return; }
+    baseShow.call(this, view);
+    if (view === 'archive') this.openArchive();
+  };
+
+  // Fiscal data loads when Invoices is first opened; the archive needs the fiscal year list.
+  App.openArchive = async function(){
+    const el = document.getElementById('view-archive');
+    if (this.isAdmin() && this.programHas?.('has_fiscal') && this.canViewFiscal?.() && !(this.fiscal?.years || []).length){
+      if (el) el.innerHTML = '<div class="notice navy"><div>i</div><div>Loading fiscal years…</div></div>';
+      try { await this.loadFiscalData(); } catch (e){ console.warn('archive fiscal load', e); }
+    }
+    if (this.view === 'archive') this.renderArchive();
+  };
+
+  /* ------------------------------------------------------------ the page */
+
+  App.archiveBasis = 'fiscal';
+
+  App.archiveYearOptions = function(basis = this.archiveBasis){
+    if (basis === 'contract'){
+      return (this.contractPeriods || []).map(p => ({ key:p.fiscalYear, label:p.label, start:p.start, end:p.end }));
+    }
+    return (this.fiscal?.years || []).map(y => ({
+      key:y.fiscal_year, label:y.budget_label || y.fiscal_year,
+      start:this.dateOnly(y.start_date), end:this.dateOnly(y.end_date)
+    }));
+  };
+
+  App.archiveFiscalAvailable = function(){ return !!(this.programHas?.('has_fiscal') && this.canViewFiscal?.() && (this.fiscal?.years || []).length); };
+
+  App.renderArchive = function(){
+    const el = document.getElementById('view-archive');
+    if (!el) return;
+    if (!this.isAdmin()){ el.innerHTML = '<div class="notice red">City admin only.</div>'; return; }
+    if (!this.archiveFiscalAvailable()) this.archiveBasis = 'contract';
+    const opts = this.archiveYearOptions();
+    const current = this.archiveBasis === 'contract' ? this.fiscalYear : this.fiscalBudgetYear;
+    if (!opts.some(o => o.key === this.archiveYear)) this.archiveYear = (opts.find(o => o.key === current) || opts[opts.length-1] || {}).key;
+    const sel = opts.find(o => o.key === this.archiveYear);
+    const range = sel ? `${shortDate(sel.start)} – ${shortDate(sel.end)}` : '';
+    const fiscalOk = this.archiveFiscalAvailable();
+
+    el.innerHTML = `
+      <div class="page-header">
+        <div><h1 class="page-title">Year-End Archive</h1>
+          <div class="page-subtitle">${esc(this.programName())} · One download with the year's program reports, fiscal records and backup documentation.</div></div>
+      </div>
+      <div class="card"><div class="card-header"><div><h2 class="card-title">Download archive (.zip)</h2>
+        <div class="field-hint">Program reports follow the contract year (Oct–Sep). Invoices, budget, payments and CDBG follow the fiscal year (Jul–Jun). Choose which calendar the archive follows; it includes the quarters and months that fall inside that year.</div></div></div>
+        <div class="card-body">
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+            <label><div class="field-label">Year basis</div>
+              <select class="field-select" id="archive-basis" style="min-width:220px">
+                <option value="fiscal" ${this.archiveBasis==='fiscal'?'selected':''} ${fiscalOk?'':'disabled'}>Fiscal year (Jul–Jun)</option>
+                <option value="contract" ${this.archiveBasis==='contract'?'selected':''}>Contract year (Oct–Sep)</option>
+              </select></label>
+            <label><div class="field-label">Year</div>
+              <select class="field-select" id="archive-year" style="min-width:220px">
+                ${opts.map(o => `<option value="${esc(o.key)}" ${o.key===this.archiveYear?'selected':''}>${esc(o.label)}</option>`).join('') || '<option value="">No years set up</option>'}
+              </select></label>
+            <button class="btn btn-gold" id="btn-archive" ${sel ? '' : 'disabled'}>Download archive</button>
+          </div>
+          ${sel ? `<div class="field-hint" style="margin-bottom:12px">Covers <strong>${esc(range)}</strong>. Only quarters and months that have started are included.</div>` : ''}
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+            <div class="fdoc-panel" style="padding:12px 14px"><div class="fdoc-panel-title">1 Program</div><div class="fdoc-panel-sub">Client, service and exit data by HMIS ID · quarterly reports · submission log · HMIS rosters · monthly operating reports</div></div>
+            <div class="fdoc-panel" style="padding:12px 14px"><div class="fdoc-panel-title">2 Fiscal</div><div class="fdoc-panel-sub">Monthly invoices · actuals, payments and funding plan · budget versions · CDBG and bed-night invoices</div></div>
+            <div class="fdoc-panel" style="padding:12px 14px"><div class="fdoc-panel-title">3 Backup Documentation</div><div class="fdoc-panel-sub">Invoice, CDBG and budget-modification files, including uploads missing from the portal's document list</div></div>
+          </div>
+          <div class="field-hint" style="margin-top:12px">De-identified: clients appear by HMIS ID only. Names, case notes, incident reports, referral attachments and free-text notes are not included.</div>
+          <p class="fdoc-msg" id="archive-msg" style="margin-top:12px"></p>
+        </div></div>`;
+
+    el.querySelector('#archive-basis')?.addEventListener('change', e => { this.archiveBasis = e.target.value; this.archiveYear = null; this.renderArchive(); });
+    el.querySelector('#archive-year')?.addEventListener('change', e => { this.archiveYear = e.target.value; this.renderArchive(); });
+    el.querySelector('#btn-archive')?.addEventListener('click', () => this.buildArchive());
+  };
+
+  App.archiveMsg = function(text, kind){
+    const m = document.getElementById('archive-msg');
+    if (m){ m.textContent = text || ''; m.className = 'fdoc-msg' + (kind ? ' ' + kind : ''); }
+  };
+
+  /* ------------------------------------------------- capture print views */
+
+  // The portal's print functions write into #print-report (or a pop-up) and
+  // call window.print(). Run one with printing stubbed and keep the HTML.
+  App.archiveCapture = function(fn){
+    const target = document.getElementById('print-report');
+    const prev = target ? target.innerHTML : '';
+    const origPrint = window.print, origOpen = window.open, origAs = this.printAs;
+    let popup = '';
+    window.print = () => {};
+    window.open = () => ({ document:{ write:h => { popup += h; }, close(){} }, focus(){}, print(){}, close(){} });
+    this.printAs = () => {};
+    try { fn(); return popup || (target ? target.innerHTML : ''); }
+    finally { window.print = origPrint; window.open = origOpen; this.printAs = origAs; if (target) target.innerHTML = prev; }
+  };
+
+  // A standalone page that looks the way the print view prints.
+  App.archivePage = function(title, body){
+    if (/^\s*<!doctype/i.test(body)) return body;
+    const css = [...document.querySelectorAll('style')].map(s => s.outerHTML.replace(/@media\s+print/g, '@media all')).join('\n');
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>${css}<style>body{background:#fff;margin:0}.print-report{display:block!important;max-width:1100px;margin:0 auto}</style></head><body><div class="print-report">${body}</div></body></html>`;
+  };
+
+  /* ------------------------------------------------------------- storage */
+
+  App.archiveListFiles = async function(bucket, prefix){
+    const out = [];
+    for (let offset = 0; ; offset += 1000){
+      const { data, error } = await this.sb.storage.from(bucket).list(prefix, { limit:1000, offset, sortBy:{ column:'name', order:'asc' } });
+      if (error) throw error;
+      for (const e of data || []){
+        if (e.name === '.emptyFolderPlaceholder') continue;
+        const path = `${prefix}/${e.name}`;
+        if (e.id === null) out.push(...await this.archiveListFiles(bucket, path));
+        else out.push({ path, size:e.metadata?.size, created_at:e.created_at });
+      }
+      if (!data || data.length < 1000) break;
+    }
+    return out;
+  };
+
+  /* --------------------------------------------------------------- build */
+
+  App.buildArchive = async function(){
+    if (!this.isAdmin()){ this.toast('City admin only.', {error:true}); return; }
+    if (this._archiveBusy) return;
+    if (this._fiscalDirty || this._cdbgDirty || this.dirty?.quarterly || this.dirty?.roster || this.dirty?.exits){
+      this.archiveMsg('Save or discard unsaved changes first. Building the archive reloads each year.', 'err'); return;
+    }
+    const sel = this.archiveYearOptions().find(o => o.key === this.archiveYear);
+    if (!sel){ this.archiveMsg('Choose a year.', 'err'); return; }
+
+    const btn = document.getElementById('btn-archive');
+    const status = t => { this.archiveMsg(t); if (btn) btn.textContent = 'Building…'; };
+    if (btn) btn.disabled = true;
+    this._archiveBusy = true;
+
+    const range = { start:sel.start, end:sel.end };
+    const today = this.localDate();
+    const pid = this.program.id;
+    const basisLabel = this.archiveBasis === 'contract' ? 'Contract Year' : 'Fiscal Year';
+    const saved = {
+      period:this.contractPeriod, fiscalYear:this.fiscalBudgetYear, fiscalMonth:this.fiscalMonth,
+      cdbgQuarter:this.cdbgQuarter, cdbgDraft:this.cdbgDraft, ffsMonth:this._ffsMonth, rosterPage:this.rosterPage, quarter:this.currentQuarter
+    };
+    const summary = [], missing = [], notes = [];
+    let zipped = false;
+    // Read-only: reloading a year would otherwise create any missing quarterly bundles.
+    const baseEnsureBundles = this.ensureBundlesExist;
+    this.ensureBundlesExist = async () => {};
+
+    try {
+      status('Loading zip library…');
+      const JSZip = await this.loadJSZip();
+      const rootName = safe(`${this.programName()} - ${sel.label} ${basisLabel} - exported ${today}`);
+      const zip = new JSZip(), root = zip.folder(rootName);
+      const program = root.folder('1 Program'), fiscal = root.folder('2 Fiscal'), backup = root.folder('3 Backup Documentation');
+      const backupIndex = [];
+      const usedPaths = new Set();
+      const addFile = async (bucket, storagePath, folder, name, meta) => {
+        const row = { ...meta, file_name:name, storage_path:storagePath, included_in_archive:'No', archive_file:'' };
+        backupIndex.push(row);
+        const { data, error } = await this.sb.storage.from(bucket).download(storagePath);
+        if (error || !data){ missing.push(`${name} (${meta.section}) - ${error?.message || 'not found'}`); return false; }
+        let base = safe(name), path = `${folder}/${base}`, n = 2;
+        const dot = base.lastIndexOf('.');
+        while (usedPaths.has(path.toLowerCase())){ path = `${folder}/${dot > 0 ? `${base.slice(0,dot)} (${n})${base.slice(dot)}` : `${base} (${n})`}`; n++; }
+        usedPaths.add(path.toLowerCase());
+        backup.file(path, data);
+        row.included_in_archive = 'Yes'; row.archive_file = path;
+        return true;
+      };
+      const originalName = p => String(p).split('/').pop().replace(/^\d{10,}(_\d+)?[_-]/, '');
+
+      /* ---------------- program: each contract year overlapping the range */
+      const periods = (this.contractPeriods || []).filter(p => overlaps(p.start, p.end, range));
+      const clients = new Map(), services = new Map();
+      const exits = [], followUps = [], metrics = [], demographics = [], submissions = [];
+      let quarterCount = 0, rosterCount = 0, monthlyCount = 0;
+      const reportsFolder = program.folder('Quarterly Reports');
+
+      for (const p of periods){
+        status(`Loading ${p.label} program data…`);
+        this.applyContractPeriod(p);
+        this.rosterPage = 0;
+        await this.loadAll();
+        const qs = Object.entries(this.quarters || {}).filter(([, q]) => inside(q.start, q.end, range) && q.start <= today);
+        const qKeys = new Set(qs.map(([k]) => k));
+
+        // De-identified client data: built with the portal's own export rows.
+        const keep = this.data.clients || [], keepServices = this.data.clientServices || [];
+        try {
+          this.data.clients = keep.filter(c => overlaps(this.dateOnly(c.entry_date) || this.dateOnly(c.created_at) || range.start, this.dateOnly(c.exit_date) || '9999-12-31', range));
+          const ids = this.data.clients.map(c => c.id);
+          this.buildClientExportRows().forEach((r, i) => clients.set(ids[i], r));
+          this.data.clientServices = keepServices.filter(s => { const d = this.dateOnly(s.service_date); return d && d >= range.start && d <= range.end; });
+          this.data.clients = keep;
+          this.buildServiceExportRows().forEach((r, i) => services.set(this.data.clientServices[i].id || `${p.fiscalYear}-${i}`, r));
+        } finally { this.data.clients = keep; this.data.clientServices = keepServices; }
+
+        (this.data.exits || []).filter(e => qKeys.has(e.quarter)).forEach(e => exits.push({ 'Contract Year':p.label, Quarter:e.quarter, 'Exit #':e.exit_number,
+          'HMIS ID':e.client_id || '', 'Exit Type':e.exit_type || '', 'Voluntary / Involuntary':e.voluntary_involuntary || '', 'Reason for Exit':e.reason_for_exit || '',
+          'Interim Program':e.interim_program_name || '', 'Submitted At':e.submitted_at || '' }));
+        if (this.buildFollowUpExportRows){
+          try {
+            this.buildFollowUpExportRows().forEach(r => {
+              const due = r['Due Date'] instanceof Date ? r['Due Date'].toISOString().slice(0,10) : this.dateOnly(r['Due Date']);
+              if (due && due >= range.start && due <= range.end) followUps.push({ 'Contract Year':p.label, ...r });
+            });
+          } catch (e){ notes.push(`Housing follow-ups for ${p.label} could not be exported (${e.message || e}).`); }
+        }
+        this.buildQuarterlyMetricExportRows().filter(r => qKeys.has(r.Quarter)).forEach(r => metrics.push(r));
+        try { this.buildDemographicExportRows().filter(r => qKeys.has(r.Quarter)).forEach(r => demographics.push(r)); } catch (_){}
+
+        for (const [q, spec] of qs){
+          status(`Rendering ${p.label} ${q} quarterly report…`);
+          quarterCount++;
+          const html = this.archiveCapture(() => this.printReport(q));
+          reportsFolder.file(safe(`${p.fiscalYear} ${q} (${spec.period}).html`), this.archivePage(`${this.programName()} ${q} ${p.label} Quarterly Report`, html));
+          const b = this.data.bundles?.[q] || {};
+          submissions.push({ 'Contract Year':p.label, Quarter:q, Period:spec.period, 'Due Date':spec.due, 'Bundle Status':b.bundle_status || 'incomplete',
+            'City Review Status':b.city_review_status || '', 'Submitted At':b.submitted_at || '', 'Accepted At':b.accepted_at || '',
+            'Reviewed At':b.reviewed_at || '', 'Revision Count':b.revision_count ?? '', 'Resubmitted At':b.resubmitted_at || '' });
+
+          const r = this.data.rosters?.[q];
+          if (r?.file_path){
+            status(`Downloading ${p.label} ${q} HMIS roster…`);
+            if (await addFile('hmis-rosters', r.file_path, `HMIS Rosters/${safe(`${p.fiscalYear} ${q}`)}`, r.file_name || originalName(r.file_path),
+              { section:'HMIS Roster', period:`${p.fiscalYear} ${q}`, document_type:'HMIS Roster', uploaded_by:r.uploaded_by || '', uploaded_at:r.uploaded_at || '', registered_in_portal:'Yes' })) rosterCount++;
+          }
+        }
+        const log = (this.data.activity || []).filter(a => qKeys.has(a.quarter)).map(a => ({ 'Contract Year':p.label, Quarter:a.quarter, Status:a.status, 'Changed At':a.created_at }));
+        log.forEach(x => submissions.push({ ...x, 'Bundle Status':'(status change)' }));
+
+        // Monthly operating reports and bed-night invoices load across all years; take the months in range once.
+        if (p === periods[periods.length - 1]){
+          for (const m of (this.data.monthlyReports || []).filter(m => { const d = this.dateOnly(m.report_month); return d && d >= range.start && d <= range.end; })
+                                                         .sort((a,b) => String(a.report_month).localeCompare(String(b.report_month)))){
+            const key = this.dateOnly(m.report_month);
+            status(`Rendering ${monthLabel(key)} monthly operating report…`);
+            const html = this.archiveCapture(() => this.printMonthly(key));
+            program.folder('Monthly Operating Reports').file(safe(`${key.slice(0,7)} ${monthLabel(key)} Monthly Operating Report.html`),
+              this.archivePage(`${this.programName()} Monthly Operating Report ${monthLabel(key)}`, html));
+            monthlyCount++;
+          }
+          const ffs = (this.data.ffsInvoices || []).filter(f => { const d = this.dateOnly(f.invoice_month); return d && d >= range.start && d <= range.end; });
+          for (const f of ffs){
+            const key = this.dateOnly(f.invoice_month);
+            status(`Rendering ${monthLabel(key)} bed-night invoice…`);
+            this._ffsMonth = key;
+            const html = this.archiveCapture(() => this.printFfsInvoice());
+            fiscal.folder('Bed Night Invoices').file(safe(`${key.slice(0,7)} ${monthLabel(key)} Bed Night Invoice.html`), this.archivePage(`Bed Night Invoice ${monthLabel(key)}`, html));
+          }
+          this._ffsMonth = saved.ffsMonth;
+          if (ffs.length) summary.push(`${ffs.length} bed-night invoice(s)`);
+        }
+      }
+      if (!periods.length) notes.push('No contract year in the portal overlaps this period, so there are no quarterly reports or client records.');
+
+      const clientRows = deidentify([...clients.values()]), serviceRows = deidentify([...services.values()]);
+      const exitRows = deidentify(exits), followRows = deidentify(followUps);
+      if (typeof XLSX !== 'undefined' && (clientRows.length || serviceRows.length || exitRows.length || metrics.length)){
+        const wb = XLSX.utils.book_new();
+        const sheet = (rows, name) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length ? rows : [{ 'No data':'No records for this period.' }], { cellDates:true }), name);
+        sheet(clientRows, 'Clients'); sheet(serviceRows, 'Services'); sheet(exitRows, 'Non-Permanent Exits');
+        sheet(followRows, 'Housing Follow-Ups'); sheet(metrics, 'Quarterly Metrics'); sheet(demographics, 'Demographics');
+        program.file('Program Data (de-identified).xlsx', XLSX.write(wb, { bookType:'xlsx', type:'array', cellDates:true }));
+      }
+      addCsv(program, 'Clients (de-identified).csv', clientRows);
+      addCsv(program, 'Services (de-identified).csv', serviceRows);
+      addCsv(program, 'Quarterly Submission Log.csv', submissions);
+      summary.unshift(`Program: ${clientRows.length} clients, ${serviceRows.length} services, ${quarterCount} quarterly report(s), ${rosterCount} HMIS roster file(s)${monthlyCount ? `, ${monthlyCount} monthly operating report(s)` : ''}`);
+
+      /* -------------- fiscal: each fiscal year overlapping the range */
+      if (this.archiveFiscalAvailable()){
+        const years = (this.fiscal.years || []).filter(y => overlaps(this.dateOnly(y.start_date), this.dateOnly(y.end_date), range));
+        const invoiceFolder = fiscal.folder('Monthly Invoices');
+        const monthlyRows = [], actualRows = [], paymentRows = [], allocationRows = [], planRows = [], logRows = [], cdbgRows = [];
+        let invoiceCount = 0, budgetCount = 0, cdbgCount = 0;
+
+        for (const y of years){
+          const fy = y.fiscal_year, fyLabel = y.budget_label || fy;
+          status(`Loading ${fyLabel} fiscal data…`);
+          await this.loadFiscalData(fy);
+          const months = this.fiscalMonths().filter(m => inside(m.start, m.end, range) && m.start <= today);
+          const monthKeys = new Set(months.map(m => m.key));
+          const lineName = new Map((this.fiscal.budgetLines || []).map(l => [l.line_code, [l.category, l.line_name].filter(Boolean).join(' - ')]));
+
+          for (const m of months){
+            this.fiscalMonth = m.key;
+            const sub = this.fiscalSubmission(m.key), docs = this.fiscalDocsFor(m.key), total = Number(this.fiscalMonthTotal(m.key) || 0);
+            monthlyRows.push({ 'Fiscal Year':fyLabel, Month:m.label, 'Invoice Number':this.fiscalInvoiceNumberFor?.(m.key) || '', Status:sub?.status || 'draft',
+              Personnel:sub?.personnel_total ?? '', Facility:sub?.facility_total ?? '', Program:sub?.program_total ?? '', Administrative:sub?.administrative_total ?? '',
+              'Invoice Total':sub?.invoice_total ?? total, 'Certified By':sub?.certified_by || '', 'Submitted At':sub?.submitted_at || '',
+              'Reviewed By':sub?.reviewed_by || '', 'Reviewed At':sub?.reviewed_at || '', 'Review Note':sub?.review_note || '' });
+            if (sub || total > 0 || docs.length){
+              status(`Rendering ${m.label} invoice…`);
+              const html = this.archiveCapture(() => this.printFiscalInvoice());
+              const idx = this.fiscalMonths().findIndex(x => x.key === m.key) + 1;
+              invoiceFolder.file(safe(`${String(idx).padStart(2,'0')} ${m.label} Invoice.html`), this.archivePage(`${this.programName()} Invoice ${m.label}`, html));
+              invoiceCount++;
+            }
+          }
+
+          (this.fiscal.actuals || []).filter(a => monthKeys.has(this.dateOnly(a.invoice_month))).forEach(a =>
+            actualRows.push({ 'Fiscal Year':fyLabel, Month:monthLabel(a.invoice_month), 'Line Code':a.line_code, 'Line':lineName.get(a.line_code) || '', Amount:Number(a.amount || 0), Notes:a.notes || '' }));
+          (this.fiscal.statusLog || []).filter(l => monthKeys.has(this.dateOnly(l.invoice_month))).forEach(l =>
+            logRows.push({ 'Fiscal Year':fyLabel, Month:monthLabel(l.invoice_month), Action:l.action || '', Note:l.note || '', By:l.acted_by || '', At:l.created_at }));
+          (this.fiscal.payments || []).filter(x => monthKeys.has(this.dateOnly(x.invoice_month))).forEach(x =>
+            paymentRows.push({ 'Fiscal Year':fyLabel, Month:monthLabel(x.invoice_month), Status:x.payment_status, 'Payment Date':x.payment_date || '', Reference:x.payment_reference || '', Notes:x.notes || '', 'Updated By':x.updated_by || '', 'Updated At':x.updated_at || '' }));
+          (this.fiscal.paymentAllocations || []).filter(x => monthKeys.has(this.dateOnly(x.invoice_month))).forEach(x =>
+            allocationRows.push({ 'Fiscal Year':fyLabel, Month:monthLabel(x.invoice_month), 'Funding Code':x.funding_code, Amount:Number(x.amount || 0) }));
+          (this.fiscal.fundingPlan || []).forEach(x =>
+            planRows.push({ 'Fiscal Year':fyLabel, 'Funding Code':x.funding_code, 'Funding Source':x.funding_name, Account:x.account_number || '', 'Planned Amount':Number(x.planned_amount || 0) }));
+
+          // Invoice backup: registered documents plus anything else in the month's storage folders.
+          for (const m of months){
+            const docs = this.fiscalDocsFor(m.key);
+            const known = new Set(docs.map(d => d.storage_path));
+            let extra = [];
+            try { extra = (await this.archiveListFiles('holloway-fiscal-documents', `${pid}/${fy}/${m.key}`)).filter(f => !known.has(f.path)); }
+            catch (e){ notes.push(`Could not scan ${m.label} invoice backup for unregistered uploads (${e.message || e}).`); }
+            const folder = `Invoice Backup/${safe(m.key.slice(0,7) + ' ' + m.label)}`;
+            for (const [i, d] of docs.entries()){
+              status(`Downloading ${m.label} backup ${i+1} of ${docs.length + extra.length}…`);
+              const sub = this.fiscalIsGL?.(d) ? 'General Ledger' : `Supporting Documentation/${safe(d.doc_type || 'Other Backup')}`;
+              await addFile('holloway-fiscal-documents', d.storage_path, `${folder}/${sub}`, d.file_name || originalName(d.storage_path),
+                { section:'Invoice Backup', period:m.label, document_type:d.doc_type || '', uploaded_by:d.uploaded_by || '', uploaded_at:d.uploaded_at || '', registered_in_portal:'Yes' });
+            }
+            for (const f of extra){
+              await addFile('holloway-fiscal-documents', f.path, `${folder}/Unregistered uploads`, originalName(f.path),
+                { section:'Invoice Backup', period:m.label, document_type:'Unregistered upload', uploaded_by:'', uploaded_at:f.created_at || '', registered_in_portal:'No' });
+            }
+          }
+
+          // Budget versions and their modification attachments.
+          const B = this.budgetMods || {};
+          for (const v of (B.versions || []).slice().sort((a,b) => (a.version_no||0) - (b.version_no||0))){
+            status(`Rendering budget version ${v.version_no}…`);
+            const req = this.bmRequestNo?.(v) || v.label || `v${v.version_no}`;
+            const html = this.archiveCapture(() => this.bmPrint(v.id));
+            if (html){
+              fiscal.folder('Budget Versions').file(safe(`${fy} v${v.version_no} ${req} (${v.status}).html`), this.archivePage(`${req} Budget`, html));
+              budgetCount++;
+            }
+            const att = Array.isArray(B.attachments?.[v.id]) ? B.attachments[v.id] : [];
+            const known = new Set(att.map(a => a.storage_path));
+            let extra = [];
+            try { extra = (await this.archiveListFiles('holloway-budget-mod-documents', `${pid}/${v.id}`)).filter(f => !known.has(f.path)); } catch (_){}
+            const folder = `Budget Modification Attachments/${safe(`${fy} v${v.version_no} ${req}`)}`;
+            for (const a of att) await addFile('holloway-budget-mod-documents', a.storage_path, folder, a.file_name || originalName(a.storage_path),
+              { section:'Budget Modification', period:`${fyLabel} v${v.version_no}`, document_type:a.description || 'Attachment', uploaded_by:a.uploaded_by || '', uploaded_at:a.uploaded_at || '', registered_in_portal:'Yes' });
+            for (const f of extra) await addFile('holloway-budget-mod-documents', f.path, `${folder}/Unregistered uploads`, originalName(f.path),
+              { section:'Budget Modification', period:`${fyLabel} v${v.version_no}`, document_type:'Unregistered upload', uploaded_by:'', uploaded_at:f.created_at || '', registered_in_portal:'No' });
+          }
+
+          // CDBG quarters inside the range.
+          if (this.loadCdbg){
+            this.cdbgDraft = {};
+            await this.loadCdbg(true);
+            if (this.cdbg?.settings){
+              const cqs = this.cdbgQuarters().filter(q => inside(q.months[0].start, q.months[q.months.length-1].end, range) && q.months[0].start <= today);
+              const cdbgMonthKeys = new Set(cqs.flatMap(q => q.months.map(m => m.key)));
+              this.cdbgRows().filter(r => cdbgMonthKeys.has(r.invoice_month)).forEach(r => cdbgRows.push({ 'Fiscal Year':fyLabel, Month:monthLabel(r.invoice_month),
+                Employee:r.employee_name, Hours:r.hours_worked ?? '', 'Salary Paid':r.salary_paid, 'Benefits Paid':r.benefits_paid, 'CDBG Salary':r.cdbg_salary, 'CDBG Benefits':r.cdbg_benefits, 'CDBG Total':r.cdbg_total }));
+              for (const q of cqs){
+                status(`Rendering CDBG ${q.label} invoice…`);
+                const html = this.archiveCapture(() => this.printCdbgInvoice(q));
+                fiscal.folder('CDBG').file(safe(`${fy} CDBG ${q.label} (${q.range}) Invoice.html`), this.archivePage(`CDBG ${q.label} ${fyLabel}`, html));
+                cdbgCount++;
+                const docs = this.cdbgDocsFor(q.start), known = new Set(docs.map(d => d.storage_path));
+                let extra = [];
+                try { extra = (await this.archiveListFiles('holloway-cdbg-documents', `${pid}/${fy}/${q.start}`)).filter(f => !known.has(f.path)); } catch (_){}
+                const folder = `CDBG Backup/${safe(`${fy} ${q.label} (${q.range})`)}`;
+                for (const d of docs) await addFile('holloway-cdbg-documents', d.storage_path, `${folder}/${safe(d.doc_type || 'Backup')}`, d.file_name || originalName(d.storage_path),
+                  { section:'CDBG Backup', period:`${fyLabel} ${q.label}`, document_type:d.doc_type || '', uploaded_by:d.uploaded_by || '', uploaded_at:d.uploaded_at || '', registered_in_portal:'Yes' });
+                for (const f of extra) await addFile('holloway-cdbg-documents', f.path, `${folder}/Unregistered uploads`, originalName(f.path),
+                  { section:'CDBG Backup', period:`${fyLabel} ${q.label}`, document_type:'Unregistered upload', uploaded_by:'', uploaded_at:f.created_at || '', registered_in_portal:'No' });
+              }
+            }
+          }
+        }
+        if (!years.length) notes.push('No fiscal year in the portal overlaps this period, so there are no invoices or fiscal records.');
+
+        addCsv(fiscal, 'Monthly Invoice Summary.csv', monthlyRows);
+        addCsv(fiscal, 'Actuals by Budget Line.csv', actualRows);
+        addCsv(fiscal, 'Invoice Status Log.csv', logRows);
+        addCsv(fiscal, 'Payments.csv', paymentRows);
+        addCsv(fiscal, 'Payment Allocations by Funding Source.csv', allocationRows);
+        addCsv(fiscal, 'Funding Plan.csv', planRows);
+        if (cdbgRows.length) addCsv(fiscal.folder('CDBG'), 'CDBG Charges.csv', cdbgRows);
+        summary.push(`Fiscal: ${invoiceCount} monthly invoice(s), ${budgetCount} budget version(s)${cdbgCount ? `, ${cdbgCount} CDBG invoice(s)` : ''}`);
+      } else {
+        notes.push('Fiscal reporting is not set up for this program, so the archive has no fiscal section.');
+      }
+
+      const unregistered = backupIndex.filter(r => r.registered_in_portal === 'No').length;
+      const included = backupIndex.filter(r => r.included_in_archive === 'Yes').length;
+      addCsv(backup, 'Backup Document Index.csv', backupIndex.map(r => ({ Section:r.section, Period:r.period, 'Document Type':r.document_type, 'File Name':r.file_name,
+        'Uploaded By':r.uploaded_by, 'Uploaded At':r.uploaded_at, 'Registered in Portal':r.registered_in_portal, 'Included in Archive':r.included_in_archive, 'Archive File':r.archive_file, 'Storage Path':r.storage_path })));
+      summary.push(`Backup documentation: ${included} of ${backupIndex.length} file(s)${unregistered ? ` (${unregistered} not registered in the portal)` : ''}`);
+
+      root.file('README.txt', [
+        `${this.programName()} - Year-End Archive`,
+        `${sel.label} ${basisLabel.toLowerCase()}: ${range.start} to ${range.end}`,
+        `Generated ${new Date().toLocaleString()} by ${this.user?.email || 'City admin'}`,
+        '', 'CONTENTS', ...summary.map(s => '- ' + s),
+        '', 'FOLDERS',
+        '1 Program - Client, service, exit and follow-up data by HMIS ID (Excel and CSV), quarterly reports, quarterly submission log, HMIS roster files and monthly operating reports.',
+        '2 Fiscal - Monthly invoices, invoice summary and status log, actuals by budget line, payments, payment allocations, funding plan, budget versions, CDBG invoices and charges, and bed-night invoices.',
+        '3 Backup Documentation - Invoice, CDBG and budget-modification files and HMIS rosters, with an index. Files under "Unregistered uploads" are in storage but missing from the portal\'s document list; they are included so nothing is lost.',
+        '', 'NOTES',
+        '- Program reports follow the contract year (Oct-Sep); invoices, budget, payments and CDBG follow the fiscal year (Jul-Jun). This archive includes the quarters and months that fall inside the period above and have started.',
+        '- De-identified: clients appear by HMIS ID only. Names, case notes, incident reports, referral attachments and free-text notes are not included.',
+        '- Quarterly reports, invoices and other print views are included exactly as the portal prints them for City review.',
+        '- Reports and invoices are HTML files. Open one in a browser and use Print > Save as PDF for a PDF copy.',
+        '- Figures reflect the portal as of the generation date.',
+        ...notes.map(n => '- ' + n),
+        ...(missing.length ? ['', 'FILES THAT COULD NOT BE INCLUDED', ...missing.map(m => '- ' + m)] : [])
+      ].join('\r\n'));
+
+      status('Compressing…');
+      const blob = await zip.generateAsync({ type:'blob', compression:'DEFLATE', compressionOptions:{ level:6 } });
+      const url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = rootName + '.zip';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      zipped = true;
+      this._archiveResult = missing.length
+        ? [`Downloaded. ${missing.length} file(s) could not be retrieved; they are listed in README.txt.`, 'err']
+        : ['Downloaded.', 'ok'];
+    } catch (e){
+      console.error('archive failed', e);
+      this._archiveResult = ['Could not build the archive: ' + (e?.message || e), 'err'];
+    } finally {
+      // Put back the years that were on screen.
+      try {
+        this.archiveMsg('Restoring your view…');
+        if (saved.period && saved.period !== this.contractPeriod){ this.applyContractPeriod(saved.period); }
+        if (saved.period){ this.rosterPage = saved.rosterPage || 0; await this.loadAll(); if (saved.quarter && this.quarters?.[saved.quarter]) this.currentQuarter = saved.quarter; }
+        if (this.archiveFiscalAvailable() && saved.fiscalYear){
+          await this.loadFiscalData(saved.fiscalYear);
+          this.fiscalMonth = saved.fiscalMonth;
+          this.cdbgQuarter = saved.cdbgQuarter;
+          if (this.loadCdbg) await this.loadCdbg(true);
+        }
+        this.cdbgDraft = saved.cdbgDraft;
+        this._ffsMonth = saved.ffsMonth;
+      } catch (e){ console.warn('archive restore', e); }
+      this.ensureBundlesExist = baseEnsureBundles;
+      this._archiveBusy = false;
+      this.renderSidebarForRole();
+      this.renderArchive();
+      const [msg, kind] = this._archiveResult || ['', ''];
+      this.archiveMsg(msg, kind);
+      if (zipped) this.toast(kind === 'err' ? 'Archive downloaded with missing files — see README.txt.' : 'Archive downloaded.');
+      else if (kind === 'err') this.toast(msg, {error:true});
+      this._archiveResult = null;
+    }
+  };
+})();
+
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 </body>
