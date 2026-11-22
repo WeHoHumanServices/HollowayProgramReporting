@@ -19737,6 +19737,930 @@ const App = {
   document.head.appendChild(css);
 })();
 
+(function(){
+  /* ==========================================================================
+     Streamlined referral pipeline (programs with has_referral_pipeline).
+
+     One status instead of two. The old New / In Review / Accepted / Declined /
+     Withdrawn buttons changed a label the section 4 clock never read, so a
+     referral could say "Withdrawn" and still be overdue. The label is now set
+     only by the steps below and kept in step for the agency status page.
+
+     One next step at a time, at the top of the referral:
+       1. Acknowledge (1 business day)
+       2. Decide: admit now, schedule, waitlist, not admitted, or document a
+          barrier (2 business days). Any of these stops the clock.
+       3. Admit: opens participant intake filled in from the referral, with the
+          held bed selected. Saving the intake marks the referral admitted and
+          links it to the participant, so nothing is typed twice.
+     The referral's details, contact attempts and notes sit below the step.
+     The full field list stays available under "Edit all fields" for fixes.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+  const DECISION_STATUS = { admitted:'Accepted', scheduled:'Accepted', waitlisted:'In Review',
+                            declined:'Declined', withdrawn:'Withdrawn', barrier:'In Review' };
+  const DECISION_LABEL = { admitted:'Admitted', scheduled:'Admission scheduled', waitlisted:'Waitlisted',
+                           declined:'Declined', withdrawn:'Withdrawn', barrier:'Barrier documented' };
+  const AFFILIATION = { verified:'Verified', self_attested:'Self-attested', not_affiliated:'Not affiliated', pending:'Pending verification' };
+  const ACK_METHODS = ['Phone', 'Email', 'Text', 'In person', 'Through referring party', 'HMIS / CES note'];
+  const GENDER_TO_HMIS = { men:'Man (Boy, if child)', women:'Woman (Girl, if child)', non_binary:'Non-Binary' };
+  const DESIG = { reserved:'Reserved bed', fee_for_service:'Fee-for-service bed' };
+
+  App.usesPipeline = function(){ return this.programHas('has_referral_pipeline') && !this.isAgencyFiscal?.(); };
+
+  // "0 business days overdue" happened whenever the deadline fell on a Friday
+  // and today is a weekend. Say "overdue" instead.
+  const previousSlaBadge = App.slaBadge;
+  App.slaBadge = function(state, due, daysLate, label){
+    if (state === 'overdue' && !daysLate)
+      return `<span class="sla-badge sla-overdue">${esc(label)} overdue (due ${esc(this.formatDate(due))})</span>`;
+    return previousSlaBadge.call(this, state, due, daysLate, label);
+  };
+
+  // One wording for deadlines everywhere in the pipeline.
+  App.dueBadge = function(state, due, late){
+    const d = this.formatDate(due);
+    if (state === 'overdue') return `<span class="sla-badge sla-overdue">${late ? late + ' business day' + (late === 1 ? '' : 's') + ' overdue' : 'Overdue'} · was due ${esc(d)}</span>`;
+    if (state === 'due_today') return `<span class="sla-badge sla-due_today">Due today</span>`;
+    if (state === 'open') return `<span class="sla-badge sla-open">Due ${esc(d)}</span>`;
+    if (state === 'met') return `<span class="sla-badge sla-met">On time</span>`;
+    if (state === 'met_late') return `<span class="sla-badge sla-met_late">${late} business day${late === 1 ? '' : 's'} late</span>`;
+    return '';
+  };
+
+  /* --------------------------------------------------------------- stage */
+
+  // Where a referral stands, and what the next step is.
+  App.referralStep = function(r){
+    const closedByLabel = !r.admission_decision && ['Declined','Withdrawn'].includes(r.status);
+    if (r.actual_admission_date || r.admission_decision === 'admitted') return { key:'admitted', label:'Admitted' };
+    if (['declined','withdrawn'].includes(r.admission_decision)) return { key:'closed', label: DECISION_LABEL[r.admission_decision] };
+    if (!r.acknowledged_at) return { key:'ack', label:'Acknowledge' };
+    if (r.admission_decision === 'scheduled') return { key:'scheduled', label:'Admit on ' + this.formatDate(this.dateOnly(r.scheduled_admission_date)) };
+    if (r.admission_decision === 'waitlisted') return { key:'waiting', label:'Waitlisted' };
+    if (!r.admission_decision && (r.barrier_description || '').trim()) return { key:'waiting', label:'Barrier documented' };
+    if (closedByLabel) return { key:'decide', label:'Record the ' + r.status.toLowerCase() + ' reason', legacy: r.status };
+    return { key:'decide', label:'Decide on admission' };
+  };
+
+  /* ------------------------------------------------------------ list view */
+
+  const previousRenderReferrals = App.renderReferrals;
+  App.renderReferrals = function(...args){
+    const out = previousRenderReferrals.apply(this, args);
+    if (!this.usesPipeline()) return out;
+    const el = document.getElementById('view-referrals');
+    const table = el?.querySelector('table');
+    if (!table) return out;
+    const heads = [...table.querySelectorAll('thead th')].map(th => th.textContent.trim().toUpperCase());
+    const drop = ['ACKNOWLEDGEMENT', 'DETERMINATION', 'ADMISSION'].map(h => heads.indexOf(h)).filter(i => i >= 0);
+    const stageIdx = heads.indexOf('STAGE');
+    if (stageIdx < 0) return out;
+    table.querySelectorAll('thead th').forEach((th, i) => {
+      if (drop.includes(i)) th.style.display = 'none';
+      if (i === stageIdx) th.textContent = 'Next step';
+    });
+    table.querySelectorAll('tbody tr').forEach(tr => {
+      const id = tr.querySelector('[data-open-referral]')?.dataset.openReferral;
+      const r = id && (this.data.referrals || []).find(x => x.id === id);
+      if (!r) return;
+      [...tr.children].forEach((td, i) => { if (drop.includes(i)) td.style.display = 'none'; });
+      const step = this.referralStep(r), c = this.referralClock(id);
+      let badge = '';
+      if (step.key === 'ack' && c) badge = this.dueBadge(c.ack_state, c.ack_due, c.ack_days_late);
+      else if (step.key === 'decide' && c) badge = this.dueBadge(c.det_state, c.det_due, c.det_days_late);
+      else if (step.key === 'admitted') badge = `<span class="sla-badge sla-met">${esc(this.formatDate(this.dateOnly(r.actual_admission_date)) || 'Admitted')}</span>`;
+      const cell = tr.children[stageIdx];
+      if (cell) cell.innerHTML = `<strong>${esc(step.label)}</strong>${badge ? '<br>' + badge : ''}`;
+      tr.style.cursor = 'pointer';
+      tr.addEventListener('click', e => { if (!e.target.closest('button,a')) this.openReferralDetail(id); });
+    });
+    return out;
+  };
+
+  /* ---------------------------------------------------------- detail view */
+
+  const previousOpenReferralDetail = App.openReferralDetail;
+  App.openReferralDetail = function(id){
+    previousOpenReferralDetail.call(this, id);
+    if (!this.usesPipeline()) return;
+    const r = (this.data.referrals || []).find(x => x.id === id);
+    const body = document.getElementById('referral-detail-body');
+    if (!r || !body) return;
+    const section = t => [...body.querySelectorAll(':scope > .form-section')]
+      .find(s => (s.querySelector('.form-section-title')?.textContent || '').trim().startsWith(t));
+
+    // The old status buttons and the service-level block are replaced by the tracker and the next step.
+    section('Status')?.remove();
+    const sla = section('Service Levels'); sla?.remove();
+
+    // Group what is left: details, then activity, then the full edit form.
+    const details = ['Referring Agency', 'Community Member', 'Eligibility Criteria', 'Intake Details', 'Attachments', 'Certification']
+      .map(section).filter(Boolean);
+    const activity = ['Contact Attempts', 'Staff Notes'].map(section).filter(Boolean);
+    const editAll = ['Eligibility and Admission Decision', 'West Hollywood Affiliation'].map(section).filter(Boolean);
+    const saveRow = body.querySelector('#btn-pipe-save')?.closest('.form-section');
+    if (saveRow) editAll.push(saveRow);
+
+    const step = this.referralStep(r);
+    const c = this.referralClock(id);
+    body.innerHTML = '';
+    body.insertAdjacentHTML('beforeend', this.referralTrackerHtml(r, step, c));
+    body.insertAdjacentHTML('beforeend', `<div class="ref-next" id="ref-next">${this.referralNextHtml(r, step, c)}</div>`);
+    body.insertAdjacentHTML('beforeend', `<div class="ref-summary">${this.referralSummaryHtml(r)}</div>`);
+
+    const mk = (title, nodes, open) => {
+      const d = document.createElement('details'); d.className = 'ref-group'; if (open) d.open = true;
+      d.innerHTML = `<summary>${esc(title)}</summary>`;
+      nodes.forEach(n => d.appendChild(n));
+      body.appendChild(d);
+      return d;
+    };
+    if (details.length) mk('Referral details', details, false);
+    if (activity.length) mk(`Contact attempts and notes${this.referralContactsFor(id).length ? ' (' + this.referralContactsFor(id).length + ' attempts)' : ''}`, activity, step.key === 'ack' || step.key === 'decide');
+    if (editAll.length) {
+      const d = mk('Edit all fields', editAll, false);
+      d.insertAdjacentHTML('beforeend', '<div class="field-hint" style="margin:0 0 8px">For corrections. Use the step at the top for normal progress.</div>');
+    }
+    const meta = document.querySelector('#modal-referral .form-modal-meta');
+    if (meta) meta.textContent = `${r.referring_agency || 'Logged by staff'} · received ${this.formatDate(this.dateOnly(r.received_at)) || '—'}`;
+    this.wireReferralNext(r, step);
+  };
+
+  App.referralTrackerHtml = function(r, step, c){
+    const ackDone = !!r.acknowledged_at;
+    const decDone = !!(r.admission_decision || (r.barrier_description || '').trim());
+    const admDone = step.key === 'admitted';
+    const closed = step.key === 'closed';
+    const node = (label, done, current, sub) => `<div class="ref-stage ${done ? 'done' : ''} ${current ? 'current' : ''}">
+        <div class="ref-dot">${done ? '&#10003;' : ''}</div><div class="ref-stage-label">${esc(label)}</div>
+        <div class="ref-stage-sub">${sub || ''}</div></div>`;
+    const ackSub = ackDone ? esc(this.formatDate(this.dateOnly(r.acknowledged_at)))
+      : (c ? this.dueBadge(c.ack_state, c.ack_due, c.ack_days_late) : '');
+    const decSub = decDone ? esc(DECISION_LABEL[r.admission_decision] || 'Barrier documented')
+      : (c && ackDone ? this.dueBadge(c.det_state, c.det_due, c.det_days_late) : (c ? `<span class="field-hint">due ${esc(this.formatDate(c.det_due))}</span>` : ''));
+    const admSub = admDone ? esc(this.formatDate(this.dateOnly(r.actual_admission_date)) || '')
+      : closed ? esc(DECISION_LABEL[r.admission_decision]) : (r.scheduled_admission_date ? 'planned ' + esc(this.formatDate(this.dateOnly(r.scheduled_admission_date))) : '');
+    return `<div class="ref-tracker">
+      ${node('Received', true, false, esc(this.formatDate(this.dateOnly(r.received_at)) || ''))}
+      ${node('Acknowledged', ackDone, step.key === 'ack', ackSub)}
+      ${node('Decided', decDone, step.key === 'decide' || step.key === 'waiting', decSub)}
+      ${node(closed ? 'Closed' : 'Admitted', admDone || closed, step.key === 'scheduled', admSub)}
+    </div>`;
+  };
+
+  App.referralSummaryHtml = function(r){
+    const age = r.date_of_birth ? Math.floor((Date.now() - Date.parse(r.date_of_birth)) / 31557600000) : null;
+    const bits = [
+      r.date_of_birth ? `Born ${this.formatDate(this.dateOnly(r.date_of_birth))}${age != null ? ` (${age})` : ''}` : null,
+      r.requested_gender_category ? ({ men:'Man', women:'Woman', non_binary:'Non-binary' }[r.requested_gender_category] || r.requested_gender_category) : null,
+      r.member_contact_info ? 'Contact: ' + r.member_contact_info : null,
+      r.weho_affiliation ? 'WeHo affiliation: ' + (AFFILIATION[r.weho_affiliation] || r.weho_affiliation) : 'WeHo affiliation not recorded',
+      r.case_manager_name && r.case_manager_name !== r.referring_agency ? 'Case manager: ' + r.case_manager_name : null
+    ].filter(Boolean);
+    return `<strong>${esc(r.community_member_name || '—')}</strong><span class="field-hint"> · ${bits.map(esc).join(' · ')}</span>`;
+  };
+
+  const affiliationSelect = (r) => `<div class="field-group"><label class="field-label required" for="rn-aff">West Hollywood affiliation</label>
+      <select class="field-select" id="rn-aff"><option value="">Select…</option>
+        ${Object.entries(AFFILIATION).map(([v, l]) => `<option value="${v}" ${r.weho_affiliation === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+      <div class="field-hint">Sections 4 and 12.4.</div></div>`;
+
+  App.vacantBedsFor = function(gender){
+    return this.bedsFor().filter(b => this.bedStatus(b) === 'vacant_available')
+      .sort((a, b) => (a.designation === b.designation ? 0 : a.designation === 'reserved' ? -1 : 1))
+      .map(b => ({ b, fits: b.designation !== 'reserved' || !gender || b.gender_category === gender }))
+      .sort((x, y) => (y.fits ? 1 : 0) - (x.fits ? 1 : 0));
+  };
+  App.heldBedFor = function(referralId){
+    return this.bedsFor().find(b => { const ev = this.latestBedEvent(b.id); return ev && ev.status === 'held' && ev.note === 'referral:' + referralId; }) || null;
+  };
+
+  const decisionChooser = (r, preset) => `
+    <div class="ref-choices" role="radiogroup">
+      ${[['admit','Admit now'],['schedule','Schedule admission'],['waitlist','Waitlist'],['notadmit','Not admitted'],['barrier',"Can't decide yet"]]
+        .map(([k, l]) => `<button type="button" class="ref-choice ${preset === k ? 'active' : ''}" data-choice="${k}">${l}</button>`).join('')}
+    </div>
+    <div id="rn-fields"></div>`;
+
+  App.referralNextHtml = function(r, step, c){
+    const due = (state, d, late) => c ? this.dueBadge(state, d, late) : '';
+    if (step.key === 'ack') return `
+      <div class="ref-next-head"><div class="ref-next-title">Next: acknowledge this referral</div>${c ? due(c.ack_state, c.ack_due, c.ack_days_late) : ''}</div>
+      <div class="ref-next-hint">Let the referring party or the participant know it was received. Section 4 allows one business day.</div>
+      <div class="client-form-grid">
+        <div class="field-group"><label class="field-label" for="rn-ack-method">How</label>
+          <select class="field-select" id="rn-ack-method">${ACK_METHODS.map(m => `<option>${esc(m)}</option>`).join('')}</select></div>
+        <div class="field-group"><label class="field-label" for="rn-ack-note">Note <span class="field-hint">optional</span></label>
+          <input class="field-input" id="rn-ack-note" placeholder="Who you spoke with, anything they need"></div>
+      </div>
+      <div class="ref-actions"><button type="button" class="btn btn-gold" id="rn-ack">Acknowledge</button>
+        <button type="button" class="btn btn-ghost" id="rn-ack-decide">Acknowledge and decide now</button><span class="ref-msg" id="rn-msg"></span></div>`;
+
+    if (step.key === 'decide' || step.key === 'waiting') {
+      const legacy = step.legacy ? `<div class="dq-warning" style="margin-bottom:10px">⚠ This referral was marked ${esc(step.legacy)} without a decision or reason, so the section 4 clock is still running. Record the reason to close it.</div>` : '';
+      const waitingNote = step.key === 'waiting'
+        ? `<div class="ref-next-hint">${r.admission_decision === 'waitlisted' ? 'Waitlisted: ' + esc(r.decision_reason || '') : 'Barrier: ' + esc(r.barrier_description || '')}. The section 4 clock has stopped. Choose what happens next when it changes.</div>` : '';
+      return `
+        <div class="ref-next-head"><div class="ref-next-title">${step.key === 'waiting' ? 'Waiting · update when things change' : 'Next: decide on admission'}</div>
+          ${step.key === 'decide' && c ? due(c.det_state, c.det_due, c.det_days_late) : ''}</div>
+        ${step.key === 'decide' ? '<div class="ref-next-hint">Any of these stops the two business day clock in section 4.</div>' : waitingNote}
+        ${legacy}${decisionChooser(r, step.legacy ? 'notadmit' : '')}`;
+    }
+
+    if (step.key === 'scheduled') {
+      const held = this.heldBedFor(r.id);
+      return `
+        <div class="ref-next-head"><div class="ref-next-title">Next: admit on ${esc(this.formatDate(this.dateOnly(r.scheduled_admission_date)))}</div></div>
+        <div class="ref-next-hint">${held ? `${esc(held.label)} is held for this participant.` : (r.requested_designation ? esc(DESIG[r.requested_designation]) + ' planned. No bed is held.' : 'No bed is held.')}
+          Starting intake fills in what the referral already has.</div>
+        <div class="ref-actions"><button type="button" class="btn btn-gold" id="rn-intake">Start intake</button>
+          <button type="button" class="btn btn-ghost" id="rn-change">Change decision</button><span class="ref-msg" id="rn-msg"></span></div>
+        <div id="rn-change-box" style="display:none;margin-top:12px">${decisionChooser(r, '')}</div>`;
+    }
+
+    if (step.key === 'admitted') {
+      const client = r.client_id && (this.data.clients || []).find(x => x.id === r.client_id);
+      return `<div class="ref-next-head"><div class="ref-next-title">Admitted ${esc(this.formatDate(this.dateOnly(r.actual_admission_date)) || '')}</div></div>
+        <div class="ref-actions">${client ? `<button type="button" class="btn btn-ghost" id="rn-open-client">Open participant ${esc(this.clientDisplayId(client))}</button>`
+          : '<span class="field-hint">Not linked to a participant record. Link it under Edit all fields if needed.</span>'}</div>`;
+    }
+
+    return `<div class="ref-next-head"><div class="ref-next-title">${esc(step.label)}</div></div>
+      <div class="ref-next-hint">Reason: ${esc(r.decision_reason || '—')}</div>
+      <div class="ref-actions"><button type="button" class="btn btn-ghost" id="rn-reopen">Reopen</button><span class="ref-msg" id="rn-msg"></span></div>`;
+  };
+
+  App.referralChoiceFields = function(r, choice){
+    const today = this.localDate();
+    if (choice === 'admit') return `${affiliationSelect(r)}
+      <div class="ref-next-hint">Opens participant intake with the name, age and gender from the referral. Saving the intake marks this referral admitted.</div>
+      <div class="ref-actions"><button type="button" class="btn btn-gold" id="rn-go">Start intake</button><span class="ref-msg" id="rn-msg"></span></div>`;
+    if (choice === 'schedule') {
+      const beds = this.vacantBedsFor(r.requested_gender_category);
+      return `<div class="client-form-grid">
+          <div class="field-group"><label class="field-label required" for="rn-date">Admission date</label>
+            <input type="date" class="field-input" id="rn-date" min="${today}" value="${esc(this.dateOnly(r.scheduled_admission_date) || '')}"></div>
+          <div class="field-group"><label class="field-label" for="rn-bed">Hold a bed <span class="field-hint">optional</span></label>
+            <select class="field-select" id="rn-bed"><option value="">Don't hold a bed</option>
+              ${beds.map(({ b, fits }) => `<option value="${esc(b.id)}">${esc(b.label)} · ${b.designation === 'reserved' ? 'Reserved ' + (b.gender_category || '') : 'Fee-for-service'}${fits ? '' : ' (other gender)'}</option>`).join('')}</select>
+            <div class="field-hint">${beds.length} open bed${beds.length === 1 ? '' : 's'}. A held bed shows on the Bed Board.</div></div>
+          ${affiliationSelect(r)}
+        </div>
+        <div class="ref-actions"><button type="button" class="btn btn-gold" id="rn-go">Schedule admission</button><span class="ref-msg" id="rn-msg"></span></div>`;
+    }
+    if (choice === 'waitlist') return `<div class="field-group"><label class="field-label required" for="rn-reason">Why waitlisted</label>
+        <input class="field-input" id="rn-reason" placeholder="e.g. no women's reserved bed open" value="${esc(r.decision_reason || '')}"></div>
+      ${affiliationSelect(r)}
+      <div class="ref-actions"><button type="button" class="btn btn-gold" id="rn-go">Waitlist</button><span class="ref-msg" id="rn-msg"></span></div>`;
+    if (choice === 'notadmit') return `<div class="client-form-grid">
+        <div class="field-group"><label class="field-label required">Outcome</label>
+          <div class="segmented-row" id="rn-out">
+            <button type="button" class="segment-btn ${r.status === 'Withdrawn' ? '' : 'active'}" data-out="declined">Declined by program</button>
+            <button type="button" class="segment-btn ${r.status === 'Withdrawn' ? 'active' : ''}" data-out="withdrawn">Withdrawn</button></div></div>
+        <div class="field-group"><label class="checkbox-label" style="margin-top:26px"><input type="checkbox" id="rn-inelig"> <span>Not eligible for the program</span></label></div>
+      </div>
+      <div class="field-group"><label class="field-label required" for="rn-reason">Reason</label>
+        <input class="field-input" id="rn-reason" placeholder="Section 4 requires a reason on the record" value="${esc(r.decision_reason || '')}"></div>
+      <div class="ref-actions"><button type="button" class="btn btn-gold" id="rn-go">Close referral</button><span class="ref-msg" id="rn-msg"></span></div>`;
+    if (choice === 'barrier') return `<div class="field-group"><label class="field-label required" for="rn-barrier">What is in the way</label>
+        <input class="field-input" id="rn-barrier" placeholder="e.g. waiting on homeless verification from the referring agency" value="${esc(r.barrier_description || '')}">
+        <div class="field-hint">A documented barrier meets the two business day service level.</div></div>
+      <div class="ref-actions"><button type="button" class="btn btn-gold" id="rn-go">Save barrier</button><span class="ref-msg" id="rn-msg"></span></div>`;
+    return '';
+  };
+
+  App.wireReferralNext = function(r, step){
+    const id = r.id;
+    const msg = (t, err) => { const m = document.getElementById('rn-msg'); if (m) { m.textContent = t; m.className = 'ref-msg' + (err ? ' err' : ''); } };
+    const box = document.getElementById('ref-next');
+    const wireChoices = (root) => root.querySelectorAll('[data-choice]').forEach(b => b.addEventListener('click', () => {
+      root.querySelectorAll('[data-choice]').forEach(x => x.classList.toggle('active', x === b));
+      const f = root.querySelector('#rn-fields'); if (!f) return;
+      f.innerHTML = this.referralChoiceFields(r, b.dataset.choice);
+      f.querySelectorAll('#rn-out [data-out]').forEach(o => o.addEventListener('click', () => f.querySelectorAll('#rn-out [data-out]').forEach(x => x.classList.toggle('active', x === o))));
+      f.querySelector('#rn-go')?.addEventListener('click', () => this.saveReferralChoice(r, b.dataset.choice));
+    }));
+    wireChoices(box);
+    box.querySelector('.ref-choice.active')?.click();
+
+    document.getElementById('rn-ack')?.addEventListener('click', () => this.acknowledgeReferralStep(id, false));
+    document.getElementById('rn-ack-decide')?.addEventListener('click', () => this.acknowledgeReferralStep(id, true));
+    document.getElementById('rn-intake')?.addEventListener('click', () => this.startIntakeFromReferral(id));
+    document.getElementById('rn-change')?.addEventListener('click', () => {
+      const cb = document.getElementById('rn-change-box'); if (cb) cb.style.display = '';
+    });
+    document.getElementById('rn-open-client')?.addEventListener('click', () => { this.closeForm('referral'); this.openClientForm(r.client_id); });
+    document.getElementById('rn-reopen')?.addEventListener('click', async () => {
+      msg('Reopening…');
+      const { error } = await this.updateReferral(id, { admission_decision:null, decision_at:null, decision_by:null, status:'In Review' });
+      if (error) return msg('Could not reopen: ' + error.message, true);
+      await this.afterReferralChange(id);
+    });
+    this._rnMsg = msg;
+  };
+
+  App.updateReferral = function(id, patch){
+    const now = new Date().toISOString();
+    const out = { ...patch, updated_at: now };
+    if (patch.status) { out.status_changed_at = now; out.status_changed_by = this.user?.email || null; }
+    return this.sb.from('holloway_referrals').update(out).eq('id', id).eq('program_id', this.program.id);
+  };
+
+  App.afterReferralChange = async function(id){
+    await this.loadAll();
+    this.openReferralDetail(id);
+    if (this.view === 'referrals') this.renderReferrals();
+    if (this.view === 'dashboard') this.renderDashboard();
+  };
+
+  App.acknowledgeReferralStep = async function(id, thenDecide){
+    const method = document.getElementById('rn-ack-method')?.value || null;
+    const note = document.getElementById('rn-ack-note')?.value.trim();
+    const r = (this.data.referrals || []).find(x => x.id === id) || {};
+    this._rnMsg?.('Saving…');
+    const { error } = await this.updateReferral(id, {
+      acknowledged_at: new Date().toISOString(), acknowledged_by: this.user?.email || null,
+      acknowledgement_method: method + (note ? ' — ' + note : ''),
+      ...(r.status === 'New' || !r.status ? { status:'In Review' } : {})
+    });
+    if (error) return this._rnMsg?.('Could not save: ' + error.message, true);
+    await this.afterReferralChange(id);
+    if (thenDecide) document.querySelector('#ref-next [data-choice="admit"]')?.focus();
+    this.toast('Acknowledged.');
+  };
+
+  App.releaseHeldBed = async function(referralId){
+    const bed = this.heldBedFor(referralId);
+    if (bed) await this.logBedStatus(bed.id, 'vacant_available', { reason: 'Hold released', note: 'referral:' + referralId });
+  };
+
+  App.saveReferralChoice = async function(r, choice){
+    const msg = this._rnMsg || (() => {});
+    const v = x => document.getElementById(x)?.value?.trim() || '';
+    const now = new Date().toISOString();
+    const decided = { decision_at: r.decision_at || now, decision_by: r.decision_by || this.user?.email || null };
+    const aff = v('rn-aff');
+
+    if (choice === 'admit') {
+      if (!aff) return msg('Record West Hollywood affiliation first.', true);
+      return this.startIntakeFromReferral(r.id, aff);
+    }
+    let patch;
+    if (choice === 'schedule') {
+      const date = v('rn-date');
+      if (!date) return msg('Enter the admission date.', true);
+      if (date < this.localDate()) return msg('The admission date cannot be in the past.', true);
+      if (!aff) return msg('Record West Hollywood affiliation.', true);
+      const bedId = v('rn-bed');
+      const bed = bedId && this.bedsFor().find(b => b.id === bedId);
+      patch = { admission_decision:'scheduled', scheduled_admission_date:date, status:'Accepted', weho_affiliation:aff,
+                eligibility_determination: r.eligibility_determination || 'eligible',
+                eligibility_determined_at: r.eligibility_determined_at || now,
+                requested_designation: bed ? bed.designation : r.requested_designation, ...decided };
+      msg('Saving…');
+      const { error } = await this.updateReferral(r.id, patch);
+      if (error) return msg('Could not save: ' + error.message, true);
+      if (bed) {
+        await this.releaseHeldBed(r.id);
+        await this.logBedStatus(bed.id, 'held', { reason: 'Held for an accepted referral', note: 'referral:' + r.id, expected_return_date: date });
+      }
+      await this.loadBedData?.();
+      return this.afterReferralChange(r.id);
+    }
+    if (choice === 'waitlist') {
+      const reason = v('rn-reason');
+      if (!reason) return msg('Say why the referral is waitlisted.', true);
+      if (!aff) return msg('Record West Hollywood affiliation.', true);
+      patch = { admission_decision:'waitlisted', decision_reason:reason, status:'In Review', weho_affiliation:aff,
+                eligibility_determination: r.eligibility_determination || 'eligible',
+                eligibility_determined_at: r.eligibility_determined_at || now, ...decided };
+    }
+    if (choice === 'notadmit') {
+      const reason = v('rn-reason');
+      const outcome = document.querySelector('#rn-out .active')?.dataset.out || 'declined';
+      if (!reason) return msg('Section 4 requires a reason.', true);
+      const inelig = document.getElementById('rn-inelig')?.checked;
+      patch = { admission_decision:outcome, decision_reason:reason, status: DECISION_STATUS[outcome], ...decided,
+                ...(inelig ? { eligibility_determination:'not_eligible', eligibility_determined_at: r.eligibility_determined_at || now } : {}) };
+    }
+    if (choice === 'barrier') {
+      const barrier = v('rn-barrier');
+      if (!barrier) return msg('Describe the barrier.', true);
+      patch = { barrier_description:barrier, status:'In Review', ...decided };
+    }
+    if (!patch) return;
+    msg('Saving…');
+    const { error } = await this.updateReferral(r.id, patch);
+    if (error) return msg('Could not save: ' + error.message, true);
+    if (choice === 'notadmit') { await this.releaseHeldBed(r.id); await this.loadBedData?.(); }
+    await this.afterReferralChange(r.id);
+  };
+
+  /* ------------------------------------------------- referral → intake */
+
+  App.startIntakeFromReferral = function(id, affiliation){
+    const r = (this.data.referrals || []).find(x => x.id === id);
+    if (!r) return;
+    this.closeForm('referral');
+    this.openClientForm(null);
+    this._intakeReferral = { id, affiliation: affiliation || r.weho_affiliation || null };
+    const set = (fid, val) => { const el = document.getElementById(fid); if (el && val != null && val !== '') { el.value = val; el.dispatchEvent(new Event('input', { bubbles:true })); el.dispatchEvent(new Event('change', { bubbles:true })); } };
+    set('cf-client-name', r.community_member_name);
+    if (r.date_of_birth) set('cf-age', Math.floor((Date.now() - Date.parse(r.date_of_birth)) / 31557600000));
+    set('cf-gender', GENDER_TO_HMIS[r.requested_gender_category]);
+    const entry = this.localDate();
+    set('cf-entry-date', entry);
+    set('cf-bed-start', entry);
+    const held = this.heldBedFor(id);
+    if (held) {
+      // A held bed is not "vacant", so add it to the choices for this intake.
+      const sel = document.getElementById('cf-bed');
+      if (sel && !sel.querySelector(`option[value="${held.id}"]`))
+        sel.insertAdjacentHTML('afterbegin', `<option value="${esc(held.id)}">${esc(this.bedLabel(held))} (held for this referral)</option>`);
+      set('cf-bed', held.id);
+    }
+    const title = document.getElementById('client-title');
+    if (title) title.textContent = `New Participant Intake · from referral`;
+    const body = document.getElementById('client-body');
+    body?.insertAdjacentHTML('afterbegin', `<div class="notice navy" id="cf-from-referral"><div>i</div><div>Filled in from the referral for
+      <strong>${esc(r.community_member_name)}</strong>. Add the HMIS ID${held ? '' : ' and choose a bed'}, check the rest, then save. Saving marks the referral admitted.</div></div>`);
+  };
+
+  const previousOpenClientForm = App.openClientForm;
+  App.openClientForm = function(...args){ this._intakeReferral = null; return previousOpenClientForm.apply(this, args); };
+
+  const previousCloseForm = App.closeForm;
+  App.closeForm = function(name, ...rest){
+    if (name === 'client' && this._intakeReferral && !this._intakeSaving) this._intakeReferral = null;
+    return previousCloseForm.call(this, name, ...rest);
+  };
+
+  const previousSaveClient = App.saveClient;
+  App.saveClient = async function(){
+    const link = this._intakeReferral;
+    if (!link) return previousSaveClient.call(this);
+    const clientId = document.getElementById('cf-hmis-id')?.value.trim();
+    const entry = document.getElementById('cf-entry-date')?.value;
+    this._intakeSaving = true;
+    try { await previousSaveClient.call(this); }
+    finally { this._intakeSaving = false; }
+    if (!(this.data.clients || []).some(c => c.id === clientId)) return;   // save did not go through
+    this._intakeReferral = null;
+    const r = (this.data.referrals || []).find(x => x.id === link.id) || {};
+    const now = new Date().toISOString();
+    const { error } = await this.updateReferral(link.id, {
+      client_id: clientId, actual_admission_date: entry, admission_decision:'admitted', status:'Accepted',
+      decision_at: r.decision_at || now, decision_by: r.decision_by || this.user?.email || null,
+      eligibility_determination: r.eligibility_determination || 'eligible',
+      eligibility_determined_at: r.eligibility_determined_at || now,
+      weho_affiliation: link.affiliation || r.weho_affiliation || null
+    });
+    if (error) this.toast('Participant saved, but the referral could not be marked admitted: ' + error.message, { error:true });
+    else this.toast(`Admitted. The referral for ${r.community_member_name || clientId} is linked to ${clientId}.`);
+    await this.loadAll();
+    if (this.view === 'referrals') this.renderReferrals();
+    if (this.view === 'dashboard') this.renderDashboard();
+  };
+
+  /* -------------------------------------------------------------- styles */
+  const css = document.createElement('style');
+  css.textContent = `
+    .ref-tracker { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:0 0 16px; position:relative; }
+    .ref-stage { text-align:center; position:relative; }
+    .ref-stage::before { content:''; position:absolute; top:13px; left:-50%; width:100%; height:2px; background:var(--gray-200,#e5e7eb); z-index:0; }
+    .ref-stage:first-child::before { display:none; }
+    .ref-stage.done::before, .ref-stage.current::before { background:var(--navy,#1f3a5f); }
+    .ref-dot { width:26px; height:26px; border-radius:50%; margin:0 auto 6px; border:2px solid var(--gray-300,#d1d5db); background:#fff;
+      position:relative; z-index:1; font-size:13px; line-height:22px; color:#fff; font-weight:700; }
+    .ref-stage.done .ref-dot { background:var(--navy,#1f3a5f); border-color:var(--navy,#1f3a5f); }
+    .ref-stage.current .ref-dot { border-color:var(--gold,#c9a227); box-shadow:0 0 0 3px rgba(201,162,39,.25); }
+    .ref-stage-label { font-weight:600; font-size:13px; }
+    .ref-stage-sub { font-size:11.5px; color:var(--gray-500,#6b7280); margin-top:2px; }
+    .ref-next { border:1px solid var(--gold,#c9a227); border-radius:10px; padding:16px 18px; margin-bottom:14px; background:rgba(201,162,39,.05); }
+    .ref-next-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+    .ref-next-title { font-weight:700; font-size:15px; color:var(--navy,#1f3a5f); }
+    .ref-next-hint { font-size:12.5px; color:var(--gray-600,#4b5563); margin-bottom:12px; }
+    .ref-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+    .ref-msg { font-size:12.5px; color:var(--gray-600,#4b5563); } .ref-msg.err { color:#B3261E; }
+    .ref-choices { display:flex; gap:6px; flex-wrap:wrap; margin:4px 0 12px; }
+    .ref-choice { border:1px solid var(--gray-300,#d1d5db); background:#fff; border-radius:18px; padding:6px 14px; font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+    .ref-choice.active { background:var(--navy,#1f3a5f); color:#fff; border-color:var(--navy,#1f3a5f); }
+    .ref-summary { padding:10px 2px 14px; font-size:14px; }
+    .ref-group { border-top:1px solid var(--gray-200,#e5e7eb); padding:10px 0; }
+    .ref-group > summary { cursor:pointer; font-weight:600; font-size:13px; color:var(--navy,#1f3a5f); padding:4px 0; }
+    .ref-group[open] > summary { margin-bottom:10px; }`;
+  document.head.appendChild(css);
+})();
+
+(function(){
+  /* ==========================================================================
+     West Hollywood eligibility for referrals (programs.requires_weho_location).
+
+     Every referral to the program, whether a partner agency submits it on the
+     public form or Ascencia or City staff log it, must show:
+       · the person is 18 or older (date of birth),
+       · they are unhoused and spend most of their time in West Hollywood,
+         with that location mapped and found inside the City limits,
+       · a certification by the referrer that the referral is true and accurate.
+
+     The location is looked up with the City's own address locator, then
+     OpenStreetMap for intersections and landmarks; when neither finds it the
+     referrer clicks the spot on the map. The City boundary comes from the
+     database (LA County Public Works' legal city boundary), and the database
+     re-checks the point and refuses an ineligible referral on its own, so this
+     screen is a guide, not the gatekeeper.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+  const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+  const LEAFLET_JS  = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+  const CITY_LOCATOR = 'https://gis.weho.org/arcgis/rest/services/AddressLocator_Comp/GeocodeServer/findAddressCandidates';
+  const OSM_SEARCH   = 'https://nominatim.openstreetmap.org/search';
+  const CERT_TEXT = 'I certify that the information in this referral is true and accurate to the best of my knowledge, and that the person is 18 or older, unhoused, and spends the majority of their time in West Hollywood.';
+
+  App.ageOn = function(dob, onDate){
+    if (!dob) return null;
+    const b = new Date(dob + 'T12:00:00'), d = new Date((onDate || this.localDate()) + 'T12:00:00');
+    let a = d.getFullYear() - b.getFullYear();
+    if (d.getMonth() < b.getMonth() || (d.getMonth() === b.getMonth() && d.getDate() < b.getDate())) a--;
+    return a;
+  };
+
+  /* ------------------------------------------------------------ boundary */
+
+  App.loadWehoBoundary = async function(){
+    if (this._wehoBoundary) return this._wehoBoundary;
+    const { data, error } = await this.sb.from('holloway_geo_boundaries')
+      .select('geojson,min_lng,min_lat,max_lng,max_lat').eq('key', 'west_hollywood').maybeSingle();
+    if (error || !data) { console.warn('boundary unavailable', error); return null; }
+    this._wehoBoundary = data;
+    return data;
+  };
+
+  // Same ray-casting rule as holloway_point_in_geojson in the database.
+  App.pointInWeho = function(lng, lat){
+    const b = this._wehoBoundary;
+    if (!b || lng == null || lat == null) return null;
+    if (lng < b.min_lng || lng > b.max_lng || lat < b.min_lat || lat > b.max_lat) return false;
+    const g = b.geojson, polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+    const inRing = ring => { let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i], [xj, yj] = ring[j];
+        if (((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)) inside = !inside;
+      } return inside; };
+    return polys.some(p => inRing(p[0]) && !p.slice(1).some(inRing));
+  };
+
+  /* ------------------------------------------------------------- geocode */
+
+  App.geocodeWeho = async function(text){
+    const q = String(text || '').trim();
+    if (!q) return null;
+    const isIntersection = /\s(&|and|at|\/)\s/i.test(q) || q.includes('&');
+    if (!isIntersection) {
+      try {
+        const u = `${CITY_LOCATOR}?SingleLine=${encodeURIComponent(q)}&outSR=4326&maxLocations=1&f=json`;
+        const r = await fetch(u).then(x => x.json());
+        const c = r?.candidates?.[0];
+        if (c && c.score >= 85) return { lat: c.location.y, lng: c.location.x, label: c.address, source: 'City of West Hollywood address locator' };
+      } catch (e) { console.warn('city locator', e); }
+    }
+    const tries = [`${q}, West Hollywood, CA`, q];
+    if (isIntersection) tries.unshift(q.replace(/\s(and|at|\/)\s/i, ' & ') + ', West Hollywood, CA');
+    for (const t of tries) {
+      try {
+        const u = `${OSM_SEARCH}?q=${encodeURIComponent(t)}&format=jsonv2&limit=1&countrycodes=us&viewbox=-118.41,34.105,-118.33,34.07`;
+        const r = await fetch(u, { headers: { 'Accept-Language': 'en' } }).then(x => x.json());
+        if (r && r[0]) return { lat: Number(r[0].lat), lng: Number(r[0].lon), label: r[0].display_name, source: 'OpenStreetMap' };
+      } catch (e) { console.warn('osm', e); }
+    }
+    return null;
+  };
+
+  App.loadLeaflet = function(){
+    if (window.L) return Promise.resolve(window.L);
+    if (this._leafletPromise) return this._leafletPromise;
+    this._leafletPromise = new Promise((resolve) => {
+      const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = LEAFLET_CSS; document.head.appendChild(css);
+      const s = document.createElement('script'); s.src = LEAFLET_JS;
+      s.onload = () => resolve(window.L || null);
+      s.onerror = () => resolve(null);
+      document.head.appendChild(s);
+    });
+    return this._leafletPromise;
+  };
+
+  /* ------------------------------------------------------- location picker */
+
+  // state: { location_description, location_lat, location_lng, location_source }
+  App.locationPickerHtml = function(prefix, state){
+    return `<div class="weho-loc" id="${prefix}-loc">
+      <label class="field-label required" for="${prefix}-loc-text">Where does the person spend most of their time?</label>
+      <div class="weho-loc-row">
+        <input class="field-input" id="${prefix}-loc-text" placeholder="Address or intersection, e.g. Santa Monica Blvd &amp; La Brea Ave"
+               value="${esc(state.location_description || '')}">
+        <button type="button" class="btn btn-ghost" id="${prefix}-loc-find">Find on map</button>
+      </div>
+      <div class="field-hint">Type an address or cross streets and press Find, or click the spot on the map. You can drag the pin.</div>
+      <div class="weho-map" id="${prefix}-loc-map"></div>
+      <div class="weho-loc-status" id="${prefix}-loc-status"></div>
+    </div>`;
+  };
+
+  App.mountLocationPicker = async function(prefix, state, onChange){
+    const status = document.getElementById(`${prefix}-loc-status`);
+    const text = document.getElementById(`${prefix}-loc-text`);
+    const mapEl = document.getElementById(`${prefix}-loc-map`);
+    if (!status || !text) return;
+    await this.loadWehoBoundary();
+    const show = () => {
+      const has = state.location_lat != null && state.location_lng != null;
+      const inside = has ? this.pointInWeho(state.location_lng, state.location_lat) : null;
+      state.location_in_weho = inside;
+      status.className = 'weho-loc-status ' + (!has ? '' : inside ? 'ok' : 'bad');
+      status.innerHTML = !has ? 'No location set yet.'
+        : inside ? `<strong>&#10003; Inside West Hollywood city limits.</strong> <span class="field-hint">${esc(state.location_source || '')}</span>`
+        : inside === false ? `<strong>&#10007; Outside West Hollywood city limits.</strong> This program serves people who spend most of their time in West Hollywood. Check the location or move the pin.`
+        : 'The City boundary could not be loaded, so the location cannot be checked right now.';
+      onChange && onChange(state);
+    };
+    let L = null, map = null, marker = null;
+    const setPoint = (lat, lng, source, label) => {
+      state.location_lat = Number(lat.toFixed(6)); state.location_lng = Number(lng.toFixed(6)); state.location_source = source;
+      if (label && !String(text.value).trim()) text.value = label;
+      state.location_description = String(text.value || label || '').trim() || null;
+      if (map) {
+        if (!marker) { marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+          marker.on('dragend', () => { const p = marker.getLatLng(); setPoint(p.lat, p.lng, 'Pin placed on map'); }); }
+        else marker.setLatLng([lat, lng]);
+        map.setView([lat, lng], Math.max(map.getZoom(), 15));
+      }
+      show();
+    };
+    text.addEventListener('input', () => { state.location_description = String(text.value).trim() || null; onChange && onChange(state); });
+    const find = async () => {
+      const q = String(text.value || '').trim();
+      if (!q) { status.className = 'weho-loc-status bad'; status.textContent = 'Type an address or intersection first.'; return; }
+      status.className = 'weho-loc-status'; status.textContent = 'Looking it up…';
+      const hit = await this.geocodeWeho(q);
+      if (!hit) { status.className = 'weho-loc-status bad';
+        status.textContent = 'That location could not be found. Click the spot on the map instead.'; return; }
+      state.location_description = q;
+      setPoint(hit.lat, hit.lng, hit.source);
+    };
+    document.getElementById(`${prefix}-loc-find`)?.addEventListener('click', find);
+    text.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); find(); } });
+
+    L = await this.loadLeaflet();
+    if (L && mapEl && !mapEl._leaflet_id) {
+      map = L.map(mapEl, { scrollWheelZoom: false }).setView([34.0900, -118.3617], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+      const b = this._wehoBoundary;
+      if (b) {
+        const layer = L.geoJSON(b.geojson, { style: { color: '#1f3a5f', weight: 2, fillColor: '#c9a227', fillOpacity: 0.08 } }).addTo(map);
+        map.fitBounds(layer.getBounds(), { padding: [10, 10] });
+      }
+      map.on('click', e => setPoint(e.latlng.lat, e.latlng.lng, 'Pin placed on map'));
+      if (state.location_lat != null) setPoint(state.location_lat, state.location_lng, state.location_source);
+    } else if (mapEl && !L) {
+      mapEl.innerHTML = '<div class="field-hint" style="padding:12px">The map could not load. Use Find on map with an address or intersection.</div>';
+      mapEl.style.height = 'auto';
+    }
+    show();
+  };
+
+  App.certificationHtml = function(prefix, state, defaultName){
+    return `<div class="weho-cert">
+      <label class="checkbox-label"><input type="checkbox" id="${prefix}-cert" ${state.eligibility_certified ? 'checked' : ''}>
+        <span>${esc(CERT_TEXT)}</span></label>
+      <div class="client-form-grid" style="margin-top:10px">
+        <div class="field-group"><label class="field-label required" for="${prefix}-cert-name">Certified by (full name)</label>
+          <input class="field-input" id="${prefix}-cert-name" value="${esc(state.eligibility_certified_by || defaultName || '')}"></div>
+        <div class="field-group"><label class="field-label">Date</label>
+          <div class="field-input" style="background:transparent">${esc(this.formatDate(this.localDate()))}</div></div>
+      </div></div>`;
+  };
+
+  App.eligibilityProblems = function(v, crits){
+    const out = [];
+    if (!v.date_of_birth) out.push('date of birth');
+    else if (this.ageOn(v.date_of_birth) < 18) out.push('an adult (18 or older) — the date of birth is under 18');
+    if (v.location_lat == null) out.push('the location where the person spends most of their time, mapped');
+    else if (this.pointInWeho(v.location_lng, v.location_lat) === false) out.push('a location inside West Hollywood city limits');
+    if (crits) Object.entries(crits).forEach(([k, val]) => { if (!val) out.push('the eligibility statements'); });
+    if (!v.eligibility_certified) out.push('the certification checkbox');
+    if (!String(v.eligibility_certified_by || '').trim()) out.push('the certifying name');
+    return [...new Set(out)];
+  };
+
+  /* -------------------------------------------- public partner agency form */
+
+  const needsLocation = st => !!st?.programForm?.requiresLocation;
+
+  const previousBindReferralStep = App.bindReferralStep;
+  App.bindReferralStep = function(...args){
+    const st = this._referral;
+    if (st?.step === 'form' && needsLocation(st)) this.decorateAgencyForm(st);
+    const out = previousBindReferralStep.apply(this, args);
+    if (st?.step === 'form' && needsLocation(st)) {
+      this.mountLocationPicker('ref', st.values, () => this.refreshReferralReadiness());
+      ['ref-cert', 'ref-cert-name'].forEach(id => {
+        const el = document.getElementById(id);
+        el?.addEventListener('input', () => { this.referralCaptureForm(); this.refreshReferralReadiness(); });
+        el?.addEventListener('change', () => { this.referralCaptureForm(); this.refreshReferralReadiness(); });
+      });
+    }
+    return out;
+  };
+
+  App.decorateAgencyForm = function(st){
+    const body = document.getElementById('referral-body');
+    if (!body || body.querySelector('#ref-loc')) return;
+    // Date of birth is required, and adulthood is shown as it is typed.
+    const dob = body.querySelector('#ref-dob-opt, #ref-dob');
+    if (dob) {
+      dob.closest('.field-group')?.querySelector('.field-label')?.classList.add('required');
+      dob.insertAdjacentHTML('afterend', '<div class="field-hint" id="ref-age-hint"></div>');
+      const hint = () => { const a = this.ageOn(dob.value); const h = document.getElementById('ref-age-hint');
+        if (h) { h.textContent = a == null ? 'This program serves adults 18 and older.' : a < 18 ? `Age ${a}: this program serves adults 18 and older.` : `Age ${a}.`;
+                 h.style.color = a != null && a < 18 ? '#B3261E' : ''; } };
+      dob.addEventListener('input', hint); hint();
+    }
+    // Affiliation is established by the mapped location, so the dropdown goes.
+    body.querySelector('#ref-affiliation')?.closest('.field-group')?.remove();
+
+    const sections = [...body.querySelectorAll('.partner-section-card')];
+    const eligibility = sections.find(s => /Eligibility/i.test(s.querySelector('.partner-section-title')?.textContent || ''));
+    const host = eligibility || sections[1];
+    host?.insertAdjacentHTML('beforeend', `<div style="margin-top:16px">${this.locationPickerHtml('ref', st.values)}</div>`);
+    const supporting = sections.find(s => /Additional Supporting/i.test(s.querySelector('.partner-section-title')?.textContent || ''));
+    const cert = document.createElement('section');
+    cert.className = 'partner-section-card';
+    cert.innerHTML = `<div class="partner-section-head"><span class="partner-section-num">&#10003;</span><div>
+        <h2 class="partner-section-title">Certification</h2><div class="partner-section-sub">The person completing this referral certifies it.</div></div></div>
+      ${this.certificationHtml('ref', st.values, st.values?.case_manager_name)}`;
+    supporting ? supporting.before(cert) : body.querySelector('.partner-form-main')?.appendChild(cert);
+    // Readiness panel gets the two new checks.
+    const list = body.querySelector('.partner-ready-list');
+    list?.insertAdjacentHTML('beforeend', `
+      <div class="partner-ready-item" data-ready-key="weho-location"><span class="partner-ready-icon">&#8226;</span><span>Location inside West Hollywood</span></div>
+      <div class="partner-ready-item" data-ready-key="weho-cert"><span class="partner-ready-icon">&#8226;</span><span>Adult, and certified</span></div>`);
+  };
+
+  const previousCapture = App.referralCaptureForm;
+  App.referralCaptureForm = function(...args){
+    const out = previousCapture.apply(this, args);
+    const st = this._referral;
+    if (needsLocation(st)) {
+      const c = document.getElementById('ref-cert'), n = document.getElementById('ref-cert-name');
+      if (c) st.values.eligibility_certified = c.checked;
+      if (n) st.values.eligibility_certified_by = n.value.trim();
+      const t = document.getElementById('ref-loc-text');
+      if (t) st.values.location_description = t.value.trim() || null;
+      if (st.values.location_lat != null && this.pointInWeho(st.values.location_lng, st.values.location_lat)) {
+        st.values.weho_affiliation = 'verified';
+      }
+    }
+    return out;
+  };
+
+  const previousReadiness = App.refreshReferralReadiness;
+  App.refreshReferralReadiness = function(...args){
+    const out = previousReadiness.apply(this, args);
+    const st = this._referral;
+    if (!needsLocation(st) || st.step !== 'form') return out;
+    const v = st.values || {};
+    const dob = document.querySelector('#ref-dob-opt, #ref-dob')?.value || v.date_of_birth;
+    const states = {
+      'weho-location': v.location_lat != null && this.pointInWeho(v.location_lng, v.location_lat) === true,
+      'weho-cert': !!dob && this.ageOn(dob) >= 18 && !!document.getElementById('ref-cert')?.checked
+                   && !!String(document.getElementById('ref-cert-name')?.value || '').trim()
+    };
+    Object.entries(states).forEach(([k, ok]) => {
+      const item = document.querySelector(`[data-ready-key="${k}"]`); if (!item) return;
+      item.classList.toggle('done', ok);
+      const icon = item.querySelector('.partner-ready-icon'); if (icon) icon.innerHTML = ok ? '&#10003;' : '&#8226;';
+    });
+    const items = [...document.querySelectorAll('[data-ready-key]')];
+    const done = items.filter(i => i.classList.contains('done')).length;
+    const count = document.getElementById('partner-ready-count'); if (count) count.textContent = `${done} of ${items.length} ready`;
+    const bar = document.getElementById('partner-ready-bar'); if (bar) bar.style.width = `${Math.round(done / items.length * 100)}%`;
+    // A warning from an earlier attempt should not linger once everything is ready.
+    if (done === items.length) { st.error = ''; document.querySelector('#referral-body .referral-error')?.remove(); }
+    return out;
+  };
+
+  const previousValidation = App.referralValidationErrors;
+  App.referralValidationErrors = function(...args){
+    const missing = previousValidation.apply(this, args);
+    const st = this._referral;
+    if (!needsLocation(st)) return missing;
+    return [...new Set([...missing, ...this.eligibilityProblems(st.values || {})])];
+  };
+
+  /* ---------------------------------------- staff: Log a Referral modal */
+
+  App.programNeedsLocation = function(){ return !!this.program?.requires_weho_location; };
+
+  const previousOpenLog = App.openLogReferral;
+  App.openLogReferral = function(...args){
+    const out = previousOpenLog.apply(this, args);
+    if (!this.programNeedsLocation()) return out;
+    this._logLoc = {};
+    const body = document.getElementById('logref-body');
+    if (!body) return out;
+    const src = document.getElementById('logref-source');
+    if (src) src.value = this.isAdmin() ? 'city' : 'program';
+    document.getElementById('logref-affiliation')?.closest('.field-group')?.remove();
+    const dob = document.getElementById('logref-dob');
+    dob?.closest('.field-group')?.querySelector('.field-label')?.classList.add('required');
+    document.querySelector('label[for="logref-name"]')?.classList.add('required');
+    dob?.insertAdjacentHTML('afterend', '<div class="field-hint" id="logref-age-hint">This program serves adults 18 and older.</div>');
+    dob?.addEventListener('input', () => { const a = this.ageOn(dob.value), h = document.getElementById('logref-age-hint');
+      if (h) { h.textContent = a == null ? 'This program serves adults 18 and older.' : a < 18 ? `Age ${a}: this program serves adults 18 and older.` : `Age ${a}.`; h.style.color = a != null && a < 18 ? '#B3261E' : ''; } });
+    const crits = (this.data.referralCriteria || []).filter(c => c.active !== false);
+    body.insertAdjacentHTML('beforeend', `
+      <div class="form-section"><div class="form-section-title">Eligibility</div>
+        ${crits.map(c => `<label class="checkbox-label" style="margin-bottom:8px"><input type="checkbox" class="logref-crit" data-key="${esc(c.criterion_key)}"> <span>${esc(c.label)}</span></label>`).join('')}
+        <div style="margin-top:12px">${this.locationPickerHtml('logref', this._logLoc)}</div>
+      </div>
+      <div class="form-section"><div class="form-section-title">Certification</div>
+        ${this.certificationHtml('logref', {}, this.profile?.full_name || '')}</div>`);
+    this.mountLocationPicker('logref', this._logLoc);
+    return out;
+  };
+
+  const previousSaveLogged = App.saveLoggedReferral;
+  App.saveLoggedReferral = async function(...args){
+    if (!this.programNeedsLocation()) return previousSaveLogged.apply(this, args);
+    const v = x => { const el = document.getElementById(x); const s = el ? String(el.value).trim() : ''; return s === '' ? null : s; };
+    const state = document.getElementById('logref-state');
+    const say = t => { if (state) state.textContent = t; };
+    const loc = this._logLoc || {};
+    loc.location_description = v('logref-loc-text') || loc.location_description || null;
+    const crits = {}; document.querySelectorAll('.logref-crit').forEach(c => { crits[c.dataset.key] = c.checked; });
+    const vals = { date_of_birth: v('logref-dob'), ...loc,
+      eligibility_certified: !!document.getElementById('logref-cert')?.checked, eligibility_certified_by: v('logref-cert-name') };
+    const name = v('logref-name'), received = v('logref-received');
+    const problems = [];
+    if (!name) problems.push('a name');
+    if (!received) problems.push('the date received');
+    problems.push(...this.eligibilityProblems({ ...vals, date_of_birth: vals.date_of_birth }, crits));
+    if (vals.date_of_birth && received && this.ageOn(vals.date_of_birth, received) < 18 && !problems.some(p => p.startsWith('an adult'))) problems.push('an adult (18 or older)');
+    if (received && received > this.localDate()) return say('The date received cannot be in the future.');
+    if (problems.length) return say('Still needed: ' + problems.join('; ') + '.');
+
+    say('Saving…');
+    const { error } = await this.sb.from('holloway_referrals').insert({
+      id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
+      program_id: this.program.id,
+      referral_source: v('logref-source') || 'other',
+      received_at: new Date(received + 'T12:00:00').toISOString(),
+      referring_agency: v('logref-party'), case_manager_name: v('logref-party'), case_manager_email: v('logref-party-contact'),
+      community_member_name: name, date_of_birth: vals.date_of_birth, member_contact_info: v('logref-contact'),
+      requested_gender_category: v('logref-gender'),
+      weho_affiliation: 'verified', weho_affiliation_date: this.localDate(),
+      weho_affiliation_method: 'Location mapped inside City limits' + (loc.location_description ? ': ' + loc.location_description : ''),
+      crit_id_18_or_older: !!crits.crit_id_18_or_older, criteria_responses: crits,
+      location_description: loc.location_description, location_lat: loc.location_lat, location_lng: loc.location_lng,
+      location_source: loc.location_source,
+      eligibility_certified: true, eligibility_certified_by: vals.eligibility_certified_by,
+      status: 'New', logged_by: this.user?.email || null
+    });
+    if (error) return say('Could not save: ' + error.message);
+    await this.loadAll();
+    this.closeForm('logref');
+    this.renderReferrals();
+    this.toast('Referral logged.');
+  };
+
+  /* -------------------------------------- staff: location on the referral */
+
+  const previousSummary = App.referralSummaryHtml;
+  App.referralSummaryHtml = function(r){
+    let html = previousSummary ? previousSummary.call(this, r) : '';
+    if (r.location_description || r.location_lat != null) {
+      const where = r.location_lat != null ? `<a href="https://www.openstreetmap.org/?mlat=${r.location_lat}&mlon=${r.location_lng}#map=18/${r.location_lat}/${r.location_lng}" target="_blank" rel="noopener">map</a>` : '';
+      html += `<div class="field-hint" style="margin-top:4px">Spends most time at: <strong>${esc(r.location_description || 'pinned location')}</strong>
+        ${r.location_in_weho === true ? ' · <span style="color:#1E8449">&#10003; inside City limits</span>' : r.location_in_weho === false ? ' · <span style="color:#B3261E">outside City limits</span>' : ''} ${where ? '· ' + where : ''}</div>`;
+    }
+    if (r.eligibility_certified) html += `<div class="field-hint">Certified true and accurate by <strong>${esc(r.eligibility_certified_by || '—')}</strong>${r.eligibility_certified_at ? ' on ' + esc(this.formatDate(this.dateOnly(r.eligibility_certified_at))) : ''}.</div>`;
+    return html;
+  };
+
+  const css = document.createElement('style');
+  css.textContent = `
+    .weho-loc-row { display:flex; gap:8px; } .weho-loc-row .field-input { flex:1; }
+    .weho-map { height:260px; border:1px solid var(--gray-200,#e5e7eb); border-radius:8px; margin-top:10px; background:#f3f4f6; }
+    .weho-loc-status { margin-top:8px; font-size:13px; padding:8px 10px; border-radius:6px; background:var(--gray-50,#f9fafb); }
+    .weho-loc-status.ok { background:#E8F5EC; color:#1E6B3A; } .weho-loc-status.bad { background:#FDECEA; color:#8C1D18; }
+    .weho-cert .checkbox-label span { font-size:13px; line-height:1.45; }`;
+  document.head.appendChild(css);
+})();
+
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 </body>
