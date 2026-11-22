@@ -20467,7 +20467,7 @@ const App = {
     const out = previousBindReferralStep.apply(this, args);
     if (st?.step === 'form' && needsLocation(st)) {
       this.mountLocationPicker('ref', st.values, () => this.refreshReferralReadiness());
-      ['ref-cert', 'ref-cert-name'].forEach(id => {
+      ['ref-cert', 'ref-cert-name', 'ref-signature'].forEach(id => {
         const el = document.getElementById(id);
         el?.addEventListener('input', () => { this.referralCaptureForm(); this.refreshReferralReadiness(); });
         el?.addEventListener('change', () => { this.referralCaptureForm(); this.refreshReferralReadiness(); });
@@ -20497,12 +20497,21 @@ const App = {
     const host = eligibility || sections[1];
     host?.insertAdjacentHTML('beforeend', `<div style="margin-top:16px">${this.locationPickerHtml('ref', st.values)}</div>`);
     const supporting = sections.find(s => /Additional Supporting/i.test(s.querySelector('.partner-section-title')?.textContent || ''));
+    const existingCert = sections.find(s => /Referring Agency Certification/i.test(s.querySelector('.partner-section-title')?.textContent || ''));
+    if (st.programForm?.requiresCertification && existingCert) {
+      // Programs that already end in a signed certification (Holloway) get the
+      // statement added there; the typed signature is the certifier's name.
+      existingCert.insertAdjacentHTML('beforeend', `<div class="weho-cert" style="margin-top:14px">
+        <label class="checkbox-label"><input type="checkbox" id="ref-cert" ${st.values?.eligibility_certified ? 'checked' : ''}>
+          <span>${esc(CERT_TEXT)}</span></label></div>`);
+    } else {
     const cert = document.createElement('section');
     cert.className = 'partner-section-card';
     cert.innerHTML = `<div class="partner-section-head"><span class="partner-section-num">&#10003;</span><div>
         <h2 class="partner-section-title">Certification</h2><div class="partner-section-sub">The person completing this referral certifies it.</div></div></div>
       ${this.certificationHtml('ref', st.values, st.values?.case_manager_name)}`;
     supporting ? supporting.before(cert) : body.querySelector('.partner-form-main')?.appendChild(cert);
+    }
     // Readiness panel gets the two new checks.
     const list = body.querySelector('.partner-ready-list');
     list?.insertAdjacentHTML('beforeend', `
@@ -20515,7 +20524,7 @@ const App = {
     const out = previousCapture.apply(this, args);
     const st = this._referral;
     if (needsLocation(st)) {
-      const c = document.getElementById('ref-cert'), n = document.getElementById('ref-cert-name');
+      const c = document.getElementById('ref-cert'), n = document.getElementById('ref-cert-name') || document.getElementById('ref-signature');
       if (c) st.values.eligibility_certified = c.checked;
       if (n) st.values.eligibility_certified_by = n.value.trim();
       const t = document.getElementById('ref-loc-text');
@@ -20537,7 +20546,7 @@ const App = {
     const states = {
       'weho-location': v.location_lat != null && this.pointInWeho(v.location_lng, v.location_lat) === true,
       'weho-cert': !!dob && this.ageOn(dob) >= 18 && !!document.getElementById('ref-cert')?.checked
-                   && !!String(document.getElementById('ref-cert-name')?.value || '').trim()
+                   && !!String((document.getElementById('ref-cert-name') || document.getElementById('ref-signature'))?.value || '').trim()
     };
     Object.entries(states).forEach(([k, ok]) => {
       const item = document.querySelector(`[data-ready-key="${k}"]`); if (!item) return;
@@ -20649,6 +20658,23 @@ const App = {
     }
     if (r.eligibility_certified) html += `<div class="field-hint">Certified true and accurate by <strong>${esc(r.eligibility_certified_by || '—')}</strong>${r.eligibility_certified_at ? ' on ' + esc(this.formatDate(this.dateOnly(r.eligibility_certified_at))) : ''}.</div>`;
     return html;
+  };
+
+  const previousOpenDetailForLocation = App.openReferralDetail;
+  App.openReferralDetail = function(id){
+    previousOpenDetailForLocation.call(this, id);
+    if (this.usesPipeline?.()) return;          // the pipeline screen shows it in its summary line
+    const r = (this.data.referrals || []).find(x => x.id === id);
+    const body = document.getElementById('referral-detail-body');
+    if (!r || !body || (r.location_lat == null && !r.location_description)) return;
+    const link = r.location_lat != null ? ` · <a href="https://www.openstreetmap.org/?mlat=${r.location_lat}&mlon=${r.location_lng}#map=18/${r.location_lat}/${r.location_lng}" target="_blank" rel="noopener">map</a>` : '';
+    const inside = r.location_in_weho === true ? ' · <span style="color:#1E8449">&#10003; inside City limits</span>'
+                 : r.location_in_weho === false ? ' · <span style="color:#B3261E">outside City limits</span>' : '';
+    const html = `<div class="form-section"><div class="form-section-title">Location</div>
+      <div style="font-size:13px">Spends most time at: <strong>${esc(r.location_description || 'pinned location')}</strong>${inside}${link}</div>
+      ${r.eligibility_certified ? `<div class="field-hint" style="margin-top:4px">Certified true and accurate by <strong>${esc(r.eligibility_certified_by || '—')}</strong>${r.eligibility_certified_at ? ' on ' + esc(this.formatDate(this.dateOnly(r.eligibility_certified_at))) : ''}.</div>` : ''}</div>`;
+    const community = [...body.querySelectorAll('.form-section')].find(s => /Community Member/.test(s.querySelector('.form-section-title')?.textContent || ''));
+    community ? community.insertAdjacentHTML('afterend', html) : body.insertAdjacentHTML('afterbegin', html);
   };
 
   const css = document.createElement('style');
