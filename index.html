@@ -18785,6 +18785,958 @@ const App = {
   };
 })();
 
+(function(){
+  /* ==========================================================================
+     Intake bed selection, housing plans and plan-linked services.
+
+     Bed at intake (programs with has_beds): enrolling a participant now
+     includes choosing their bed. Saving the intake opens a stay on that bed,
+     the same record the Bed Board writes, so the bed inventory, the nightly
+     census and the fee-for-service invoice all follow from intake without a
+     second step. A new participant cannot be saved without a bed.
+
+     Housing plans (programs with has_case_plan_tracking): the Services screen
+     holds each participant's uploaded plan with its goals. A service contact
+     can be marked as tied to the plan, either generally or to one goal, so
+     plan-related work can be counted separately from services in general.
+
+     Needs migration 2026-11-22_glendale_intake_beds_housing_plans.sql.
+     Without it the portal keeps working and these extras stay out of the way.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+  const PLAN_BUCKET = 'holloway-client-documents';
+  const DESIGNATION = { reserved:'Reserved', fee_for_service:'Fee-for-service' };
+  const GENDER_LABEL = { men:'Men', women:'Women' };
+
+  App.SERVICE_MIGRATION_FIELDS = [...(App.SERVICE_MIGRATION_FIELDS || []), 'housing_plan_id', 'housing_plan_goal'];
+
+  const insertAfterSection = (title, html) => {
+    const t = [...document.querySelectorAll('#client-body .form-section-title')]
+      .find(x => x.textContent.trim() === title);
+    const ref = t ? t.closest('.form-section') : null;
+    const wrap = document.createElement('div'); wrap.innerHTML = html.trim();
+    const el = wrap.firstElementChild;
+    if (ref) ref.parentNode.insertBefore(el, ref.nextSibling);
+    else document.getElementById('client-body')?.prepend(el);
+  };
+
+  /* ------------------------------------------------------------- loading */
+
+  const previousLoadAll = App.loadAll;
+  App.loadAll = async function(){
+    await previousLoadAll.call(this);
+    if (!this.data) this.data = {};
+    this.data.housingPlans = [];
+    const pid = this.program?.id;
+    if (!pid || this.isAgencyFiscal?.()) return;
+    const tasks = [];
+    if (this.programHas('has_beds') && this.loadBedData) tasks.push(this.loadBedData());
+    if (this.programHas('has_case_plan_tracking')) {
+      tasks.push(this.sb.from('holloway_housing_plans').select('*').eq('program_id', pid)
+        .order('plan_date', { ascending:false }).order('created_at', { ascending:false })
+        .then(r => { if (r.error) console.warn('housing plans unavailable', r.error); this.data.housingPlans = r.data || []; }));
+    }
+    await Promise.all(tasks);
+  };
+
+  App.plansFor   = function(clientId){ return (this.data.housingPlans || []).filter(p => p.client_id === clientId); };
+  App.latestPlan = function(clientId){ return this.plansFor(clientId)[0] || null; };
+  App.planGoals  = function(plan){ return Array.isArray(plan?.goals) ? plan.goals.filter(g => String(g || '').trim()) : []; };
+
+  /* ------------------------------------------------------ bed at intake */
+
+  // Beds that can take a new participant today: vacant, or held for an
+  // accepted referral (which is usually who is being enrolled).
+  App.intakeBeds = function(){
+    return this.bedsFor().filter(b => ['vacant_available','held'].includes(this.bedStatus(b)));
+  };
+
+  App.bedLabel = function(b){
+    const kind = b.designation === 'reserved'
+      ? `Reserved · ${GENDER_LABEL[b.gender_category] || 'Any'}`
+      : 'Fee-for-service';
+    return `${b.label} — ${kind}`;
+  };
+
+  // Reserved beds are split by gender under the contract. Flag a mismatch
+  // rather than block it: staff may be housing someone by their identity.
+  const genderMismatch = (bed, gender) => {
+    if (!bed || bed.designation !== 'reserved' || !gender) return false;
+    const g = String(gender).toLowerCase();
+    if (bed.gender_category === 'men')   return g.startsWith('woman');
+    if (bed.gender_category === 'women') return g.startsWith('man');
+    return false;
+  };
+
+  const previousOpenClientForm = App.openClientForm;
+  App.openClientForm = function(id = null){
+    previousOpenClientForm.call(this, id);
+    this._intakeBedRequired = false;
+    if (!this.programHas('has_beds') || this.isAgencyFiscal?.()) return;
+
+    const c = id ? (this.data.clients || []).find(x => x.id === id) || {} : {};
+    const stay = id ? (this.data.stays || []).find(s => s.client_id === id && !s.end_date) : null;
+    const exited = id && this.clientStatus(c) === 'Exited';
+
+    let body;
+    if (stay) {
+      const bed = this.bedsFor().find(b => b.id === stay.bed_id);
+      body = `<div class="client-form-grid">
+          <div class="field-group"><label class="field-label">Bed</label>
+            <div class="field-input" style="background:transparent">${esc(bed ? this.bedLabel(bed) : 'Unknown bed')}</div></div>
+          <div class="field-group"><label class="field-label">In this bed since</label>
+            <div class="field-input" style="background:transparent">${this.formatDate(this.dateOnly(stay.start_date))}</div></div>
+        </div>
+        <div class="field-hint">To move this participant to another bed or end the stay, use the Bed Board.</div>`;
+    } else if (exited) {
+      body = `<div class="field-hint">This participant has exited and has no open bed stay.</div>`;
+    } else if (this.isAdmin()) {
+      body = `<div class="field-hint">${id ? 'No bed assigned.' : 'Ascencia staff choose the bed at intake.'}</div>`;
+    } else {
+      const beds = this.intakeBeds();
+      const byKind = [['reserved','Reserved beds (standard agreement)'],['fee_for_service','Fee-for-service beds']];
+      const options = byKind.map(([k, label]) => {
+        const list = beds.filter(b => b.designation === k);
+        return list.length ? `<optgroup label="${esc(label)}">${list.map(b =>
+          `<option value="${esc(b.id)}">${esc(this.bedLabel(b))}${this.bedStatus(b) === 'held' ? ' (held)' : ''}</option>`).join('')}</optgroup>` : '';
+      }).join('');
+      const reservedFree = beds.filter(b => b.designation === 'reserved').length;
+      const ffsFree = beds.filter(b => b.designation === 'fee_for_service').length;
+      this._intakeBedRequired = !id;
+      body = `<div class="client-form-grid">
+          <div class="field-group"><label class="field-label ${id ? '' : 'required'}" for="cf-bed">Bed</label>
+            <select class="field-select" id="cf-bed"><option value="">Select a bed…</option>${options}</select>
+            <div class="field-hint">${reservedFree} reserved and ${ffsFree} fee-for-service bed${ffsFree === 1 ? '' : 's'} open today.</div></div>
+          <div class="field-group"><label class="field-label ${id ? '' : 'required'}" for="cf-bed-start">Bed start date</label>
+            <input type="date" class="field-input" id="cf-bed-start" value="${esc(this.dateOnly(c.entry_date) || this.localDate())}">
+            <div class="field-hint">Usually the entry date. Fee-for-service nights are billed from here.</div></div>
+        </div>
+        <div id="cf-bed-note"></div>
+        ${beds.length ? '' : '<div class="dq-warning">⚠ No beds are open. Free a bed on the Bed Board before enrolling.</div>'}`;
+    }
+
+    insertAfterSection('Intake & Demographics',
+      `<div class="form-section" id="cf-bed-section"><div class="form-section-title">Bed Assignment</div>${body}</div>`);
+
+    const sel = document.getElementById('cf-bed');
+    const entry = document.getElementById('cf-entry-date');
+    const start = document.getElementById('cf-bed-start');
+    const note = () => {
+      const bed = this.bedsFor().find(b => b.id === sel?.value);
+      const gender = document.getElementById('cf-gender')?.value;
+      const out = document.getElementById('cf-bed-note');
+      if (!out) return;
+      const msgs = [];
+      if (bed?.designation === 'fee_for_service') msgs.push('This is a fee-for-service bed. Each night of the stay will appear on the fee-for-service invoice.');
+      if (genderMismatch(bed, gender)) msgs.push(`This reserved bed is designated for ${GENDER_LABEL[bed.gender_category].toLowerCase()}. Confirm this placement is intended.`);
+      out.innerHTML = msgs.map(m => `<div class="dq-warning">⚠ ${esc(m)}</div>`).join('');
+    };
+    sel?.addEventListener('change', note);
+    document.getElementById('cf-gender')?.addEventListener('change', note);
+    // Keep the bed start date in step with the entry date until staff change it.
+    let startTouched = false;
+    start?.addEventListener('input', () => { startTouched = true; });
+    entry?.addEventListener('input', () => { if (start && !startTouched && entry.value) start.value = entry.value; });
+  };
+
+  const previousSaveClient = App.saveClient;
+  App.saveClient = async function(){
+    const sel = document.getElementById('cf-bed');
+    if (!sel) return previousSaveClient.call(this);
+
+    const bedId = sel.value || null;
+    const start = document.getElementById('cf-bed-start')?.value || null;
+    const entry = document.getElementById('cf-entry-date')?.value || null;
+    const clientId = this.currentClientId || document.getElementById('cf-hmis-id')?.value.trim();
+    const state = document.getElementById('client-save-state');
+    const say = t => { if (state) state.textContent = t; };
+
+    if (this._intakeBedRequired && !bedId) { say('Choose a bed to complete intake.'); return; }
+    if (bedId && !start) { say('Enter the bed start date.'); return; }
+    if (bedId && entry && start < entry) { say('The bed start date cannot be before the entry date.'); return; }
+    if (bedId && start > this.localDate()) { say('The bed start date cannot be in the future.'); return; }
+
+    await previousSaveClient.call(this);
+    if (!bedId) return;
+    // The base save reloads data and closes the form only when it succeeds.
+    if (!(this.data.clients || []).some(c => c.id === clientId)) return;
+
+    const { error } = await this.sb.from('holloway_stays').insert({
+      program_id: this.program.id, client_id: clientId, bed_id: bedId,
+      start_date: start, created_by: this.user?.email || null
+    });
+    if (error) {
+      const taken = /exclusion|overlap|conflict/i.test(error.message || '');
+      this.toast(taken
+        ? 'Participant saved, but that bed was just taken. Assign a bed on the Bed Board.'
+        : 'Participant saved, but the bed could not be assigned: ' + error.message, { error:true });
+    } else {
+      await this.logBedStatus(bedId, 'occupied', { reason: 'Assigned at intake' });
+      const bed = this.bedsFor().find(b => b.id === bedId);
+      this.toast(`Saved. ${bed ? bed.label : 'Bed'} assigned from ${this.formatDate(start)}.`);
+    }
+    await this.loadBedData();
+    if (this.view === 'beds') this.renderBeds();
+  };
+
+  /* ---------------------------------------- services tied to the plan */
+
+  const previousOpenServiceForm = App.openServiceForm;
+  App.openServiceForm = function(id = null, clientId = null, presetType = null, presetName = null){
+    previousOpenServiceForm.call(this, id, clientId, presetType, presetName);
+    if (!this.programHas('has_case_plan_tracking') || this.isAgencyFiscal?.()) return;
+
+    const s = id ? (this.data.clientServices || []).find(x => x.id === id) || {} : {};
+    const grid = document.querySelector('#service-body .client-form-grid');
+    if (!grid) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'field-group full'; wrap.id = 'sf-plan-wrap';
+    wrap.innerHTML = `<label class="field-label" for="sf-plan">Housing plan</label>
+      <select id="sf-plan" class="field-select"></select>
+      <div class="field-hint" id="sf-plan-hint"></div>`;
+    const notes = document.getElementById('sf-notes')?.closest('.field-group');
+    grid.insertBefore(wrap, notes || null);
+
+    const fill = () => {
+      const cid = document.getElementById('sf-client')?.value;
+      const plan = cid ? this.latestPlan(cid) : null;
+      const sel = document.getElementById('sf-plan');
+      const hint = document.getElementById('sf-plan-hint');
+      // An existing row keeps the plan it was logged against, even after a newer version is uploaded.
+      const rowPlan = s.housing_plan_id ? (this.data.housingPlans || []).find(p => p.id === s.housing_plan_id) : null;
+      const usePlan = (rowPlan && rowPlan.client_id === cid) ? rowPlan : plan;
+      const goals = this.planGoals(usePlan);
+      if (s.housing_plan_goal && !goals.includes(s.housing_plan_goal)) goals.push(s.housing_plan_goal);
+      const current = s.housing_plan_goal ? 'goal:' + s.housing_plan_goal : (s.housing_plan_id ? 'general' : '');
+      sel.innerHTML = `<option value="">Not tied to the housing plan</option>` + (usePlan ? `
+        <option value="general" ${current === 'general' ? 'selected' : ''}>Supports the housing plan (general)</option>
+        ${goals.length ? `<optgroup label="Plan goals">${goals.map(g =>
+          `<option value="${esc('goal:' + g)}" ${current === 'goal:' + g ? 'selected' : ''}>${esc(g)}</option>`).join('')}</optgroup>` : ''}` : '');
+      sel.disabled = !usePlan;
+      sel.dataset.planId = usePlan?.id || '';
+      hint.textContent = !cid ? 'Choose a client first.'
+        : usePlan ? `Plan dated ${this.formatDate(this.dateOnly(usePlan.plan_date))}.`
+        : 'No housing plan on file for this client. Upload one on the Services screen.';
+    };
+    const toggle = () => {
+      const type = document.getElementById('sf-type')?.value || '';
+      // Group sessions save one row per attendee; plan links are per person, so they stay single-client.
+      const group = this.isGroupSessionType(type) && !id;
+      wrap.style.display = group ? 'none' : '';
+    };
+    document.getElementById('sf-client')?.addEventListener('change', fill);
+    document.getElementById('sf-type')?.addEventListener('change', toggle);
+    fill(); toggle();
+  };
+
+  const previousSaveService = App.saveService;
+  App.saveService = async function(){
+    const sel = document.getElementById('sf-plan');
+    const wrap = document.getElementById('sf-plan-wrap');
+    this._planLink = null;
+    if (sel && wrap && wrap.style.display !== 'none') {
+      const v = sel.value;
+      this._planLink = {
+        housing_plan_id: v && sel.dataset.planId ? sel.dataset.planId : null,
+        housing_plan_goal: v.startsWith('goal:') ? v.slice(5) : null
+      };
+    }
+    try { return await previousSaveService.call(this); }
+    finally { this._planLink = null; }
+  };
+
+  const previousUpsertServiceRows = App.upsertServiceRows;
+  App.upsertServiceRows = async function(rows){
+    if (this._planLink && Array.isArray(rows) && rows.length === 1) {
+      rows = [{ ...rows[0], ...this._planLink }];
+    }
+    return previousUpsertServiceRows.call(this, rows);
+  };
+
+  /* ----------------------------------------- housing plans on Services */
+
+  const previousRenderServices = App.renderServices;
+  App.renderServices = function(){
+    previousRenderServices.call(this);
+    if (!this.programHas('has_case_plan_tracking') || this.isAgencyFiscal?.()) return;
+    const el = document.getElementById('view-services');
+    if (!el) return;
+
+    // Mark plan-linked contacts in the table.
+    const byId = new Map((this.data.clientServices || []).map(s => [String(s.id), s]));
+    el.querySelectorAll('[data-edit-service]').forEach(btn => {
+      const s = byId.get(String(btn.dataset.editService));
+      if (!s || !s.housing_plan_id) return;
+      const cell = btn.closest('tr')?.children[3];
+      if (cell) cell.insertAdjacentHTML('beforeend',
+        `<br><span class="badge badge-navy" title="Tied to the housing plan">Plan${s.housing_plan_goal ? ': ' + esc(s.housing_plan_goal) : ''}</span>`);
+    });
+
+    const { start, end } = this.qRange(this.currentQuarter);
+    const inQuarter = (this.data.clientServices || []).filter(s => {
+      const d = this.dateOnly(s.service_date); return d >= start && d <= end;
+    });
+    const linked = inQuarter.filter(s => s.housing_plan_id);
+    const admin = this.isAdmin();
+    const active = (this.data.clients || []).filter(c => this.clientStatus(c) !== 'Exited');
+    const withPlan = active.filter(c => this.latestPlan(c.id));
+
+    const rows = active.map(c => {
+      const plan = this.latestPlan(c.id);
+      const versions = this.plansFor(c.id).length;
+      const goals = this.planGoals(plan);
+      const n = linked.filter(s => s.client_id === c.id).length;
+      const fileCell = !plan ? '—'
+        : !plan.storage_path ? 'No file'
+        : `<button type="button" class="btn btn-ghost btn-sm" data-open-plan="${esc(plan.id)}">${esc(plan.file_name || 'Open')}</button>`;
+      return `<tr>
+        <td><strong>${esc(this.clientDisplayId(c))}</strong>${admin ? '' : '<br><span class="field-hint">' + esc(this.clientName(c) || '') + '</span>'}</td>
+        <td>${plan ? this.formatDate(this.dateOnly(plan.plan_date)) + (versions > 1 ? `<br><span class="field-hint">${versions} versions</span>` : '')
+                   : '<span class="badge badge-amber">No plan</span>'}</td>
+        <td>${goals.length ? goals.map(g => esc(g)).join('<br>') : '<span class="field-hint">—</span>'}</td>
+        <td style="text-align:right">${n}</td>
+        <td>${fileCell}</td>
+        <td>${admin ? '' : `<button type="button" class="btn btn-ghost btn-sm" data-upload-plan="${esc(c.id)}">${plan ? 'New version' : 'Upload plan'}</button>`}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6" class="empty-table-state">No active participants.</td></tr>';
+
+    const card = document.createElement('div');
+    card.className = 'card'; card.id = 'housing-plans-card'; card.style.margin = '16px 0'; card.style.padding = '16px 20px';
+    card.innerHTML = `
+      <div class="page-header" style="margin-bottom:8px"><div>
+        <h2 class="page-title" style="font-size:1.1rem">Housing Plans</h2>
+        <div class="page-subtitle">${withPlan.length} of ${active.length} active participants have a plan on file ·
+          ${linked.length} of ${inQuarter.length} service contacts this quarter tied to a plan</div></div></div>
+      <div id="hp-form" style="display:none"></div>
+      <div class="client-table-wrap"><table class="client-table"><thead><tr>
+        <th>Participant</th><th>Plan date</th><th>Goals</th><th style="text-align:right">Plan services this quarter</th><th>Document</th><th></th>
+      </tr></thead><tbody>${rows}</tbody></table></div>`;
+    const anchor = el.querySelector('.generated-metric-grid') || el.querySelector('.page-header');
+    anchor ? anchor.parentNode.insertBefore(card, anchor.nextSibling) : el.prepend(card);
+
+    card.querySelectorAll('[data-upload-plan]').forEach(b => b.addEventListener('click', () => this.openPlanUpload(b.dataset.uploadPlan)));
+    card.querySelectorAll('[data-open-plan]').forEach(b => b.addEventListener('click', () => this.openPlanFile(b.dataset.openPlan)));
+  };
+
+  App.openPlanUpload = function(clientId){
+    const box = document.getElementById('hp-form');
+    if (!box) return;
+    const c = (this.data.clients || []).find(x => x.id === clientId) || { id: clientId };
+    const prior = this.latestPlan(clientId);
+    box.style.display = '';
+    box.innerHTML = `<div class="form-section" style="border:1px solid var(--border, #ddd);border-radius:8px;padding:14px;margin-bottom:12px">
+      <div class="form-section-title">Upload housing plan · ${esc(this.clientDisplayId(c))} ${esc(this.clientName(c) || '')}</div>
+      <div class="client-form-grid">
+        <div class="field-group"><label class="field-label required" for="hp-date">Plan date</label>
+          <input type="date" class="field-input" id="hp-date" value="${esc(this.localDate())}"></div>
+        <div class="field-group"><label class="field-label required" for="hp-file">Plan document</label>
+          <input type="file" class="field-input" id="hp-file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.heic">
+          <div class="field-hint">PDF, Word or a photo of the signed plan. 20 MB max.</div></div>
+        <div class="field-group full"><label class="field-label" for="hp-goals">Plan goals <span class="field-hint">one per line</span></label>
+          <textarea class="field-textarea" id="hp-goals" placeholder="Obtain California ID&#10;Apply for SSI&#10;Submit Section 8 application">${esc(this.planGoals(prior).join('\n'))}</textarea>
+          <div class="field-hint">Services can be tied to these goals. ${prior ? 'Carried over from the last plan; edit as needed.' : ''}</div></div>
+        <div class="field-group full"><label class="field-label" for="hp-notes">Notes</label>
+          <input type="text" class="field-input" id="hp-notes"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+        <button type="button" class="btn btn-primary" id="hp-save">Save plan</button>
+        <button type="button" class="btn btn-ghost" id="hp-cancel">Cancel</button>
+        <span class="field-hint" id="hp-msg"></span></div>
+    </div>`;
+    document.getElementById('hp-cancel').addEventListener('click', () => { box.style.display = 'none'; box.innerHTML = ''; });
+    document.getElementById('hp-save').addEventListener('click', () => this.savePlanUpload(clientId));
+    box.scrollIntoView({ behavior:'smooth', block:'start' });
+  };
+
+  App.savePlanUpload = async function(clientId){
+    const msg = t => { const m = document.getElementById('hp-msg'); if (m) m.textContent = t; };
+    const date = document.getElementById('hp-date')?.value;
+    const file = document.getElementById('hp-file')?.files?.[0];
+    const goals = (document.getElementById('hp-goals')?.value || '').split('\n').map(g => g.trim()).filter(Boolean);
+    const notes = document.getElementById('hp-notes')?.value.trim() || null;
+    if (!date) { msg('Enter the plan date.'); return; }
+    if (date > this.localDate()) { msg('The plan date cannot be in the future.'); return; }
+    if (!file) { msg('Choose the plan document.'); return; }
+    if (file.size > 20 * 1024 * 1024) { msg('That file is over 20 MB.'); return; }
+
+    const btn = document.getElementById('hp-save'); if (btn) btn.disabled = true;
+    msg('Uploading…');
+    const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(-80);
+    const path = `${this.program.id}/${clientId}/${crypto.randomUUID ? crypto.randomUUID() : Date.now()}-${safe}`;
+    const up = await this.sb.storage.from(PLAN_BUCKET).upload(path, file, { upsert:false, contentType: file.type || undefined });
+    if (up.error) { msg('Upload failed: ' + up.error.message); if (btn) btn.disabled = false; return; }
+    const { error } = await this.sb.from('holloway_housing_plans').insert({
+      program_id: this.program.id, client_id: clientId, plan_date: date, goals, notes,
+      storage_path: path, file_name: file.name,
+      uploaded_by: this.profile?.full_name || this.user?.email || null
+    });
+    if (error) {
+      await this.sb.storage.from(PLAN_BUCKET).remove([path]);
+      msg('Could not save the plan: ' + error.message); if (btn) btn.disabled = false; return;
+    }
+    await this.loadAll();
+    this.renderServices();
+    this.toast('Housing plan saved.');
+  };
+
+  App.openPlanFile = async function(planId){
+    const plan = (this.data.housingPlans || []).find(p => p.id === planId);
+    if (!plan?.storage_path) return;
+    const { data, error } = await this.sb.storage.from(PLAN_BUCKET).createSignedUrl(plan.storage_path, 3600);
+    if (error) { this.toast('Could not open the plan: ' + error.message, { error:true }); return; }
+    window.open(data.signedUrl, '_blank', 'noopener');
+  };
+})();
+
+(function(){
+  /* ==========================================================================
+     Benefit and service connections (programs with contract goals).
+
+     The "Participants Connected to Benefits/Services" goal counts completed
+     connections only: a Benefits Assistance or Income / Employment Support
+     contact marked Connected, with the date the benefit was approved or the
+     participant enrolled. Help that has not yet led to a connection is logged
+     as In progress and does not count until a contact records it as Connected.
+
+     Needs migration 2026-11-22_benefit_connections.sql.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+  const CONNECTION_TYPES = ['Benefits Assistance', 'Income / Employment Support'];
+  const BENEFITS = ['SSI', 'SSDI', 'Medi-Cal', 'CalFresh', 'General Relief', 'CalWORKs', 'Veterans benefits',
+                    'Unemployment insurance', 'Employment', 'Job training program', 'Other'];
+  const STATUSES = ['In progress', 'Connected', 'Denied / not eligible'];
+
+  App.SERVICE_MIGRATION_FIELDS = [...(App.SERVICE_MIGRATION_FIELDS || []), 'benefit_type', 'connection_status', 'connected_on'];
+  App.tracksConnections = function(){ return this.programHas('has_contract_goals_card') && !this.isAgencyFiscal?.(); };
+
+  const previousOpenServiceForm = App.openServiceForm;
+  App.openServiceForm = function(id = null, clientId = null, presetType = null, presetName = null){
+    previousOpenServiceForm.call(this, id, clientId, presetType, presetName);
+    if (!this.tracksConnections()) return;
+    const s = id ? (this.data.clientServices || []).find(x => x.id === id) || {} : {};
+    const grid = document.querySelector('#service-body .client-form-grid');
+    if (!grid) return;
+    const benefit = s.benefit_type || '';
+    const known = !benefit || BENEFITS.includes(benefit);
+    const wrap = document.createElement('div');
+    wrap.className = 'field-group full'; wrap.id = 'sf-conn-wrap';
+    wrap.innerHTML = `
+      <div class="client-form-grid" style="border:1px solid var(--border, #ddd);border-radius:8px;padding:12px">
+        <div class="field-group"><label class="field-label required" for="sf-benefit">Benefit or service</label>
+          <select id="sf-benefit" class="field-select"><option value="">Select…</option>
+            ${BENEFITS.map(b => `<option ${(known ? benefit : 'Other') === b ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>
+          <input id="sf-benefit-other" class="field-input" style="margin-top:8px;display:none" placeholder="Name the benefit or service" value="${esc(known ? '' : benefit)}"></div>
+        <div class="field-group"><label class="field-label required" for="sf-conn-status">Status</label>
+          <select id="sf-conn-status" class="field-select">
+            ${STATUSES.map(v => `<option ${(s.connection_status || 'In progress') === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
+        <div class="field-group" id="sf-connected-on-wrap"><label class="field-label required" for="sf-connected-on">Date approved or enrolled</label>
+          <input id="sf-connected-on" type="date" class="field-input" value="${esc(this.dateOnly(s.connected_on) || '')}"></div>
+        <div class="field-group full"><div class="field-hint">Only contacts marked <strong>Connected</strong> count toward the benefits goal, by the date the benefit was approved or the participant enrolled. Help still under way is <strong>In progress</strong>; log a new contact or edit this one once it is approved.</div></div>
+      </div>`;
+    const notes = document.getElementById('sf-notes')?.closest('.field-group');
+    grid.insertBefore(wrap, notes || null);
+
+    const sync = () => {
+      const type = document.getElementById('sf-type')?.value || '';
+      wrap.style.display = CONNECTION_TYPES.includes(type) ? '' : 'none';
+      const other = document.getElementById('sf-benefit')?.value === 'Other';
+      document.getElementById('sf-benefit-other').style.display = other ? '' : 'none';
+      const connected = document.getElementById('sf-conn-status')?.value === 'Connected';
+      document.getElementById('sf-connected-on-wrap').style.display = connected ? '' : 'none';
+    };
+    ['sf-type', 'sf-benefit', 'sf-conn-status'].forEach(i => document.getElementById(i)?.addEventListener('change', sync));
+    sync();
+  };
+
+  const previousSaveService = App.saveService;
+  App.saveService = async function(){
+    this._connFields = null;
+    const wrap = document.getElementById('sf-conn-wrap');
+    const type = document.getElementById('sf-type')?.value || '';
+    if (wrap) {
+      if (!CONNECTION_TYPES.includes(type)) {
+        this._connFields = { benefit_type: null, connection_status: null, connected_on: null };
+      } else {
+        const state = document.getElementById('service-save-state');
+        const say = t => { if (state) state.textContent = t; };
+        const pick = document.getElementById('sf-benefit')?.value || '';
+        const benefit = pick === 'Other' ? (document.getElementById('sf-benefit-other')?.value.trim() || '') : pick;
+        const status = document.getElementById('sf-conn-status')?.value || 'In progress';
+        const on = document.getElementById('sf-connected-on')?.value || '';
+        const date = document.getElementById('sf-date')?.value || '';
+        if (!benefit) { say('Choose the benefit or service.'); return; }
+        if (status === 'Connected' && !on) { say('Enter the date the benefit was approved or the participant enrolled.'); return; }
+        if (status === 'Connected' && on > this.localDate()) { say('The approval date cannot be in the future.'); return; }
+        this._connFields = { benefit_type: benefit, connection_status: status,
+                             connected_on: status === 'Connected' ? on : null };
+        if (status === 'Connected' && date && on > date) {
+          // Recording an approval on an earlier contact is fine; flag it so the dates are checked.
+          this.toast('Saved with an approval date after the contact date. Check the dates are right.');
+        }
+      }
+    }
+    try { return await previousSaveService.call(this); }
+    finally { this._connFields = null; }
+  };
+
+  const previousUpsertServiceRows = App.upsertServiceRows;
+  App.upsertServiceRows = async function(rows){
+    if (this._connFields && Array.isArray(rows)) rows = rows.map(r => ({ ...r, ...this._connFields }));
+    return previousUpsertServiceRows.call(this, rows);
+  };
+
+  const previousRenderServices = App.renderServices;
+  App.renderServices = function(){
+    previousRenderServices.call(this);
+    if (!this.tracksConnections()) return;
+    const el = document.getElementById('view-services');
+    if (!el) return;
+    const byId = new Map((this.data.clientServices || []).map(s => [String(s.id), s]));
+    el.querySelectorAll('#view-services tr [data-edit-service]').forEach(btn => {
+      const s = byId.get(String(btn.dataset.editService));
+      if (!s || !s.connection_status) return;
+      const cell = btn.closest('tr')?.children[3];
+      const cls = s.connection_status === 'Connected' ? 'badge-green' : s.connection_status === 'In progress' ? 'badge-gray' : 'badge-red';
+      const when = s.connection_status === 'Connected' && s.connected_on ? ' ' + this.formatDate(this.dateOnly(s.connected_on)) : '';
+      if (cell) cell.insertAdjacentHTML('beforeend',
+        `<br><span class="badge ${cls}">${esc(s.benefit_type || '')}: ${esc(s.connection_status)}${esc(when)}</span>`);
+    });
+  };
+})();
+
+(function(){
+  /* ==========================================================================
+     Streamlined workspace for shelter programs (has_beds), e.g. Glendale.
+
+     1. One-step exit. Recording an exit on the participant ends their bed
+        stay on the same date; ending a stay on the Bed Board offers the exit
+        form straight away. An open stay left behind after an exit keeps the
+        bed off the inventory and, on a fee-for-service bed, keeps billing.
+     2. Fewer duplicate fields. The free-text room field follows the bed; the
+        Income Tracking screen is hidden (the benefits goal now counts
+        completed connections). The plan-completed date is set by the database
+        from the first uploaded plan.
+     3. Six places instead of twelve: Dashboard, Referrals, Bed Board,
+        Participants, Incidents, Reports. Services, Exits and Follow-Ups are
+        tabs on Participants, and a participant's record opens in tabs.
+     4. A to-do list on the Dashboard built from the contract's deadlines.
+
+     Holloway (has_beds = false) is untouched by all of this.
+     ========================================================================== */
+
+  const esc = s => App.escape(s ?? '');
+  App.isShelterProgram = function(){ return this.programHas('has_beds') && !this.isAgencyFiscal?.(); };
+
+  /* ================================================== 1. one-step exit */
+
+  App.openStayForClient = function(clientId){
+    return (this.data.stays || []).find(s => s.client_id === clientId && !s.end_date) || null;
+  };
+
+  App.endStayForExit = async function(stay, exitDate, reason){
+    const { error } = await this.sb.from('holloway_stays')
+      .update({ end_date: exitDate, end_reason: reason || 'Participant exited', updated_at: new Date().toISOString() })
+      .eq('id', stay.id).eq('program_id', this.program.id);
+    if (error) return error;
+    await this.logBedStatus(stay.bed_id, 'vacant_available', { reason: 'Participant exited' });
+    return null;
+  };
+
+  const previousSaveClient = App.saveClient;
+  App.saveClient = async function(){
+    if (!this.isShelterProgram()) return previousSaveClient.call(this);
+    const clientId = this.currentClientId || document.getElementById('cf-hmis-id')?.value.trim();
+    const exiting  = document.getElementById('cf-status')?.value === 'Exited';
+    const exitDate = document.getElementById('cf-exit-date')?.value || null;
+    const dest     = document.getElementById('cf-exit-type')?.value || null;
+    const stay     = clientId ? this.openStayForClient(clientId) : null;
+    const state    = document.getElementById('client-save-state');
+    if (exiting && stay && exitDate && exitDate < stay.start_date) {
+      if (state) state.textContent = `The exit date is before this participant's bed stay began (${this.formatDate(stay.start_date)}).`;
+      return;
+    }
+
+    await previousSaveClient.call(this);
+    if (!(exiting && stay && exitDate)) return;
+    const saved = (this.data.clients || []).find(c => c.id === clientId);
+    if (!saved || this.dateOnly(saved.exit_date) !== exitDate) return;   // the save did not go through
+
+    const error = await this.endStayForExit(stay, exitDate, dest);
+    const bed = this.bedsFor().find(b => b.id === stay.bed_id);
+    if (error) this.toast('Exit saved, but the bed stay could not be closed: ' + error.message + ' End it on the Bed Board.', { error:true });
+    else this.toast(`Exit saved. ${bed ? bed.label : 'The bed'} is back in the available inventory from ${this.formatDate(exitDate)}.`);
+    await this.loadBedData();
+    if (this.view === 'beds') this.renderBeds();
+    if (this.view === 'dashboard') this.renderDashboard();
+  };
+
+  // Open a participant's record on the Exit tab with the exit date filled in.
+  App.openExitFor = function(clientId, exitDate){
+    this.openClientForm(clientId);
+    document.querySelector('[data-status="Exited"]')?.click();
+    const d = document.getElementById('cf-exit-date');
+    if (d && !d.value && exitDate) d.value = exitDate;
+    this.showProfileTab?.('exit');
+  };
+
+  const previousEndBedStay = App.endBedStay;
+  App.endBedStay = async function(){
+    if (!this.isShelterProgram()) return previousEndBedStay.call(this);
+    const bed  = this.bedsFor().find(b => b.id === this._bedPanelId);
+    const stay = bed ? this.openStayForBed(bed.id) : null;
+    const end  = document.getElementById('bed-end-date')?.value;
+    await previousEndBedStay.call(this);
+    if (!stay || !end || this.openStayForBed(bed.id)) return;            // not ended
+    const c = (this.data.clients || []).find(x => x.id === stay.client_id);
+    if (!c || this.clientStatus(c) === 'Exited') return;
+    const msg = document.getElementById('bed-msg');
+    if (msg) {
+      msg.innerHTML = `Stay ended. <strong>${esc(this.clientDisplayId(c))}</strong> still needs exit details (destination and reason) for reporting.
+        <button type="button" class="btn btn-primary btn-sm" id="bed-record-exit" style="margin-left:8px">Record exit</button>`;
+      msg.className = 'bed-msg ok';
+      document.getElementById('bed-record-exit')?.addEventListener('click', () => { this.closeBedPanel?.(); this.openExitFor(c.id, end); });
+    }
+  };
+
+  /* ============================================ 2. duplicate fields */
+
+  App.bedLabelFor = function(clientId){
+    const stay = this.openStayForClient(clientId);
+    const bed = stay && this.bedsFor().find(b => b.id === stay.bed_id);
+    return bed ? bed.label : '';
+  };
+
+  /* ======================================= 3. participant record tabs */
+
+  const PROFILE_TABS = [
+    ['intake',   'Intake & Bed'],
+    ['plan',     'Plan & Services'],
+    ['exit',     'Exit'],
+    ['followups','Follow-Ups']
+  ];
+  const SECTION_TAB = {
+    'Intake & Demographics':'intake', 'Bed Assignment':'intake', 'Demographics':'intake', 'Priority Populations':'intake',
+    'Housing & Case Management':'plan', 'Assigned Case Managers':'plan', 'Housing Plan Reviews':'plan',
+    'Service Contacts':'plan', 'Case Notes':'plan', 'Incident History':'plan', 'Income Readings':'plan',
+    'Income / Benefits Updates':'plan', 'Housing Plan':'plan',
+    'Exit Information':'exit', 'Exit':'exit',
+    'Follow-Ups':'followups'
+  };
+
+  App.showProfileTab = function(key){
+    const body = document.getElementById('client-body');
+    if (!body || !body.querySelector('.profile-tabs')) return;
+    this._profileTab = key;
+    body.querySelectorAll('.profile-tabs [data-ptab]').forEach(b => b.classList.toggle('active', b.dataset.ptab === key));
+    body.querySelectorAll('[data-ptab-section]').forEach(s => { s.style.display = s.dataset.ptabSection === key ? '' : 'none'; });
+    // The exit section hides itself until the status is Exited; on the Exit tab
+    // say how to start one instead of showing an empty tab.
+    const exitSec = document.getElementById('cf-exit-section');
+    const prompt = document.getElementById('ptab-exit-prompt');
+    if (prompt) prompt.style.display = (key === 'exit' && exitSec && exitSec.classList.contains('is-hidden')) ? '' : 'none';
+  };
+
+  const previousOpenClientForm = App.openClientForm;
+  App.openClientForm = function(id = null){
+    previousOpenClientForm.call(this, id);
+    if (!this.isShelterProgram()) return;
+    const body = document.getElementById('client-body');
+    if (!body) return;
+    const c = id ? (this.data.clients || []).find(x => x.id === id) || {} : {};
+
+    // Room assignment follows the bed, so it is no longer typed.
+    const room = document.getElementById('cf-room-number');
+    if (room) {
+      room.closest('.field-group')?.style.setProperty('display', 'none');
+      room.value = id ? (this.bedLabelFor(id) || room.value) : '';
+      document.getElementById('cf-bed')?.addEventListener('change', e => {
+        const bed = this.bedsFor().find(b => b.id === e.target.value);
+        room.value = bed ? bed.label : '';
+      });
+    }
+    // Bed Assignment hint now that ending is automatic.
+    body.querySelectorAll('#cf-bed-section .field-hint').forEach(h => {
+      if (/use the Bed Board/.test(h.textContent))
+        h.textContent = 'Recording an exit on the Exit tab ends this stay automatically. To move beds, use the Bed Board.';
+    });
+
+    // Follow-ups for this participant (recorded on the Follow-Ups screen).
+    const fus = id ? (this.data.housingFollowUps || []).filter(f => f.client_id === id)
+                      .sort((a,b) => String(a.due_date||'').localeCompare(String(b.due_date||''))) : [];
+    const fuHtml = `<div class="form-section" id="ptab-followups"><div class="form-section-title">Follow-Ups</div>
+      ${fus.length ? `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Check</th><th>Due</th><th>Completed</th><th>Housing status</th></tr></thead><tbody>
+        ${fus.map(f => `<tr><td>${esc(f.followup_type || '')}</td><td>${f.due_date ? this.formatDate(this.dateOnly(f.due_date)) : '—'}</td>
+          <td>${f.completed_date ? this.formatDate(this.dateOnly(f.completed_date)) : '<span class="badge badge-amber">Open</span>'}</td>
+          <td>${esc(f.housing_status || f.stable_at_followup || '')}</td></tr>`).join('')}</tbody></table></div>`
+        : `<div class="field-hint">${c.exit_date ? 'No follow-ups recorded yet.' : 'Follow-ups start after the participant exits.'}</div>`}
+      <button type="button" class="btn btn-ghost btn-sm" id="ptab-open-followups" style="margin-top:8px">Open Follow-Ups</button></div>`;
+    const exitPrompt = `<div class="form-section" id="ptab-exit-prompt"><div class="form-section-title">Exit</div>
+      <div class="field-hint" style="margin-bottom:8px">This participant is not marked as exited. Recording an exit also ends their bed stay on the same date.</div>
+      <button type="button" class="btn btn-primary btn-sm" id="ptab-start-exit">Record an exit</button></div>`;
+
+    const layout = body.querySelector('.client-entry-layout > div') || body;
+    layout.insertAdjacentHTML('beforeend', exitPrompt + fuHtml);
+
+    // Tag every section with its tab.
+    body.querySelectorAll('.form-section').forEach(sec => {
+      const title = sec.querySelector('.form-section-title')?.textContent.trim() || '';
+      sec.dataset.ptabSection = sec.id === 'ptab-exit-prompt' ? 'exit' : (SECTION_TAB[title] || 'intake');
+    });
+
+    const counts = { plan: (this.data.clientServices || []).filter(s => s.client_id === id).length, followups: fus.filter(f => !f.completed_date).length };
+    const bar = document.createElement('div');
+    bar.className = 'profile-tabs';
+    bar.setAttribute('role', 'tablist');
+    bar.innerHTML = PROFILE_TABS.map(([k, label]) =>
+      `<button type="button" role="tab" class="profile-tab" data-ptab="${k}">${esc(label)}${
+        counts[k] ? ` <span class="profile-tab-count">${counts[k]}</span>` : ''}</button>`).join('');
+    const steps = body.querySelector('.wizard-steps');
+    if (steps) steps.replaceWith(bar); else body.prepend(bar);
+    body.querySelector('.notice')?.style.setProperty('display', 'none');
+
+    bar.querySelectorAll('[data-ptab]').forEach(b => b.addEventListener('click', () => this.showProfileTab(b.dataset.ptab)));
+    document.getElementById('ptab-start-exit')?.addEventListener('click', () => {
+      document.querySelector('[data-status="Exited"]')?.click();
+      this.showProfileTab('exit');
+      document.getElementById('cf-exit-date')?.focus();
+    });
+    document.getElementById('ptab-open-followups')?.addEventListener('click', () => { this.closeForm('client'); this.showView('housing-followups'); });
+    // Status buttons live on the Intake tab; keep the Exit tab in step with them.
+    body.querySelectorAll('[data-status]').forEach(b => b.addEventListener('click', () => this.showProfileTab(this._profileTab || 'intake')));
+
+    this.showProfileTab(id ? (this._profileTabNext || 'intake') : 'intake');
+    this._profileTabNext = null;
+  };
+
+  /* ===================================== 3. navigation for shelters */
+
+  const PARTICIPANT_VIEWS = [['clients','Participants'],['services','Services'],['client-exits','Exits'],['housing-followups','Follow-Ups']];
+
+  App.participantTabsHtml = function(active){
+    return `<div class="participant-tabs" role="tablist">${PARTICIPANT_VIEWS.map(([v, l]) =>
+      `<button type="button" role="tab" class="participant-tab ${v === active ? 'active' : ''}" data-ptview="${v}">${esc(l)}</button>`).join('')}</div>`;
+  };
+  App.addParticipantTabs = function(view){
+    if (!this.isShelterProgram()) return;
+    const el = document.getElementById('view-' + view);
+    if (!el) return;
+    el.querySelector('.participant-tabs')?.remove();
+    el.insertAdjacentHTML('afterbegin', this.participantTabsHtml(view));
+    el.querySelectorAll('[data-ptview]').forEach(b => b.addEventListener('click', () => this.showView(b.dataset.ptview)));
+  };
+  [['renderClients','clients'],['renderServices','services'],['renderClientExits','client-exits'],['renderHousingFollowUps','housing-followups']]
+    .forEach(([fn, view]) => {
+      const prev = App[fn];
+      if (typeof prev !== 'function') return;
+      App[fn] = function(...args){ const r = prev.apply(this, args);
+        if (r && typeof r.then === 'function') return r.then(v => { this.addParticipantTabs(view); return v; });
+        this.addParticipantTabs(view); return r; };
+    });
+
+  App.applyShelterNav = function(){
+    if (!this.isShelterProgram() || this._shelterNavApplied) return;
+    const item = v => document.querySelector(`.sidebar-item[data-view="${v}"]`);
+    const ws = item('dashboard')?.closest('.sidebar-section');
+    if (!ws) return;
+    this._shelterNavApplied = true;
+
+    // Workspace: Dashboard, Referrals, Bed Board, Participants, Incidents.
+    const clients = item('clients');
+    const caret = document.getElementById('clients-subnav-toggle');
+    if (clients) {
+      const label = [...clients.childNodes].find(n => n.nodeType === 3 && n.textContent.trim() === 'Clients');
+      if (label) label.textContent = 'Participants';
+      clients.classList.remove('sidebar-parent');
+    }
+    caret?.style.setProperty('display', 'none');
+    const sub = document.getElementById('clients-subnav');
+    ['referrals', 'beds', 'clients', 'incident-log'].forEach(v => { const el = item(v) || (v === 'beds' ? document.getElementById('nav-beds') : null); if (el) ws.insertBefore(el, sub); });
+    const inc = item('incident-log');
+    if (inc) { const t = [...inc.childNodes].find(n => n.nodeType === 3 && /Incident Log/.test(n.textContent)); if (t) t.textContent = 'Incidents'; }
+    if (sub) sub.style.display = 'none';
+    ['nav-review', 'nav-access'].forEach(i => { const el = document.getElementById(i); if (el) ws.appendChild(el); });
+
+    // Reports: Monthly Report, Bed Night Invoice, Program Reports.
+    const reports = item('quarter')?.closest('.sidebar-section');
+    if (reports) {
+      const lab = reports.querySelector('.sidebar-label'); if (lab) lab.textContent = 'Reports';
+      const monthly = document.getElementById('nav-monthly'), ffs = document.getElementById('nav-ffs'), quarter = item('quarter');
+      [monthly, ffs, quarter].forEach(el => el && reports.appendChild(el));
+    }
+  };
+
+  const previousRenderSidebar = App.renderSidebarForRole;
+  App.renderSidebarForRole = function(...args){
+    const r = previousRenderSidebar.apply(this, args);
+    if (!this.isShelterProgram()) return r;
+    this.applyShelterNav();
+    // Income Tracking is not used for shelter programs.
+    const income = document.querySelector('.sidebar-item[data-view="income"]');
+    if (income) income.style.display = 'none';
+    document.querySelectorAll('.sidebar-section').forEach(section => {
+      const items = [...section.querySelectorAll('.sidebar-item')];
+      section.style.display = (items.length && !items.some(el => getComputedStyle(el).display !== 'none')) ? 'none' : '';
+    });
+    return r;
+  };
+
+  const previousShowView = App.showView;
+  App.showView = function(view){
+    if (this.isShelterProgram() && view === 'income') view = 'clients';
+    previousShowView.call(this, view);
+    if (!this.isShelterProgram()) return;
+    const clients = document.querySelector('.sidebar-item[data-view="clients"]');
+    const inParticipants = PARTICIPANT_VIEWS.some(([v]) => v === this.view);
+    clients?.classList.toggle('active', inParticipants);
+    clients?.classList.remove('has-active-child');
+  };
+
+  /* ============================================= 4. dashboard to-do */
+
+  const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const monthKey = iso => iso.slice(0, 7) + '-01';
+  const prevMonth = iso => { const d = new Date(iso.slice(0, 7) + '-15T12:00:00'); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7) + '-01'; };
+  const monthName = iso => new Date(iso + 'T12:00:00').toLocaleString('en-US', { month:'long', year:'numeric' });
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + 's')}`;
+
+  App.shelterTodos = function(){
+    const today = this.localDate(), soon = addDays(today, 7);
+    const admin = this.isAdmin();
+    const clients = this.data.clients || [];
+    const active = clients.filter(c => this.clientStatus(c) !== 'Exited');
+    const byId = new Map(clients.map(c => [c.id, c]));
+    const items = [];
+    const add = (level, text, cite, action, label) => items.push({ level, text, cite, action, label });
+
+    // Section 4 — referral clocks.
+    const clocks = Object.values(this.data.referralClocks || {});
+    const ackOpen = clocks.filter(k => ['open','due_today','overdue'].includes(k.ack_state));
+    const detOpen = clocks.filter(k => ['open','due_today','overdue'].includes(k.det_state) && !ackOpen.includes(k));
+    const late = list => list.filter(k => k.ack_state === 'overdue' || k.det_state === 'overdue').length;
+    if (ackOpen.length) add(late(ackOpen) ? 'late' : 'due', `${plural(ackOpen.length, 'referral')} to acknowledge${late(ackOpen) ? ` (${late(ackOpen)} overdue)` : ''}`, 'Section 4 · 1 business day', 'referrals', 'Open referrals');
+    if (detOpen.length) add(detOpen.some(k => k.det_state === 'overdue') ? 'late' : 'due', `${plural(detOpen.length, 'referral')} needing an admission decision or documented barrier`, 'Section 4 · 2 business days', 'referrals', 'Open referrals');
+
+    // Data check — an exit with the bed still occupied.
+    const openAfterExit = (this.data.stays || []).filter(s => !s.end_date && byId.get(s.client_id) && this.clientStatus(byId.get(s.client_id)) === 'Exited');
+    openAfterExit.forEach(s => {
+      const c = byId.get(s.client_id), bed = this.bedsFor().find(b => b.id === s.bed_id);
+      add('late', `${this.clientDisplayId(c)} exited ${c.exit_date ? this.formatDate(this.dateOnly(c.exit_date)) : ''} but ${bed ? bed.label : 'their bed'} is still occupied${bed?.designation === 'fee_for_service' ? ' and billing' : ''}`,
+          'Bed inventory', admin ? null : `closestay:${s.id}`, 'End stay on exit date');
+    });
+
+    // Section 3.1 — bed status changes the City has not been told about.
+    const unnotified = (this.data.bedStatus || []).filter(e => ['unavailable','held','released','pending_discharge'].includes(e.status) && !e.city_notified_at
+      && this.latestBedEvent(e.bed_id)?.id === e.id);
+    if (unnotified.length) add(unnotified.some(e => addDays(String(e.effective_at).slice(0, 10), 1) < today) ? 'late' : 'due',
+      `${plural(unnotified.length, 'bed status change')} not yet reported to the City`, 'Section 3.1 · 1 business day', 'beds', 'Open Bed Board');
+
+    // Section 3.2 — absences recorded without written approval are not billable.
+    const absences = (this.data.absences || []).filter(a => !a.billing_approved);
+    if (absences.length) add('info', `${plural(absences.length, 'absence')} without City approval — not billable unless approved in writing`, 'Section 3.2', 'beds', 'Review absences');
+
+    // Section 7.1 — 30-day plan reviews.
+    const activeIds = new Set(active.map(c => c.id));
+    const reviews = (this.data.planReviewDue || []).filter(r => activeIds.has(r.client_id) && r.next_review_due && this.dateOnly(r.next_review_due) <= soon);
+    const overdueReviews = reviews.filter(r => this.dateOnly(r.next_review_due) < today);
+    if (reviews.length) add(overdueReviews.length ? 'late' : 'due', `${plural(reviews.length, 'housing plan review')} due${overdueReviews.length ? ` (${overdueReviews.length} overdue)` : ' this week'}`, 'Section 7.1 · every 30 days', 'clients', 'Open participants');
+
+    // Plans not on file. Section 14 counts completed plans toward 38.
+    if (this.programHas('has_case_plan_tracking')) {
+      const noPlan = active.filter(c => !(this.plansFor?.(c.id) || []).length);
+      if (noPlan.length) add('due', `${plural(noPlan.length, 'active participant')} without an uploaded housing plan`, 'Section 14 · 38 plans a year', 'services', 'Upload plans');
+    }
+
+    // Follow-ups due within two weeks.
+    const fus = (this.data.housingFollowUps || []).filter(f => !f.completed_date && f.due_date && this.dateOnly(f.due_date) <= addDays(today, 14));
+    const lateFus = fus.filter(f => this.dateOnly(f.due_date) < today);
+    if (fus.length) add(lateFus.length ? 'late' : 'due', `${plural(fus.length, 'follow-up')} due${lateFus.length ? ` (${lateFus.length} overdue)` : ' in the next two weeks'}`, 'Section 14 · retention', 'housing-followups', 'Open follow-ups');
+
+    // Section 12.2 — monthly report due on the 15th.
+    if (this.programHas('has_monthly_report')) {
+      const contractStart = this.program?.contract_year_start || '2000-01-01';
+      const reports = this.data.monthlyReports || [];
+      const statusOf = m => (reports.find(r => this.dateOnly(r.report_month) === m) || {}).status || 'not_started';
+      [prevMonth(prevMonth(today)), prevMonth(today)].forEach(m => {
+        if (m < monthKey(contractStart)) return;
+        const due = addDays(monthKey(addDays(m, 32)), 14);
+        const st = statusOf(m);
+        if (admin) {
+          if (st === 'submitted') add('due', `${monthName(m)} monthly report is waiting for City review`, 'Section 12.2', 'monthly', 'Review report');
+          return;
+        }
+        if (st === 'accepted' || st === 'submitted') return;
+        const label = st === 'revision_requested' ? 'needs revision' : (due < today ? 'is overdue' : `is due ${this.formatDate(due)}`);
+        add(st === 'revision_requested' || due < today ? 'late' : 'due', `${monthName(m)} monthly report ${label}`, 'Section 12.2 · by the 15th', 'monthly', 'Open report');
+      });
+    }
+
+    const rank = { late:0, due:1, info:2 };
+    return items.sort((a, b) => rank[a.level] - rank[b.level]);
+  };
+
+  App.renderShelterTodos = function(){
+    const el = document.getElementById('view-dashboard');
+    if (!el || !this.isShelterProgram()) return;
+    el.querySelector('#shelter-todos')?.remove();
+    const items = this.shelterTodos();
+    const icon = { late:'badge-red', due:'badge-amber', info:'badge-gray' };
+    const word = { late:'Overdue', due:'Due', info:'Note' };
+    const card = document.createElement('div');
+    card.id = 'shelter-todos'; card.className = 'card'; card.style.margin = '0 0 16px';
+    card.innerHTML = `<div class="card-header"><div><strong>To do</strong>
+        <span class="field-hint" style="margin-left:6px">${items.length ? plural(items.length, 'item') + ' from contract deadlines' : 'Nothing due from contract deadlines'}</span></div></div>
+      <div class="card-body">${items.length ? `<div class="todo-list">${items.map((t, i) => `
+        <div class="todo-row">
+          <span class="badge ${icon[t.level]}">${word[t.level]}</span>
+          <div class="todo-text">${esc(t.text)}<br><span class="field-hint">${esc(t.cite)}</span></div>
+          ${t.action ? `<button type="button" class="btn btn-ghost btn-sm" data-todo="${i}">${esc(t.label)}</button>` : ''}
+        </div>`).join('')}</div>` : '<div class="field-hint">All referrals, plan reviews, follow-ups, bed notices and reports are up to date.</div>'}</div>`;
+    const header = el.querySelector('.page-header');
+    header ? header.after(card) : el.prepend(card);
+    card.querySelectorAll('[data-todo]').forEach(b => b.addEventListener('click', async () => {
+      const t = items[Number(b.dataset.todo)];
+      if (t.action.startsWith('closestay:')) {
+        const stay = (this.data.stays || []).find(s => s.id === t.action.slice(10));
+        const c = stay && (this.data.clients || []).find(x => x.id === stay.client_id);
+        const end = c && this.dateOnly(c.exit_date);
+        if (!stay || !end) return;
+        b.disabled = true;
+        const error = await this.endStayForExit(stay, end < stay.start_date ? stay.start_date : end, c.exit_destination_type);
+        if (error) { this.toast('Could not end the stay: ' + error.message, { error:true }); b.disabled = false; return; }
+        await this.loadBedData();
+        this.toast('Stay ended on the exit date.');
+        this.renderDashboard();
+        return;
+      }
+      this.showView(t.action);
+    }));
+  };
+
+  const previousRenderDashboard = App.renderDashboard;
+  App.renderDashboard = function(...args){
+    const r = previousRenderDashboard.apply(this, args);
+    if (r && typeof r.then === 'function') return r.then(v => { this.renderShelterTodos(); return v; });
+    this.renderShelterTodos();
+    return r;
+  };
+
+  /* -------------------------------------------------------------- styles */
+  const css = document.createElement('style');
+  css.textContent = `
+    .profile-tabs, .participant-tabs { display:flex; gap:4px; border-bottom:1px solid var(--gray-200, #e5e7eb); margin:0 0 16px; flex-wrap:wrap; }
+    .profile-tab, .participant-tab { background:none; border:0; border-bottom:2px solid transparent; padding:8px 14px; font:inherit; font-weight:600;
+      color:var(--gray-500, #6b7280); cursor:pointer; margin-bottom:-1px; }
+    .profile-tab.active, .participant-tab.active { color:var(--navy, #1f3a5f); border-bottom-color:var(--gold, #c9a227); }
+    .profile-tab-count { display:inline-block; min-width:18px; padding:0 6px; border-radius:9px; background:var(--gray-100, #f3f4f6); font-size:11px; margin-left:4px; }
+    .todo-list { display:flex; flex-direction:column; }
+    .todo-row { display:grid; grid-template-columns:80px 1fr auto; gap:12px; align-items:center; padding:10px 0; border-top:1px solid var(--gray-100, #f3f4f6); }
+    .todo-row:first-child { border-top:0; }
+    .todo-row .badge { justify-self:start; }`;
+  document.head.appendChild(css);
+})();
+
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 </body>
