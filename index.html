@@ -1927,7 +1927,7 @@ button, input, select, textarea { font-family: var(--font-ui); }
     <div class="form-modal-header">
       <div>
         <h2 class="form-modal-title" id="client-title">Client Record</h2>
-        <div class="form-modal-meta">Client-based reporting source record</div>
+        <div class="form-modal-meta"></div>
       </div>
       <button class="form-close-btn" data-close="client">✕</button>
     </div>
@@ -2254,7 +2254,7 @@ const CONFIG = {
   },
 
   ANNUAL_GOALS: [
-    { key:'phExitsAnnual',      label:'Permanent Housing Exits',      desc:'Permanent housing placements this contract year, measured against the fixed annual goal of 12.', target:null, unit:' exits' },
+    { key:'phExitsAnnual',      label:'Permanent Housing Exits',      desc:'Permanent housing placements this contract year (goal: 12).', target:null, unit:' exits' },
     { key:'suppServicesAnnual', label:'Supportive Services Engagement', desc:'Quarterly count of participants engaged in supportive services.',                target:null, unit:' people' },
     { key:'incomeAnnual',       label:'Income / Benefits Stability',    desc:'Participants who increased or maintained income/benefits this quarter.',         target:null, unit:' people' },
     { key:'occupancyAnnual',    label:'Occupancy / Utilization',        desc:'Bed nights occupied compared with available bed nights YTD.',                    target:null, unit:' bed nights' },
@@ -3798,7 +3798,7 @@ const App = {
       <div class="field-hint" style="margin-top:8px;">Groups with fewer than 5 exits are suppressed to protect client privacy.</div>
     </details>`;
     return `<div class="card" style="margin-top:16px;"><div class="card-header"><h2 class="card-title">Housing Outcomes</h2></div><div class="card-body">
-      <p class="field-hint" style="margin-bottom:12px;">Permanent housing is the contract outcome. Positive non-permanent exits are tracked separately; deceased exits are excluded from the rate.</p>
+      <p class="field-hint" style="margin-bottom:12px;">Positive non-permanent exits are tracked separately. Deceased exits are excluded from the rate.</p>
       <div class="content-grid" style="grid-template-columns:1fr 1fr;gap:20px;">
         ${this.renderOutcomeBandTable(qtr, `${q} (this quarter)`)}
         ${this.renderOutcomeBandTable(ytd, 'Year to date')}
@@ -4654,7 +4654,7 @@ const App = {
         </div>
       </div>
       <div class="card-body">
-        <p class="field-hint" style="margin-bottom:11px;">Uses the date range and record types above. Client names are withheld; counts come from the database.</p>
+        <p class="field-hint" style="margin-bottom:11px;">Uses the dates and record types above. No client names.</p>
         <div class="chat-starters">${starters.map(x => `<button class="chat-starter" type="button" data-chat-starter="${this.escape(x)}">${this.escape(x)}</button>`).join('')}</div>
         <div id="chat-log" class="chat-log"></div>
         <div class="chat-input-row">
@@ -5185,7 +5185,7 @@ const App = {
     html += `<div class="demo-cell row-label total-row">Grand Total</div>
       <div class="demo-cell ro total-row" data-age-grand="male">${qMale}</div><div class="demo-cell ro total-row" data-age-grand="female">${qFemale}</div><div class="demo-cell ro total-row" data-age-grand="nb">${qNb}</div><div class="demo-cell ro total-row" data-age-grand="unk">${qUnk}</div><div class="demo-cell ro total-row" data-age-grand-total>${qMale+qFemale+qNb+qUnk}</div>
       <div class="demo-cell ro total-row" data-ytd-age-grand="male">${yMale}</div><div class="demo-cell ro total-row" data-ytd-age-grand="female">${yFemale}</div><div class="demo-cell ro total-row" data-ytd-age-grand="nb">${yNb}</div><div class="demo-cell ro total-row" data-ytd-age-grand="unk">${yUnk}</div><div class="demo-cell ro total-row" data-ytd-age-grand-total>${yMale+yFemale+yNb+yUnk}</div>`;
-    return html + `</div><p class="field-hint" style="margin-top:8px;">Must equal Persons Served This Quarter. Calculated from client records when client-generated reporting is on.</p>`;
+    return html + `</div><p class="field-hint" style="margin-top:8px;">Must equal Persons Served This Quarter.</p>`;
   },
 
   renderSimpleDemoTable(prefix, keys, values, q, readonly=false) {
@@ -5556,7 +5556,7 @@ const App = {
       ${linkedRows.map((r,i)=>this.exitRowHtml(r.saved||{}, i+1, !!r.saved, r.client)).join('')}
       ${manualRows.map((e,i)=>this.exitRowHtml(e, linkedRows.length+i+1, true, null)).join('')}
       </tbody></table></div>
-      <div class="field-hint" style="margin-top:8px;">Need to log an exit for someone not listed above (e.g. a record not yet entered as a client)? <button type="button" class="btn btn-ghost btn-sm" id="btn-add-exit">+ Add Manual Row</button></div>
+      <div class="field-hint" style="margin-top:8px;">Exit for someone not listed above? <button type="button" class="btn btn-ghost btn-sm" id="btn-add-exit">+ Add Manual Row</button></div>
       <div class="notice amber" style="margin-top:14px;"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div><strong>Involuntary vs. Voluntary</strong><br>Voluntary exits are initiated by the participant. Involuntary exits are initiated by the program due to safety, eligibility, or program participation issues.</div></div>`;
     // Wire autosave on existing exit-row edits. Without this, typing into
     // a row never sets the dirty flag and autosave never fires until the
@@ -6884,9 +6884,9 @@ const App = {
     const updates=(this.data.clientUpdates||[]).filter(u=>u.client_id===id).sort((a,b)=>(b.quarter||'').localeCompare(a.quarter||'')).slice(0,5);
     const recentUpdates=updates.map(u=>`<div class="recent-service-row"><div><strong>${this.escape(u.quarter||'—')}</strong><br><span class="field-hint">${this.escape(u.income_change||'—')}</span></div><span class="field-hint">${u.income_at_update!=null?'$'+u.income_at_update:''}</span></div>`).join('') || '<div class="field-hint">No income/benefits updates recorded yet.</div>';
     document.getElementById('client-title').textContent = id ? `Client Profile · ${this.escape(this.clientDisplayId(c))}` : 'New Client Intake';
-    document.getElementById('client-body').innerHTML=`<div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>Complete intake and demographics first. Housing progress, case management milestones, services, and exit details can be added as the case progresses.</div></div><div class="wizard-steps"><div class="wizard-step"><div class="num">Step 1</div><div class="name">Intake & Demographics</div></div><div class="wizard-step"><div class="num">Step 2</div><div class="name">Housing & Case Management</div></div><div class="wizard-step"><div class="num">Step 3</div><div class="name">Services / Exit if applicable</div></div></div><div class="client-entry-layout"><div>
+    document.getElementById('client-body').innerHTML=`<div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>Start with intake. Add the rest as the case moves forward.</div></div><div class="wizard-steps"><div class="wizard-step"><div class="num">Step 1</div><div class="name">Intake & Demographics</div></div><div class="wizard-step"><div class="num">Step 2</div><div class="name">Housing & Case Management</div></div><div class="wizard-step"><div class="num">Step 3</div><div class="name">Services / Exit if applicable</div></div></div><div class="client-entry-layout"><div>
       <div class="form-section"><div class="form-section-title">Intake & Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label required">HMIS ID</label><input id="cf-hmis-id" class="field-input" value="${this.escape(c.id||c.hmis_unique_identifier||c.agency_client_id||'')}" placeholder="HMIS Unique Identifier"></div><div class="field-group"><label class="field-label required">Entry Date</label><input id="cf-entry-date" type="date" class="field-input" value="${this.dateOnly(c.entry_date)}"></div><div class="field-group"><label class="field-label">Current Status</label><div class="segmented-row" data-status-group>${['Active','Scheduled Exit','Exited'].map(v=>`<button type="button" class="segment-btn ${status===v?'active':''}" data-status="${v}">${v}</button>`).join('')}</div><input type="hidden" id="cf-status" value="${this.escape(status)}"></div><div class="field-group"><label class="field-label">Room / Bed Assignment</label><input id="cf-room-number" class="field-input" value="${this.escape(c.room_assignment||'')}" placeholder="e.g., Room 7, 102, Bed A, Unassigned"></div></div></div>
-      <div class="form-section"><div class="form-section-title">Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Client Name <span class="field-hint">Agency use only</span></label><input id="cf-client-name" class="field-input" value="${this.escape(c.client_name||'')}"></div><div class="field-group"><label class="field-label">Age</label><input id="cf-age" type="number" class="field-input" value="${c.age||''}"></div><div class="field-group"><label class="field-label">Gender Identity</label><select id="cf-gender" class="field-select"><option></option>${opt(this.hmisGenderOptions(), c.gender)}</select><div id="cf-gender-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify gender identity</label><input id="cf-gender-other" class="field-input" value="${this.escape(c.gender_other||'')}"></div><div class="field-hint">Transgender experience is captured separately below and is not treated as a gender.</div></div><div class="field-group"><label class="field-label">Transgender Experience</label><select id="cf-transgender-status" class="field-select"><option></option>${opt(['Yes','No','Questioning','Client doesn’t know','Client prefers not to answer','Data not collected'], c.transgender_status)}</select></div><div class="field-group"><label class="field-label">Race / Ethnicity</label><select id="cf-race" class="field-select"><option></option>${opt(this.hmisRaceEthnicityOptions(), c.race_ethnicity)}</select><div id="cf-race-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify race/ethnicity</label><input id="cf-race-other" class="field-input" value="${this.escape(c.race_ethnicity_other||'')}"></div></div><div class="field-group"><label class="field-label">Primary Language</label><select id="cf-primary-language" class="field-select"><option></option>${opt(['English','Spanish','Russian','Farsi','Other'], c.primary_language||c.household_language||c.language)}</select><div id="cf-primary-language-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify language</label><input id="cf-primary-language-other" class="field-input" value="${this.escape(c.primary_language_other||'')}"></div></div>${this.yesNoSegment('cf-veteran','Veteran Status',c.veteran)}${this.yesNoSegment('cf-disability','Disability Status',c.disability)}</div><details style="margin-top:12px;"><summary class="field-label" style="cursor:pointer;">Additional Information</summary><div class="client-form-grid" style="margin-top:12px;"><div class="field-group"><label class="field-label">Income at Entry</label><input id="cf-income-entry" type="number" class="field-input" value="${c.income_at_entry||''}"></div></div></details></div>
+      <div class="form-section"><div class="form-section-title">Demographics</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Client Name <span class="field-hint">Agency use only</span></label><input id="cf-client-name" class="field-input" value="${this.escape(c.client_name||'')}"></div><div class="field-group"><label class="field-label">Age</label><input id="cf-age" type="number" class="field-input" value="${c.age||''}"></div><div class="field-group"><label class="field-label">Gender Identity</label><select id="cf-gender" class="field-select"><option></option>${opt(this.hmisGenderOptions(), c.gender)}</select><div id="cf-gender-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify gender identity</label><input id="cf-gender-other" class="field-input" value="${this.escape(c.gender_other||'')}"></div><div class="field-hint">Transgender experience is recorded separately below.</div></div><div class="field-group"><label class="field-label">Transgender Experience</label><select id="cf-transgender-status" class="field-select"><option></option>${opt(['Yes','No','Questioning','Client doesn’t know','Client prefers not to answer','Data not collected'], c.transgender_status)}</select></div><div class="field-group"><label class="field-label">Race / Ethnicity</label><select id="cf-race" class="field-select"><option></option>${opt(this.hmisRaceEthnicityOptions(), c.race_ethnicity)}</select><div id="cf-race-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify race/ethnicity</label><input id="cf-race-other" class="field-input" value="${this.escape(c.race_ethnicity_other||'')}"></div></div><div class="field-group"><label class="field-label">Primary Language</label><select id="cf-primary-language" class="field-select"><option></option>${opt(['English','Spanish','Russian','Farsi','Other'], c.primary_language||c.household_language||c.language)}</select><div id="cf-primary-language-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please specify language</label><input id="cf-primary-language-other" class="field-input" value="${this.escape(c.primary_language_other||'')}"></div></div>${this.yesNoSegment('cf-veteran','Veteran Status',c.veteran)}${this.yesNoSegment('cf-disability','Disability Status',c.disability)}</div><details style="margin-top:12px;"><summary class="field-label" style="cursor:pointer;">Additional Information</summary><div class="client-form-grid" style="margin-top:12px;"><div class="field-group"><label class="field-label">Income at Entry</label><input id="cf-income-entry" type="number" class="field-input" value="${c.income_at_entry||''}"></div></div></details></div>
       <div class="form-section"><div class="form-section-title">Housing & Case Management</div><div class="housing-progress">${this.housingProgressOptions().map(v=>`<button type="button" class="hp-step ${progress===v?'active':''}" data-housing-progress="${this.escape(v)}">○ ${this.escape(v)}</button>`).join('')}</div><input type="hidden" id="cf-housing-plan" value="${this.escape(progress)}"><div class="client-form-grid" style="margin-top:14px;"><div class="field-group"><label class="field-label">Expected Exit Date</label><input id="cf-expected-exit" type="date" class="field-input" value="${this.dateOnly(c.expected_exit_date)}"></div><div class="field-group full"><label class="field-label">Intake Milestones</label><div class="field-hint" style="margin-bottom:8px;">Check each item when complete. The date defaults to intake.</div><div class="reason-list">${this.intakeMilestoneDefs().map(m=>{const val=this.dateOnly(c[m.col]);return `<label class="reason-row" style="display:flex;align-items:center;gap:10px;"><input type="checkbox" class="cf-milestone-check" data-milestone="${m.id}" ${val?'checked':''}><span style="flex:1;">${this.escape(m.label)}</span><input id="${m.id}" type="date" class="field-input cf-milestone-date" style="max-width:172px;" value="${val}" ${val?'':'disabled'}></label>`}).join('')}</div><button type="button" class="btn btn-ghost btn-sm" id="cf-milestones-all" style="margin-top:8px;">Mark all three complete at intake date</button></div></div></div>
       <div id="cf-exit-section" class="form-section exit-section ${status==='Exited'?'':'is-hidden'}"><div class="form-section-title">Exit Information</div><div class="client-form-grid"><div class="field-group"><label class="field-label">Exit Date</label><input id="cf-exit-date" type="date" class="field-input" value="${this.dateOnly(c.exit_date)}"></div><div class="field-group"><label class="field-label">Exit Destination</label><select id="cf-exit-type" class="field-select"><option></option>${opt(this.exitDestinationOptions(), c.exit_destination_type)}</select><div id="cf-exit-type-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required">Please describe exit destination</label><input id="cf-exit-type-other" class="field-input" value="${this.escape(c.exit_destination_other||'')}"></div></div><div class="field-group full"><label class="field-label">Reason for Exit</label><div class="field-hint" style="margin-bottom:7px;">Select every reason that applies.</div><div class="reason-list" id="cf-exit-reason-list">${this.exitReasonOptions().map((r,i)=>`<label class="reason-row"><input type="checkbox" class="cf-exit-reason" id="cf-exit-reason-${i}" value="${this.escape(r)}" ${selectedReasons.includes(r)?'checked':''}><span>${this.escape(r)}</span></label>`).join('')}</div><div id="cf-exit-reason-other-wrap" class="other-specify-wrap" style="display:none;margin-top:8px;"><label class="field-label required" for="cf-exit-reason-other">Please specify reason for exit</label><input id="cf-exit-reason-other" class="field-input" value="${this.escape(c.exit_reason_other||'')}"></div></div><div class="field-group"><label class="field-label">Specific Destination / Notes</label><input id="cf-exit-destination" class="field-input" value="${this.escape(c.exit_destination||'')}"></div><div class="field-group"><label class="field-label">Income at Exit</label><input id="cf-income-exit" type="number" class="field-input" value="${c.income_at_exit||''}"></div><div class="field-group full"><label class="field-label">Outcome Notes</label><textarea id="cf-exit-notes" class="field-textarea">${this.escape(c.exit_notes||'')}</textarea></div></div></div>
       <div class="form-section"><div class="form-section-title">Service Contacts</div><div class="field-hint" style="margin-bottom:8px;">${services.length} contact${services.length===1?'':'s'} on file.</div><div class="recent-service-list">${recent}</div><button class="btn btn-ghost btn-sm" id="cf-add-service" ${id?'':'disabled'}>+ Add Service</button><div class="field-hint" style="margin-top:6px;">Save the client before adding services.</div></div><div class="form-section"><div class="form-section-title">Income / Benefits Updates</div>${recentUpdates}<button class="btn btn-ghost btn-sm" id="cf-add-update" ${id?'':'disabled'}>+ Add Update</button><div class="field-hint" style="margin-top:6px;">Save the client before adding an update. One update per quarter.</div></div><div id="cf-quality" class="data-quality-list"></div>
@@ -7380,10 +7380,10 @@ const App = {
   };
 
   App.renderCaseNotesPanel = function(clientId){
-    if(!clientId) return `<div class="form-section"><div class="form-section-title">Case Notes</div><div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg></div><div>Save the client record first, then add case notes. Case notes are stored as a separate history and do not feed the quarterly program report.</div></div></div>`;
+    if(!clientId) return `<div class="form-section"><div class="form-section-title">Case Notes</div><div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg></div><div>Save the client record first, then add case notes. Case notes aren&rsquo;t used in reports.</div></div></div>`;
     const rows=this.caseNotesForClient(clientId);
     return `<div class="form-section" id="client-case-notes-section"><div class="form-section-title">Case Notes</div>
-      <div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg></div><div><strong>Case notes are retained historically.</strong> They support case management documentation only and are not used in program report calculations.</div></div>
+      <div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg></div><div>Case notes are for case management and aren&rsquo;t used in reports.</div></div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;"><div class="field-hint">${rows.length} note${rows.length===1?'':'s'} on file</div><button class="btn btn-gold btn-sm" id="btn-add-case-note" type="button">+ Add Case Note</button></div>
       ${rows.length ? `<div class="client-table-wrap"><table class="client-table case-note-table"><thead><tr><th>Note Date</th><th>Entered</th><th>Staff</th><th>Note</th><th>Actions</th></tr></thead><tbody>${rows.map(n=>`<tr><td class="cn-nowrap">${this.formatDate(this.dateOnly(n.note_date))}</td><td class="cn-nowrap"><span class="field-hint">${n.created_at?this.formatDate(this.dateOnly(n.created_at)):'—'}</span></td><td>${this.escape(n.staff_name||'—')}</td><td class="cn-note-cell">${this.escape(n.note||'')}</td><td class="cn-row-actions"><button class="btn btn-ghost btn-sm" data-edit-case-note="${this.escape(n.id)}" type="button">Edit</button><button class="btn btn-ghost btn-sm" data-del-case-note="${this.escape(n.id)}" type="button">Delete</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="notice amber"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg></div><div>No case notes have been added for this client yet.</div></div>`}
     </div>`;
@@ -7716,7 +7716,7 @@ const App = {
       const metaEl=document.querySelector('#modal-client .form-modal-header .form-modal-meta');
       if (c && metaEl) {
         const part=this.clientParticipation(c);
-        metaEl.innerHTML = `Client-based reporting source record · <span class="badge ${part.cssClass}" title="${this.escape(part.hint||'')}">${this.escape(part.label)}</span>`;
+        metaEl.innerHTML = `<span class="badge ${part.cssClass}" title="${this.escape(part.hint||'')}">${this.escape(part.label)}</span>`;
       }
     }
   };
@@ -8026,7 +8026,7 @@ const App = {
     const overdue=rows.filter(f=>this.followUpStatus(f)==='overdue');
     this._followup6Sort = this._followup6Sort || {key:null, dir:'asc'};
     this._followup12Sort = this._followup12Sort || {key:null, dir:'asc'};
-    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Housing Follow-Ups</h1><div class="page-subtitle">6- and 12-month checks for clients placed in permanent housing.</div></div></div><div class="generated-metric-grid"><div class="generated-metric"><div class="label">Open Follow-Ups</div><div class="value">${due.length}</div></div><div class="generated-metric"><div class="label">Completed</div><div class="value">${complete.length}</div></div><div class="generated-metric"><div class="label">Overdue</div><div class="value">${overdue.length}</div></div><div class="generated-metric"><div class="label">PH Clients</div><div class="value">${this.phExitClients().length}</div></div></div><div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg></div><div><strong>Purpose:</strong> after a client exits to documented permanent housing, staff should confirm housing status at 6 months and 12 months. This helps the City understand whether placements remain stable beyond the point of exit.</div></div>${this.renderFollowUpSection(rows,'6-month','6-Month Follow-Ups',this._followup6Sort)}${this.renderFollowUpSection(rows,'12-month','12-Month Follow-Ups',this._followup12Sort)}`;
+    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Housing Follow-Ups</h1><div class="page-subtitle">6- and 12-month checks for clients placed in permanent housing.</div></div></div><div class="generated-metric-grid"><div class="generated-metric"><div class="label">Open Follow-Ups</div><div class="value">${due.length}</div></div><div class="generated-metric"><div class="label">Completed</div><div class="value">${complete.length}</div></div><div class="generated-metric"><div class="label">Overdue</div><div class="value">${overdue.length}</div></div><div class="generated-metric"><div class="label">PH Clients</div><div class="value">${this.phExitClients().length}</div></div></div><div class="notice navy"><div><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg></div><div>Confirm housing status 6 and 12 months after a permanent housing exit.</div></div>${this.renderFollowUpSection(rows,'6-month','6-Month Follow-Ups',this._followup6Sort)}${this.renderFollowUpSection(rows,'12-month','12-Month Follow-Ups',this._followup12Sort)}`;
     el.querySelectorAll('[data-followup-client]').forEach(b=>b.addEventListener('click',()=>this.openFollowUpForm(b.dataset.followupClient,b.dataset.followupType)));
     this.wireSortableHeaders(el.querySelector('[data-followup-table="6-month"]'), this._followup6Sort, ()=>this.renderHousingFollowUps());
     this.wireSortableHeaders(el.querySelector('[data-followup-table="12-month"]'), this._followup12Sort, ()=>this.renderHousingFollowUps());
@@ -8163,7 +8163,7 @@ const App = {
             return `<div class="goal-row"><div class="goal-meta"><div><div class="goal-name">${this.escape(g.name)}</div><div class="field-hint">${this.escape(g.desc)}</div>${quickLink}</div><div style="text-align:right;"><strong>${this.escape(String(g.actual))}</strong> / ${this.escape(String(g.target))}<br><span class="badge ${status === 'On Track' ? 'badge-green' : status === 'In Progress' ? 'badge-amber' : 'badge-red'}">${status}</span></div></div><div class="goal-bar"><div class="goal-fill ${cls}" style="width:${pct}%"></div></div></div>`;
           }).join('')}
         </div>
-        <p class="field-hint" style="margin-top:10px;">Interpret with care when counts are small or the year is in progress.</p>
+        <p class="field-hint" style="margin-top:10px;">Read with care while counts are small.</p>
       </div>
     </div>`;
   };
@@ -11031,7 +11031,7 @@ const App = {
       <div style="display:flex;justify-content:space-between;margin-top:4px;">
         <span class="field-hint">Non-cash benefits (excluded from cash total)</span>
         <span class="field-hint">${this.money(t.noncash)}</span></div>
-      ${none && t.cash > 0 ? '<div class="field-hint" style="color:#b45309;margin-top:8px;">“No income” is ticked but cash sources are listed — untick one or the other before saving.</div>' : ''}`;
+      ${none && t.cash > 0 ? '<div class="field-hint" style="color:#b45309;margin-top:8px;">“No income” is checked but cash sources are listed. Fix one before saving.</div>' : ''}`;
   };
 
   App.saveIncomeReading = async function(){
@@ -11125,9 +11125,9 @@ const App = {
 
     el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Income Tracking</h1><div class="page-subtitle">Readings every two months. Non-cash benefits are excluded from the cash total.</div></div></div>
       <div class="kpi-row">${kpis}</div>
-      <div class="dashboard-section-head"><h2>In Program</h2><div class="hint">Baselines first \u2014 nothing downstream can be computed without them.</div></div>
+      <div class="dashboard-section-head"><h2>In Program</h2><div class="hint">Record baselines first.</div></div>
       ${table(inProgram, 'No in-program clients on file.')}
-      <div class="dashboard-section-head"><h2>Exited \u2014 Backfill</h2><div class="hint">Placeholder rows already hold a total from the old income fields \u2014 open and replace it rather than adding a second reading.</div></div>
+      <div class="dashboard-section-head"><h2>Exited \u2014 Backfill</h2><div class="hint">Placeholder rows hold totals from the old income fields. Open and replace them instead of adding a reading.</div></div>
       ${table(exited, 'No exited clients on file.')}`;
 
     el.querySelectorAll('[data-income-client]').forEach(b =>
@@ -11311,7 +11311,7 @@ const App = {
 
   App.referralCodeStepHtml = function(st){
     return `<div class="referral-step-head"><h3>Enter your agency code</h3><span class="referral-progress">Step 1 of 2</span></div>
-      <p class="field-hint" style="margin-bottom:16px;">Partner agencies are issued a five-digit code by the Holloway team. If you don't have one, contact the City's Human Services Division.</p>
+      <p class="field-hint" style="margin-bottom:16px;">No code? Contact the City’s Human Services Division.</p>
       <div class="field-group">
         <label class="field-label required" for="ref-code">Agency Code</label>
         <input id="ref-code" class="field-input referral-code-input" autocomplete="off" spellcheck="false" placeholder="00000" inputmode="numeric" maxlength="12" ${st.busy?'disabled':''}>
@@ -11954,7 +11954,7 @@ const App = {
     el.innerHTML = `
       <div class="page-header"><div>
         <h1 class="page-title">Bed Board</h1>
-        <div class="page-subtitle">${esc(this.program.name)} · ten reserved beds and up to five fee-for-service</div>
+        <div class="page-subtitle">${esc(this.program.name)} · 10 reserved and 5 fee-for-service beds</div>
       </div></div>
       <div class="bed-summary">
         <div class="bed-stat"><div class="bed-stat-label">Occupied</div><div class="bed-stat-value">${counts.occupied} / ${counts.total}</div><div class="bed-stat-sub">across all beds</div></div>
@@ -12103,7 +12103,7 @@ const App = {
           <label class="checkbox-label" style="margin-top:10px"><input type="checkbox" id="abs-approved"> <span>The City approved billing for this absence in writing</span></label>
           <div class="field-group" style="margin-top:8px"><label class="field-label" for="abs-ref">Approval reference</label>
             <input type="text" class="field-input" id="abs-ref" placeholder="Email date, approver, or note reference">
-            <div class="field-hint">Section 3.2 requires prior written approval before an absent night can be billed. Without it the night is recorded but not billable.</div></div>
+            <div class="field-hint">An absent night is billable only with the City’s prior written approval (section 3.2).</div></div>
           <button class="btn btn-primary" id="bed-absence-btn" style="margin-top:12px">Record absence</button>
         </div>` : `
         <div class="bed-action-block">
@@ -12135,7 +12135,7 @@ const App = {
         <div class="field-group" style="margin-top:10px"><label class="field-label" for="bed-reason">Reason</label>
           <input type="text" class="field-input" id="bed-reason" placeholder="Required when a bed is unavailable"></div>
         <label class="checkbox-label" style="margin-top:10px"><input type="checkbox" id="bed-notified"> <span>City notified of this change</span></label>
-        <div class="field-hint">Section 3.1 requires the City to be told within one business day.</div>
+        <div class="field-hint">Notify the City within one business day (section 3.1).</div>
         <button class="btn btn-primary" id="bed-status-btn" style="margin-top:12px">Record status change</button>
       </div>`}
       <p class="bed-msg" id="bed-msg"></p>`;
@@ -12540,8 +12540,7 @@ const App = {
 
     el.innerHTML = `<div class="page-header">
         <div><h1 class="page-title">Referral Pipeline</h1>
-          <div class="page-subtitle">Referrals from the City, partner agencies, the provider and self-referral, with the
-            section&nbsp;4 service levels measured in business days.</div></div>
+          <div class="page-subtitle">Every referral and its section&nbsp;4 deadlines.</div></div>
         <div class="client-actions">
           <button class="btn btn-gold" id="btn-log-referral">Log a Referral</button>
           ${this.isAdmin?.() ? `<button class="btn btn-ghost" id="btn-referral-codes">Manage Agency Codes</button>` : ''}
@@ -12658,7 +12657,7 @@ const App = {
         <div class="field-group"><label class="field-label" for="pipe-barrier">Documented barrier</label>
           <textarea id="pipe-barrier" class="field-textarea"
             placeholder="Required within two business days when no admission status can be given.">${esc(r.barrier_description || '')}</textarea>
-          <div class="field-hint">Section 4 is satisfied by an admission status <em>or</em> a documented barrier &mdash; either one stops the clock.</div></div>
+          <div class="field-hint">An admission status or a documented barrier meets section 4.</div></div>
       </div>
 
       <div class="form-section"><div class="form-section-title">West Hollywood Affiliation &middot; Sections 4 and 12.4</div>
@@ -12827,7 +12826,7 @@ const App = {
           <div class="field-group"><label class="field-label" for="logref-party-contact">Their contact</label>
             <input type="text" class="field-input" id="logref-party-contact" placeholder="Phone or email"></div>
         </div>
-        <div class="field-hint">Service-level clocks start from this date.</div>
+        <div class="field-hint">Deadlines count from this date.</div>
       </div>
 
       <div class="form-section"><div class="form-section-title">Community Member</div>
@@ -12851,7 +12850,7 @@ const App = {
             <select class="field-select" id="logref-gender"><option value="">—</option>
               ${Object.entries(GENDERS).map(([v,l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('')}</select></div>
         </div>
-        <div class="field-hint" style="margin-top:8px;">Reserved vs. fee-for-service is assigned by program staff after referral review.</div>
+        <div class="field-hint" style="margin-top:8px;">Program staff assign the bed type after review.</div>
       </div>`;
     document.getElementById('logref-state').textContent = '';
     this.openOverlay('logref');
@@ -13033,7 +13032,7 @@ const App = {
           <td>${num(v.billable)}</td>
           <td>${v.available ? Math.round((v.occupied / v.available) * 100) + '%' : '—'}</td>
         </tr>`).join('')}</tbody></table></div>`
-      : '<div class="mr-empty">No bed nights generated for this month yet. Generate the census on the Bed Board first.</div>';
+      : '<div class="mr-empty">No bed nights yet. Generate the census on the Bed Board.</div>';
 
     const statusChanges = Object.entries((r?.bed_status_breakdown?.status_changes) || {});
     const statusTable = statusChanges.length ? `<div class="client-table-wrap"><table class="client-table">
@@ -13066,8 +13065,7 @@ const App = {
 
     el.innerHTML = `<div class="page-header">
         <div><h1 class="page-title">Monthly Report</h1>
-          <div class="page-subtitle">The section&nbsp;12.2 operating report. Figures are computed from the month&rsquo;s beds,
-            referrals, stays and services &mdash; only the narrative is written by hand.</div></div>
+          <div class="page-subtitle">Monthly operating report (section&nbsp;12.2). Figures fill in from the portal; add the narrative.</div></div>
         <span class="badge ${badge.badge}">${esc(badge.label)}</span>
       </div>
 
@@ -13478,9 +13476,7 @@ const App = {
               <input type="text" class="field-input" id="cf-orientation-other"
                      value="${esc(c.sexual_orientation_other || '')}"></div>
           </div>
-          <div class="eq-hint">&ldquo;Client prefers not to answer&rdquo; and &ldquo;unknown&rdquo; are different answers and are
-            reported differently: one is the participant&rsquo;s choice, the other is a gap in the record. Leave a field blank only
-            if it has not been asked yet.</div>
+          <div class="eq-hint">Use &ldquo;Client prefers not to answer&rdquo; when the person declines. Leave blank only if it hasn&rsquo;t been asked.</div>
         </div>`);
 
       const orient = document.getElementById('cf-sexual-orientation');
@@ -13513,8 +13509,7 @@ const App = {
             <div class="field-group"><label class="field-label" for="cf-retention-cm-date">Transferred on</label>
               <input type="date" class="field-input" id="cf-retention-cm-date" value="${esc(this.dateOnly(c.retention_cm_assigned_on) || '')}"></div>
           </div>
-          <div class="eq-hint">The retention assignment date is the transfer between the two roles, which is itself reportable
-            under section&nbsp;8.</div>
+          <div class="eq-hint">The date the participant moved to the retention case manager (section&nbsp;8).</div>
         </div>
 
         <div class="form-section"><div class="form-section-title">Housing Plan Reviews</div>
@@ -14609,8 +14604,7 @@ const App = {
 
     el.innerHTML = `<div class="page-header">
         <div><h1 class="page-title">Bed Night Invoice</h1>
-          <div class="page-subtitle">Fee-for-service bed nights at the contract rate, taken from the month&rsquo;s census
-            &mdash; Exhibit&nbsp;A sections&nbsp;3.2 and&nbsp;13.2.</div></div>
+          <div class="page-subtitle">Fee-for-service nights at the contract rate, from the month&rsquo;s census.</div></div>
         <span class="badge ${badge.badge}">${esc(badge.label)}</span>
       </div>
 
@@ -14715,7 +14709,7 @@ const App = {
           <td style="text-align:right"><strong>${rows.reduce((t,r)=>t+r.nights,0)}</strong></td><td></td>
           <td style="text-align:right"><strong>${this.ffsMoney(rows.reduce((t,r)=>t+r.amount,0))}</strong></td></tr>
       </tbody></table>`
-      : '<div class="mr-empty">No billable bed nights in this month. Generate the census on the Bed Board first.</div>';
+      : '<div class="mr-empty">No billable nights this month. Generate the census on the Bed Board.</div>';
 
     return `<div class="fiscal-invoice" id="ffs-invoice">
       <div class="fiscal-invoice-head">
@@ -14760,8 +14754,7 @@ const App = {
       <div style="margin-top:26px">
         <h2 style="color:var(--navy);font-size:15px;border-bottom:2px solid var(--gold);padding-bottom:6px">
           Participant-Level Census Detail</h2>
-        <p class="field-hint" style="margin:8px 0 4px">Every night billed above, by participant, as required by
-          Exhibit&nbsp;A section&nbsp;13.2. Participants are shown by their programme identifier; no names appear on an invoice.</p>
+        <p class="field-hint" style="margin:8px 0 4px">Nights billed, by participant ID (section&nbsp;13.2).</p>
         ${detail}
       </div>
     </div>`;
@@ -15508,20 +15501,17 @@ const App = {
     total_census: {
       short: 'Total daily census',
       line: n => `Fee-for-service bed nights &mdash; eligible participants beyond the ${n} reserved beds`,
-      sentence: n => `A night is billable only when the daily census rose above the ${n} reserved beds, `
-        + `whichever beds those participants were in.`
+      sentence: n => `a night is billable only when the census was above the ${n} reserved beds.`
     },
     gender_availability: {
       short: 'Reserved beds available to the participant',
       line: () => 'Fee-for-service bed nights &mdash; eligible participants beyond the reserved beds available to them',
-      sentence: n => `A night is billable when every reserved bed on that participant's side was already taken, `
-        + `whatever the total census was. The ${n} reserved beds are held as separate men's and women's `
-        + `sides, so a bed on the other side was never available to them.`
+      sentence: () => `a night is billable only when every reserved bed for the participant's gender was full.`
     },
     designation: {
       short: 'Bed designation',
       line: () => 'Fee-for-service bed nights &mdash; eligible participants in fee-for-service beds',
-      sentence: () => 'Every occupied fee-for-service bed is billable, with no census test.'
+      sentence: () => 'every occupied fee-for-service bed is billable.'
     }
   };
 
@@ -15544,8 +15534,7 @@ const App = {
   App.censusSummaryHtml = function(){
     const html = previousCensusSummary.call(this);
     const note = `<div class="field-hint" style="margin-top:12px;padding-top:11px;border-top:1px solid var(--rule,#E6E2DA);">`
-      + `<strong>Billing rule in force:</strong> ${esc(this.ffsBasisLabel())}. ${esc(this.ffsBasisSentence())}`
-      + ` Each night below carries the reason it was or was not billed.</div>`;
+      + `<strong>Billing rule:</strong> ${esc(this.ffsBasisSentence())}</div>`;
     return html.replace('<p class="bed-msg" id="census-msg"></p>', note + '<p class="bed-msg" id="census-msg"></p>');
   };
 
@@ -15564,7 +15553,7 @@ const App = {
     // And the invoice says which rule, in a form an auditor can check against
     // the participant-level detail printed below it.
     const footnote = `<p class="field-hint" style="margin:8px 0 0;">`
-      + `<strong>Billing basis:</strong> ${esc(this.ffsBasisLabel())}. ${esc(this.ffsBasisSentence())}</p>`;
+      + `<strong>Billing rule:</strong> ${esc(this.ffsBasisSentence())}</p>`;
     return html.replace('</tbody></table>\n\n      <div class="fiscal-cert">',
                         '</tbody></table>' + footnote + '\n\n      <div class="fiscal-cert">');
   };
@@ -16164,7 +16153,7 @@ const App = {
       ['Bed Nights Provided', p.bedNights.toLocaleString(), `Since ${since}`],
       ['Stays Past 90 Days', p.longStays, `Of ${p.active} enrolled, counted from original entry`]
     ];
-    return `<div class="dashboard-section-head"><h2>Program to Date</h2><div class="hint">Carries across contract years. Year-to-date figures above include carried-over residents as persons served; intakes count only new entries.</div></div>
+    return `<div class="dashboard-section-head"><h2>Program to Date</h2><div class="hint">Includes residents carried over from earlier years. Intakes count new entries only.</div></div>
       <div class="housing-outcome-grid">${stats.map(([label, value, sub]) => `<div class="outcome-stat"><div class="label">${this.escape(label)}</div><div class="value">${value}</div><div class="sub">${this.escape(sub)}</div></div>`).join('')}</div>`;
   };
 
@@ -17411,7 +17400,7 @@ const App = {
 
     return `<div class="card" style="margin-top:18px"><div class="card-header">
         <div><h2 class="card-title">Supporting Documentation</h2>
-          <div class="field-hint">The General Ledger is required before the month can be submitted. Add any other backup under Supporting Documentation.</div></div>
+          <div class="field-hint">The General Ledger is required to submit. Add other backup under Supporting Documentation.</div></div>
         <div class="fdoc-head-actions">
           <button class="btn btn-ghost btn-sm" id="btn-fiscal-zip" ${docs.length ? '' : 'disabled'}>Download all (.zip)</button>
         </div>
@@ -17822,14 +17811,14 @@ const App = {
       </div>
       ${reviewNote}${exhaustedNote}
       <div class="card"><div class="card-header"><div><h2 class="card-title">Monthly Payroll · ${esc(q.label)}</h2>
-        <div class="field-hint">Enter what was actually paid to the ${esc(set.position_label)} each month. The portal charges CDBG first; only what's left can go on the standard invoice.</div></div></div>
+        <div class="field-hint">Enter what was actually paid to the ${esc(set.position_label)} each month. CDBG is charged first; the rest goes on the standard invoice.</div></div></div>
         <div class="card-body"><div class="client-table-wrap"><table class="client-table cdbg-table">
           <thead><tr><th>Month</th><th>Employee</th><th class="num">Hours</th><th class="num">Salary Paid</th><th class="num">Benefits Paid</th>
             <th class="num">Charged to CDBG</th><th class="num">Standard Invoice<br><span style="font-weight:400">salary allowed</span></th><th>Benefits off<br>standard invoice</th></tr></thead>
           <tbody>${qRows.map(r => this.cdbgRowHtml(r, editable)).join('')}</tbody>
           <tfoot><tr><td colspan="3">Quarter total</td><td class="num" id="cdbg-t-sal">${this.fiscalMoney(qRows.reduce((s,r)=>s+r.salary_paid,0))}</td><td class="num" id="cdbg-t-ben">${this.fiscalMoney(qRows.reduce((s,r)=>s+r.benefits_paid,0))}</td><td class="num cdbg-charge" id="cdbg-t-cdbg">${this.fiscalMoney(qTotal)}</td><td class="num" id="cdbg-t-std">${this.fiscalMoney(qRows.reduce((s,r)=>s+r.standard_salary_allowed,0))}</td><td></td></tr></tfoot>
         </table></div>
-        <div class="field-hint" style="margin-top:8px">CDBG covers salary first, then benefits. Benefits charged to CDBG must be left off the standard invoice's benefit lines; tick the box to confirm for each month.</div>
+        <div class="field-hint" style="margin-top:8px">CDBG covers salary first, then benefits. Leave CDBG benefits off the standard invoice and check the box each month.</div>
       </div></div>
       <div class="cdbg-grid2">
         ${this.cdbgDocsHtml(q, editable)}
@@ -18369,7 +18358,7 @@ const App = {
           <div class="page-subtitle">${esc(this.programName())} · One download with the year's program reports, fiscal records and backup documentation.</div></div>
       </div>
       <div class="card"><div class="card-header"><div><h2 class="card-title">Download archive (.zip)</h2>
-        <div class="field-hint">Program reports follow the contract year (Oct–Sep). Invoices, budget, payments and CDBG follow the fiscal year (Jul–Jun). Choose which calendar the archive follows; it includes the quarters and months that fall inside that year.</div></div></div>
+        <div class="field-hint">Program reports run Oct–Sep; invoices, budget, payments and CDBG run Jul–Jun. Choose which year the archive follows.</div></div></div>
         <div class="card-body">
           <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
             <label><div class="field-label">Year basis</div>
@@ -18389,7 +18378,7 @@ const App = {
             <div class="fdoc-panel" style="padding:12px 14px"><div class="fdoc-panel-title">2 Fiscal</div><div class="fdoc-panel-sub">Monthly invoices · actuals, payments and funding plan · budget versions · CDBG and bed-night invoices</div></div>
             <div class="fdoc-panel" style="padding:12px 14px"><div class="fdoc-panel-title">3 Backup Documentation</div><div class="fdoc-panel-sub">Invoice, CDBG and budget-modification files, including uploads missing from the portal's document list</div></div>
           </div>
-          <div class="field-hint" style="margin-top:12px">De-identified: clients appear by HMIS ID only. Names, case notes, incident reports, referral attachments and free-text notes are not included.</div>
+          <div class="field-hint" style="margin-top:12px">De-identified: HMIS IDs only. No names, case notes, incident reports, attachments or free-text notes.</div>
           <p class="fdoc-msg" id="archive-msg" style="margin-top:12px"></p>
         </div></div>`;
 
@@ -18736,7 +18725,7 @@ const App = {
         '3 Backup Documentation - Invoice, CDBG and budget-modification files and HMIS rosters, with an index. Files under "Unregistered uploads" are in storage but missing from the portal\'s document list; they are included so nothing is lost.',
         '', 'NOTES',
         '- Program reports follow the contract year (Oct-Sep); invoices, budget, payments and CDBG follow the fiscal year (Jul-Jun). This archive includes the quarters and months that fall inside the period above and have started.',
-        '- De-identified: clients appear by HMIS ID only. Names, case notes, incident reports, referral attachments and free-text notes are not included.',
+        '- De-identified: HMIS IDs only. No names, case notes, incident reports, attachments or free-text notes.',
         '- Quarterly reports, invoices and other print views are included exactly as the portal prints them for City review.',
         '- Reports and invoices are HTML files. Open one in a browser and use Print > Save as PDF for a PDF copy.',
         '- Figures reflect the portal as of the generation date.',
@@ -18910,7 +18899,7 @@ const App = {
             <div class="field-hint">${reservedFree} reserved and ${ffsFree} fee-for-service bed${ffsFree === 1 ? '' : 's'} open today.</div></div>
           <div class="field-group"><label class="field-label ${id ? '' : 'required'}" for="cf-bed-start">Bed start date</label>
             <input type="date" class="field-input" id="cf-bed-start" value="${esc(this.dateOnly(c.entry_date) || this.localDate())}">
-            <div class="field-hint">Usually the entry date. Fee-for-service nights are billed from here.</div></div>
+            <div class="field-hint">Usually the entry date.</div></div>
         </div>
         <div id="cf-bed-note"></div>
         ${beds.length ? '' : '<div class="dq-warning">⚠ No beds are open. Free a bed on the Bed Board before enrolling.</div>'}`;
@@ -18928,8 +18917,8 @@ const App = {
       const out = document.getElementById('cf-bed-note');
       if (!out) return;
       const msgs = [];
-      if (bed?.designation === 'fee_for_service') msgs.push('This is a fee-for-service bed. Each night of the stay will appear on the fee-for-service invoice.');
-      if (genderMismatch(bed, gender)) msgs.push(`This reserved bed is designated for ${GENDER_LABEL[bed.gender_category].toLowerCase()}. Confirm this placement is intended.`);
+      if (bed?.designation === 'fee_for_service') msgs.push('Fee-for-service bed: nights are billed.');
+      if (genderMismatch(bed, gender)) msgs.push(`This bed is reserved for ${GENDER_LABEL[bed.gender_category].toLowerCase()}. Confirm the placement.`);
       out.innerHTML = msgs.map(m => `<div class="dq-warning">⚠ ${esc(m)}</div>`).join('');
     };
     sel?.addEventListener('change', note);
@@ -19017,7 +19006,7 @@ const App = {
       sel.dataset.planId = usePlan?.id || '';
       hint.textContent = !cid ? 'Choose a client first.'
         : usePlan ? `Plan dated ${this.formatDate(this.dateOnly(usePlan.plan_date))}.`
-        : 'No housing plan on file for this client. Upload one on the Services screen.';
+        : 'No plan on file.';
     };
     const toggle = () => {
       const type = document.getElementById('sf-type')?.value || '';
@@ -19135,7 +19124,7 @@ const App = {
           <div class="field-hint">PDF, Word or a photo of the signed plan. 20 MB max.</div></div>
         <div class="field-group full"><label class="field-label" for="hp-goals">Plan goals <span class="field-hint">one per line</span></label>
           <textarea class="field-textarea" id="hp-goals" placeholder="Obtain California ID&#10;Apply for SSI&#10;Submit Section 8 application">${esc(this.planGoals(prior).join('\n'))}</textarea>
-          <div class="field-hint">Services can be tied to these goals. ${prior ? 'Carried over from the last plan; edit as needed.' : ''}</div></div>
+          <div class="field-hint">${prior ? 'Carried over from the last plan.' : ''}</div></div>
         <div class="field-group full"><label class="field-label" for="hp-notes">Notes</label>
           <input type="text" class="field-input" id="hp-notes"></div>
       </div>
@@ -19233,7 +19222,7 @@ const App = {
             ${STATUSES.map(v => `<option ${(s.connection_status || 'In progress') === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
         <div class="field-group" id="sf-connected-on-wrap"><label class="field-label required" for="sf-connected-on">Date approved or enrolled</label>
           <input id="sf-connected-on" type="date" class="field-input" value="${esc(this.dateOnly(s.connected_on) || '')}"></div>
-        <div class="field-group full"><div class="field-hint">Only contacts marked <strong>Connected</strong> count toward the benefits goal, by the date the benefit was approved or the participant enrolled. Help still under way is <strong>In progress</strong>; log a new contact or edit this one once it is approved.</div></div>
+        <div class="field-group full"><div class="field-hint">Only <strong>Connected</strong> counts toward the benefits goal.</div></div>
       </div>`;
     const notes = document.getElementById('sf-notes')?.closest('.field-group');
     grid.insertBefore(wrap, notes || null);
@@ -19393,7 +19382,7 @@ const App = {
     if (!c || this.clientStatus(c) === 'Exited') return;
     const msg = document.getElementById('bed-msg');
     if (msg) {
-      msg.innerHTML = `Stay ended. <strong>${esc(this.clientDisplayId(c))}</strong> still needs exit details (destination and reason) for reporting.
+      msg.innerHTML = `Stay ended. Record <strong>${esc(this.clientDisplayId(c))}</strong>&rsquo;s exit details.
         <button type="button" class="btn btn-primary btn-sm" id="bed-record-exit" style="margin-left:8px">Record exit</button>`;
       msg.className = 'bed-msg ok';
       document.getElementById('bed-record-exit')?.addEventListener('click', () => { this.closeBedPanel?.(); this.openExitFor(c.id, end); });
@@ -19459,7 +19448,7 @@ const App = {
     // Bed Assignment hint now that ending is automatic.
     body.querySelectorAll('#cf-bed-section .field-hint').forEach(h => {
       if (/use the Bed Board/.test(h.textContent))
-        h.textContent = 'Recording an exit on the Exit tab ends this stay automatically. To move beds, use the Bed Board.';
+        h.textContent = 'Ends when the exit is recorded. Use the Bed Board to move beds.';
     });
 
     // Follow-ups for this participant (recorded on the Follow-Ups screen).
@@ -19473,7 +19462,7 @@ const App = {
         : `<div class="field-hint">${c.exit_date ? 'No follow-ups recorded yet.' : 'Follow-ups start after the participant exits.'}</div>`}
       <button type="button" class="btn btn-ghost btn-sm" id="ptab-open-followups" style="margin-top:8px">Open Follow-Ups</button></div>`;
     const exitPrompt = `<div class="form-section" id="ptab-exit-prompt"><div class="form-section-title">Exit</div>
-      <div class="field-hint" style="margin-bottom:8px">This participant is not marked as exited. Recording an exit also ends their bed stay on the same date.</div>
+      <div class="field-hint" style="margin-bottom:8px">Recording an exit also ends the bed stay.</div>
       <button type="button" class="btn btn-primary btn-sm" id="ptab-start-exit">Record an exit</button></div>`;
 
     const layout = body.querySelector('.client-entry-layout > div') || body;
@@ -19634,7 +19623,7 @@ const App = {
 
     // Section 3.2 — absences recorded without written approval are not billable.
     const absences = (this.data.absences || []).filter(a => !a.billing_approved);
-    if (absences.length) add('info', `${plural(absences.length, 'absence')} without City approval — not billable unless approved in writing`, 'Section 3.2', 'beds', 'Review absences');
+    if (absences.length) add('info', `${plural(absences.length, 'absence')} not approved for billing`, 'Section 3.2', 'beds', 'Review absences');
 
     // Section 7.1 — 30-day plan reviews.
     const activeIds = new Set(active.map(c => c.id));
@@ -19686,13 +19675,13 @@ const App = {
     const card = document.createElement('div');
     card.id = 'shelter-todos'; card.className = 'card'; card.style.margin = '0 0 16px';
     card.innerHTML = `<div class="card-header"><div><strong>To do</strong>
-        <span class="field-hint" style="margin-left:6px">${items.length ? plural(items.length, 'item') + ' from contract deadlines' : 'Nothing due from contract deadlines'}</span></div></div>
+        <span class="field-hint" style="margin-left:6px">${items.length ? plural(items.length, 'item') : 'Nothing due'}</span></div></div>
       <div class="card-body">${items.length ? `<div class="todo-list">${items.map((t, i) => `
         <div class="todo-row">
           <span class="badge ${icon[t.level]}">${word[t.level]}</span>
           <div class="todo-text">${esc(t.text)}<br><span class="field-hint">${esc(t.cite)}</span></div>
           ${t.action ? `<button type="button" class="btn btn-ghost btn-sm" data-todo="${i}">${esc(t.label)}</button>` : ''}
-        </div>`).join('')}</div>` : '<div class="field-hint">All referrals, plan reviews, follow-ups, bed notices and reports are up to date.</div>'}</div>`;
+        </div>`).join('')}</div>` : '<div class="field-hint">All caught up.</div>'}</div>`;
     const header = el.querySelector('.page-header');
     header ? header.after(card) : el.prepend(card);
     card.querySelectorAll('[data-todo]').forEach(b => b.addEventListener('click', async () => {
@@ -19881,7 +19870,7 @@ const App = {
     if (activity.length) mk(`Contact attempts and notes${this.referralContactsFor(id).length ? ' (' + this.referralContactsFor(id).length + ' attempts)' : ''}`, activity, step.key === 'ack' || step.key === 'decide');
     if (editAll.length) {
       const d = mk('Edit all fields', editAll, false);
-      d.insertAdjacentHTML('beforeend', '<div class="field-hint" style="margin:0 0 8px">For corrections. Use the step at the top for normal progress.</div>');
+      d.insertAdjacentHTML('beforeend', '<div class="field-hint" style="margin:0 0 8px">For corrections only.</div>');
     }
     const meta = document.querySelector('#modal-referral .form-modal-meta');
     if (meta) meta.textContent = `${r.referring_agency || 'Logged by staff'} · received ${this.formatDate(this.dateOnly(r.received_at)) || '—'}`;
@@ -19948,7 +19937,7 @@ const App = {
     const due = (state, d, late) => c ? this.dueBadge(state, d, late) : '';
     if (step.key === 'ack') return `
       <div class="ref-next-head"><div class="ref-next-title">Next: acknowledge this referral</div>${c ? due(c.ack_state, c.ack_due, c.ack_days_late) : ''}</div>
-      <div class="ref-next-hint">Let the referring party or the participant know it was received. Section 4 allows one business day.</div>
+      <div class="ref-next-hint">Confirm receipt with the referring party or the participant.</div>
       <div class="client-form-grid">
         <div class="field-group"><label class="field-label" for="rn-ack-method">How</label>
           <select class="field-select" id="rn-ack-method">${ACK_METHODS.map(m => `<option>${esc(m)}</option>`).join('')}</select></div>
@@ -19961,11 +19950,11 @@ const App = {
     if (step.key === 'decide' || step.key === 'waiting') {
       const legacy = step.legacy ? `<div class="dq-warning" style="margin-bottom:10px">⚠ This referral was marked ${esc(step.legacy)} without a decision or reason, so the section 4 clock is still running. Record the reason to close it.</div>` : '';
       const waitingNote = step.key === 'waiting'
-        ? `<div class="ref-next-hint">${r.admission_decision === 'waitlisted' ? 'Waitlisted: ' + esc(r.decision_reason || '') : 'Barrier: ' + esc(r.barrier_description || '')}. The section 4 clock has stopped. Choose what happens next when it changes.</div>` : '';
+        ? `<div class="ref-next-hint">${r.admission_decision === 'waitlisted' ? 'Waitlisted: ' + esc(r.decision_reason || '') : 'Barrier: ' + esc(r.barrier_description || '')}. Update this when things change.</div>` : '';
       return `
         <div class="ref-next-head"><div class="ref-next-title">${step.key === 'waiting' ? 'Waiting · update when things change' : 'Next: decide on admission'}</div>
           ${step.key === 'decide' && c ? due(c.det_state, c.det_due, c.det_days_late) : ''}</div>
-        ${step.key === 'decide' ? '<div class="ref-next-hint">Any of these stops the two business day clock in section 4.</div>' : waitingNote}
+        ${step.key === 'decide' ? '<div class="ref-next-hint">Any of these meets the section 4 deadline.</div>' : waitingNote}
         ${legacy}${decisionChooser(r, step.legacy ? 'notadmit' : '')}`;
     }
 
@@ -19974,7 +19963,7 @@ const App = {
       return `
         <div class="ref-next-head"><div class="ref-next-title">Next: admit on ${esc(this.formatDate(this.dateOnly(r.scheduled_admission_date)))}</div></div>
         <div class="ref-next-hint">${held ? `${esc(held.label)} is held for this participant.` : (r.requested_designation ? esc(DESIG[r.requested_designation]) + ' planned. No bed is held.' : 'No bed is held.')}
-          Starting intake fills in what the referral already has.</div>
+          Intake is pre-filled from the referral.</div>
         <div class="ref-actions"><button type="button" class="btn btn-gold" id="rn-intake">Start intake</button>
           <button type="button" class="btn btn-ghost" id="rn-change">Change decision</button><span class="ref-msg" id="rn-msg"></span></div>
         <div id="rn-change-box" style="display:none;margin-top:12px">${decisionChooser(r, '')}</div>`;
@@ -19995,7 +19984,7 @@ const App = {
   App.referralChoiceFields = function(r, choice){
     const today = this.localDate();
     if (choice === 'admit') return `${affiliationSelect(r)}
-      <div class="ref-next-hint">Opens participant intake with the name, age and gender from the referral. Saving the intake marks this referral admitted.</div>
+      <div class="ref-next-hint">Opens intake pre-filled from this referral.</div>
       <div class="ref-actions"><button type="button" class="btn btn-gold" id="rn-go">Start intake</button><span class="ref-msg" id="rn-msg"></span></div>`;
     if (choice === 'schedule') {
       const beds = this.vacantBedsFor(r.requested_gender_category);
@@ -20026,7 +20015,7 @@ const App = {
       <div class="ref-actions"><button type="button" class="btn btn-gold" id="rn-go">Close referral</button><span class="ref-msg" id="rn-msg"></span></div>`;
     if (choice === 'barrier') return `<div class="field-group"><label class="field-label required" for="rn-barrier">What is in the way</label>
         <input class="field-input" id="rn-barrier" placeholder="e.g. waiting on homeless verification from the referring agency" value="${esc(r.barrier_description || '')}">
-        <div class="field-hint">A documented barrier meets the two business day service level.</div></div>
+        <div class="field-hint">Meets the section 4 deadline.</div></div>
       <div class="ref-actions"><button type="button" class="btn btn-gold" id="rn-go">Save barrier</button><span class="ref-msg" id="rn-msg"></span></div>`;
     return '';
   };
@@ -20184,8 +20173,7 @@ const App = {
     const title = document.getElementById('client-title');
     if (title) title.textContent = `New Participant Intake · from referral`;
     const body = document.getElementById('client-body');
-    body?.insertAdjacentHTML('afterbegin', `<div class="notice navy" id="cf-from-referral"><div>i</div><div>Filled in from the referral for
-      <strong>${esc(r.community_member_name)}</strong>. Add the HMIS ID${held ? '' : ' and choose a bed'}, check the rest, then save. Saving marks the referral admitted.</div></div>`);
+    body?.insertAdjacentHTML('afterbegin', `<div class="notice navy" id="cf-from-referral"><div>i</div><div>Pre-filled from <strong>${esc(r.community_member_name)}</strong>&rsquo;s referral. Add the HMIS ID${held ? '' : ' and a bed'}, then save.</div></div>`);
   };
 
   const previousOpenClientForm = App.openClientForm;
@@ -20363,7 +20351,7 @@ const App = {
                value="${esc(state.location_description || '')}">
         <button type="button" class="btn btn-ghost" id="${prefix}-loc-find">Find on map</button>
       </div>
-      <div class="field-hint">Type an address or cross streets and press Find, or click the spot on the map. You can drag the pin.</div>
+      <div class="field-hint">Enter an address or cross streets, or click the map.</div>
       <div class="weho-map" id="${prefix}-loc-map"></div>
       <div class="weho-loc-status" id="${prefix}-loc-status"></div>
     </div>`;
@@ -20382,8 +20370,8 @@ const App = {
       status.className = 'weho-loc-status ' + (!has ? '' : inside ? 'ok' : 'bad');
       status.innerHTML = !has ? 'No location set yet.'
         : inside ? `<strong>&#10003; Inside West Hollywood city limits.</strong> <span class="field-hint">${esc(state.location_source || '')}</span>`
-        : inside === false ? `<strong>&#10007; Outside West Hollywood city limits.</strong> This program serves people who spend most of their time in West Hollywood. Check the location or move the pin.`
-        : 'The City boundary could not be loaded, so the location cannot be checked right now.';
+        : inside === false ? `<strong>&#10007; Outside West Hollywood city limits.</strong>`
+        : 'The City boundary didn’t load. Try again shortly.';
       onChange && onChange(state);
     };
     let L = null, map = null, marker = null;
@@ -20406,7 +20394,7 @@ const App = {
       status.className = 'weho-loc-status'; status.textContent = 'Looking it up…';
       const hit = await this.geocodeWeho(q);
       if (!hit) { status.className = 'weho-loc-status bad';
-        status.textContent = 'That location could not be found. Click the spot on the map instead.'; return; }
+        status.textContent = 'Not found. Click the spot on the map instead.'; return; }
       state.location_description = q;
       setPoint(hit.lat, hit.lng, hit.source);
     };
@@ -20426,7 +20414,7 @@ const App = {
       map.on('click', e => setPoint(e.latlng.lat, e.latlng.lng, 'Pin placed on map'));
       if (state.location_lat != null) setPoint(state.location_lat, state.location_lng, state.location_source);
     } else if (mapEl && !L) {
-      mapEl.innerHTML = '<div class="field-hint" style="padding:12px">The map could not load. Use Find on map with an address or intersection.</div>';
+      mapEl.innerHTML = '<div class="field-hint" style="padding:12px">The map didn’t load. Use Find on map instead.</div>';
       mapEl.style.height = 'auto';
     }
     show();
