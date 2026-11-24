@@ -3176,8 +3176,8 @@ const App = {
     // is enabled — read-only Program Reports. Hide every other program view.
     if (fiscalOnly) {
       const allowed = CONFIG.FISCAL_VIEW_PROGRAM_REPORTS
-        ? ['dashboard', 'fiscal', 'budget', 'quarter']
-        : ['dashboard', 'fiscal', 'budget'];
+        ? ['dashboard', 'fiscal', 'budget', 'quarter', 'ffs']
+        : ['dashboard', 'fiscal', 'budget', 'ffs'];
       document.querySelectorAll('.sidebar-item[data-view]').forEach(el => {
         el.style.display = allowed.includes(el.dataset.view) ? 'flex' : 'none';
       });
@@ -3206,8 +3206,8 @@ const App = {
 
   showView(view) {
     const fiscalViews = CONFIG.FISCAL_VIEW_PROGRAM_REPORTS
-      ? ['dashboard','fiscal','budget','quarter']
-      : ['dashboard','fiscal','budget'];
+      ? ['dashboard','fiscal','budget','quarter','ffs']
+      : ['dashboard','fiscal','budget','ffs'];
     if (this.isAgencyFiscal?.() && !fiscalViews.includes(view)) {
       view = 'dashboard';
       this.toast?.(CONFIG.FISCAL_VIEW_PROGRAM_REPORTS
@@ -9737,7 +9737,7 @@ const App = {
     return this.isAdmin() || ['management','fiscal'].includes(this.agencyGroup) || ['management','fiscal'].includes(this.profile?.agency_group);
   };
 
-  App.fiscalMoney = function(v){ return Number(v||0).toLocaleString('en-US',{style:'currency',currency:'USD',minimumFractionDigits:0,maximumFractionDigits:2}); };
+  App.fiscalMoney = function(v){ const n=Number(v||0); return n.toLocaleString('en-US',{style:'currency',currency:'USD',minimumFractionDigits:Number.isInteger(Math.round(n*100)/100)?0:2,maximumFractionDigits:2}); };
   App.fiscalPct = function(v){ return Number.isFinite(v) ? `${Math.round(v*100)}%` : '—'; };
   App.fiscalYearRecord = function(){ return (this.fiscal.years||[]).find(y=>y.fiscal_year===this.fiscalBudgetYear) || {fiscal_year:FY27.fiscalYear,budget_label:FY27.budgetLabel,start_date:FY27.start,end_date:FY27.end}; };
   App.fiscalYearStart = function(){ return this.dateOnly(this.fiscalYearRecord().start_date || FY27.start); };
@@ -11945,7 +11945,7 @@ const App = {
     const beds = this.bedsFor();
     const counts = beds.reduce((m,b) => {
       const s = this.bedStatus(b);
-      const key = b.designation === 'reserved' ? ('reserved_' + b.gender_category) : 'ffs';
+      const key = b.designation === 'reserved' ? 'reserved' : 'ffs';
       m.total++; if (s === 'occupied' || s === 'pending_discharge') { m.occupied++; m[key] = (m[key]||0) + 1; }
       m['cap_' + key] = (m['cap_' + key]||0) + 1;
       return m;
@@ -11958,8 +11958,7 @@ const App = {
       </div></div>
       <div class="bed-summary">
         <div class="bed-stat"><div class="bed-stat-label">Occupied</div><div class="bed-stat-value">${counts.occupied} / ${counts.total}</div><div class="bed-stat-sub">across all beds</div></div>
-        <div class="bed-stat"><div class="bed-stat-label">Reserved · men</div><div class="bed-stat-value">${counts.reserved_men||0} / ${counts.cap_reserved_men||0}</div><div class="bed-stat-sub">held for West Hollywood</div></div>
-        <div class="bed-stat"><div class="bed-stat-label">Reserved · women</div><div class="bed-stat-value">${counts.reserved_women||0} / ${counts.cap_reserved_women||0}</div><div class="bed-stat-sub">held for West Hollywood</div></div>
+        <div class="bed-stat"><div class="bed-stat-label">Reserved</div><div class="bed-stat-value">${counts.reserved||0} / ${counts.cap_reserved||0}</div><div class="bed-stat-sub">advanced by the City</div></div>
         <div class="bed-stat"><div class="bed-stat-label">Fee-for-service</div><div class="bed-stat-value">${counts.ffs||0} / ${counts.cap_ffs||0}</div><div class="bed-stat-sub">billable above ten</div></div>
       </div>
       <div class="fiscal-tabs">
@@ -11981,8 +11980,7 @@ const App = {
 
   App.bedGridHtml = function(){
     const groups = [
-      ['Reserved · men',   b => b.designation === 'reserved' && b.gender_category === 'men'],
-      ['Reserved · women', b => b.designation === 'reserved' && b.gender_category === 'women'],
+      ['Reserved',         b => b.designation === 'reserved'],
       ['Fee-for-service',  b => b.designation === 'fee_for_service']
     ];
     return groups.map(([title, match]) => {
@@ -12022,7 +12020,7 @@ const App = {
       const ev = this.latestBedEvent(b.id);
       return `<tr>
         <td><strong>${esc(b.label)}</strong></td>
-        <td>${b.designation === 'reserved' ? 'Reserved · ' + esc(b.gender_category) : 'Fee-for-service'}</td>
+        <td>${b.designation === 'reserved' ? 'Reserved' : 'Fee-for-service'}</td>
         <td><span class="badge ${status==='occupied'?'badge-green':status==='unavailable'?'badge-red':status==='held'||status==='pending_discharge'?'badge-amber':'badge-gray'}">${esc(BED_STATUS[status])}</span></td>
         <td>${stay ? esc(this.clientName(client) || client.id) : '—'}</td>
         <td>${stay ? esc(this.formatDate(stay.start_date)) : '—'}</td>
@@ -12062,7 +12060,7 @@ const App = {
     const editable = !this.isAdmin();
     document.getElementById('bed-panel-title').textContent = 'Bed ' + bed.label;
     document.getElementById('bed-panel-meta').textContent =
-      (bed.designation === 'reserved' ? 'Reserved · ' + bed.gender_category : 'Fee-for-service') + ' · ' + BED_STATUS[status];
+      (bed.designation === 'reserved' ? 'Reserved' : 'Fee-for-service') + ' · ' + BED_STATUS[status];
 
     // Participants without a current bed anywhere in this program.
     const taken = new Set((this.data.stays || []).filter(s => !s.end_date).map(s => s.client_id));
@@ -12920,7 +12918,8 @@ const App = {
   const CATEGORY_LABEL = {
     reserved_men:        "Reserved &middot; men's",
     reserved_women:      "Reserved &middot; women's",
-    reserved_unspecified:'Reserved &middot; unspecified',
+    reserved_unspecified:'Reserved',
+    reserved:            'Reserved',
     fee_for_service:     'Fee-for-service'
   };
 
@@ -13097,7 +13096,7 @@ const App = {
             <div class="field-hint">Nights by bed status for the month.</div></div>
         </div><div class="card-body">
           <div class="mr-grid">
-            ${stat('Beds in service', num(r?.beds_total), `${num(r?.reserved_men_beds)} men &middot; ${num(r?.reserved_women_beds)} women &middot; ${num(r?.ffs_beds)} fee-for-service`)}
+            ${stat('Beds in service', num(r?.beds_total), `${num(Number(r?.beds_total||0) - Number(r?.ffs_beds||0))} reserved &middot; ${num(r?.ffs_beds)} fee-for-service`)}
             ${stat('Bed nights available', num(r?.bed_nights_available), 'across all beds')}
             ${stat('Bed nights occupied', num(r?.bed_nights_occupied), r?.bed_nights_available ? Math.round((r.bed_nights_occupied / r.bed_nights_available)*100) + '% utilisation' : 'no nights generated')}
             ${stat('Fee-for-service', num(r?.ffs_nights_billable), money(r?.ffs_amount) + ' billable')}
@@ -14847,7 +14846,7 @@ const App = {
   App.renderSidebarForRole = function(){
     previousSidebarForFfs.call(this);
     const nav = document.getElementById('nav-ffs');
-    if (nav && !this.isAgencyFiscal?.()) nav.style.display = this.programHas('has_ffs_invoice') ? 'flex' : 'none';
+    if (nav) nav.style.display = this.programHas('has_ffs_invoice') ? 'flex' : 'none';
   };
 })();
 
@@ -15501,7 +15500,7 @@ const App = {
     total_census: {
       short: 'Total daily census',
       line: n => `Fee-for-service bed nights &mdash; eligible participants beyond the ${n} reserved beds`,
-      sentence: n => `nights are billable only for people housed beyond the ${n} reserved beds, counting men's and women's reserved beds together.`
+      sentence: n => `nights are billable only for people housed beyond the ${n} reserved beds.`
     },
     gender_availability: {
       short: 'Reserved beds available to the participant',
@@ -15778,8 +15777,7 @@ const App = {
       <div class="print-section"><h2>Beds and Occupancy</h2>
         <table class="print-table"><thead><tr><th>Measure</th><th>Count</th><th>Note</th></tr></thead><tbody>
           <tr><td>Beds in service</td><td>${num(r?.beds_total)}</td>
-            <td>${num(r?.reserved_men_beds)} men's reserved &middot; ${num(r?.reserved_women_beds)} women's reserved
-              &middot; ${num(r?.ffs_beds)} fee-for-service</td></tr>
+            <td>${num(Number(r?.beds_total||0) - Number(r?.ffs_beds||0))} reserved &middot; ${num(r?.ffs_beds)} fee-for-service</td></tr>
           <tr><td>Bed nights available</td><td>${num(r?.bed_nights_available)}</td><td>Across all beds in service</td></tr>
           <tr><td>Bed nights occupied</td><td>${num(r?.bed_nights_occupied)}</td>
             <td>${avail ? pct(occ, avail) + ' occupancy' : 'No census generated for this month'}</td></tr>
@@ -18843,7 +18841,7 @@ const App = {
 
   App.bedLabel = function(b){
     const kind = b.designation === 'reserved'
-      ? `Reserved · ${GENDER_LABEL[b.gender_category] || 'Any'}`
+      ? (b.gender_category ? `Reserved · ${GENDER_LABEL[b.gender_category]}` : 'Reserved')
       : 'Fee-for-service';
     return `${b.label} — ${kind}`;
   };
@@ -19919,7 +19917,7 @@ const App = {
   App.vacantBedsFor = function(gender){
     return this.bedsFor().filter(b => this.bedStatus(b) === 'vacant_available')
       .sort((a, b) => (a.designation === b.designation ? 0 : a.designation === 'reserved' ? -1 : 1))
-      .map(b => ({ b, fits: b.designation !== 'reserved' || !gender || b.gender_category === gender }))
+      .map(b => ({ b, fits: b.designation !== 'reserved' || !gender || !b.gender_category || b.gender_category === gender }))
       .sort((x, y) => (y.fits ? 1 : 0) - (x.fits ? 1 : 0));
   };
   App.heldBedFor = function(referralId){
@@ -19993,14 +19991,14 @@ const App = {
             <input type="date" class="field-input" id="rn-date" min="${today}" value="${esc(this.dateOnly(r.scheduled_admission_date) || '')}"></div>
           <div class="field-group"><label class="field-label" for="rn-bed">Hold a bed <span class="field-hint">optional</span></label>
             <select class="field-select" id="rn-bed"><option value="">Don't hold a bed</option>
-              ${beds.map(({ b, fits }) => `<option value="${esc(b.id)}">${esc(b.label)} · ${b.designation === 'reserved' ? 'Reserved ' + (b.gender_category || '') : 'Fee-for-service'}${fits ? '' : ' (other gender)'}</option>`).join('')}</select>
+              ${beds.map(({ b, fits }) => `<option value="${esc(b.id)}">${esc(b.label)} · ${b.designation === 'reserved' ? 'Reserved' : 'Fee-for-service'}${fits ? '' : ' (other gender)'}</option>`).join('')}</select>
             <div class="field-hint">${beds.length} open bed${beds.length === 1 ? '' : 's'}. A held bed shows on the Bed Board.</div></div>
           ${affiliationSelect(r)}
         </div>
         <div class="ref-actions"><button type="button" class="btn btn-gold" id="rn-go">Schedule admission</button><span class="ref-msg" id="rn-msg"></span></div>`;
     }
     if (choice === 'waitlist') return `<div class="field-group"><label class="field-label required" for="rn-reason">Why waitlisted</label>
-        <input class="field-input" id="rn-reason" placeholder="e.g. no women's reserved bed open" value="${esc(r.decision_reason || '')}"></div>
+        <input class="field-input" id="rn-reason" placeholder="e.g. no reserved bed open" value="${esc(r.decision_reason || '')}"></div>
       ${affiliationSelect(r)}
       <div class="ref-actions"><button type="button" class="btn btn-gold" id="rn-go">Waitlist</button><span class="ref-msg" id="rn-msg"></span></div>`;
     if (choice === 'notadmit') return `<div class="client-form-grid">
@@ -20673,6 +20671,385 @@ const App = {
     .weho-loc-status.ok { background:#E8F5EC; color:#1E6B3A; } .weho-loc-status.bad { background:#FDECEA; color:#8C1D18; }
     .weho-cert .checkbox-label span { font-size:13px; line-height:1.45; }`;
   document.head.appendChild(css);
+})();
+
+/* ============================================================
+   Monthly fiscal reporting on the City-advance model (Glendale).
+
+   Programs with fiscal_model = 'advance' use the same Invoices / Budget /
+   Payments screens as Holloway, with three differences:
+     - The City advances the reserved-bed budget. The agency's monthly
+       submission is an expense report against that advance, not a bill.
+     - The City's Payments page records advances, and every screen shows the
+       unspent advance (advances received minus expenses reported).
+     - Fee-for-service beds stay on the Bed Night Invoice. They are not part
+       of this budget.
+   Holloway (fiscal_model = 'reimbursement') is unchanged.
+   ============================================================ */
+(function(){
+  const esc = s => App.escape(s);
+  const CATS = ['Personnel','Facility','Program','Administrative'];
+  const CAT_LABEL = {Personnel:'Personnel',Facility:'Facility',Program:'Program',Administrative:'Administrative / Indirect'};
+  const REPORT_CERT = 'I certify that the expenses on this report are accurate, eligible under the agreement, incurred during the period shown, paid from the City’s advance, not charged to any other funding source, and supported by records kept by the agency and the documents submitted with this report.';
+
+  App.fiscalIsAdvance = function(){ return this.program?.fiscal_model === 'advance'; };
+
+  // Phrase swaps for the screens built by the Holloway module.
+  const PHRASES = [
+    ['Monthly actuals, backup and invoice review.', 'Monthly expenses against the City’s advance. Fee-for-service nights are billed on the Bed Night Invoice.'],
+    ['Invoice Information', 'Report Details'],
+    ['PO and vendor numbers for this invoice.', 'Report number and date.'],
+    ['Agency invoice number', 'Report number'],
+    ['Enter FY27 PO number', 'Optional'],
+    ['Print / Save Invoice PDF', 'Print / Save Report PDF'],
+    ['Invoice Preview', 'Report Preview'],
+    ['Invoice Month', 'Report Month'],
+    ['Invoice Date', 'Report Date'],
+    ['Invoice #', 'Report #'],
+    ['Resubmit Monthly Invoice', 'Resubmit Monthly Report'],
+    ['Submit Monthly Invoice', 'Submit Monthly Report'],
+    ['Approve Invoice', 'Approve Report'],
+    ['No invoice has been submitted for this month.', 'No report has been submitted for this month.'],
+    ['The City approved this monthly invoice.', 'The City approved this monthly report.'],
+    ['The invoice has been submitted to the City', 'The report has been submitted to the City'],
+    ['Invoice, AHTF and submission status by month.', 'Expenses, advances and status by month.'],
+    ['Save the fiscal draft before printing the invoice.', 'Save the draft before printing the report.']
+  ];
+  const swap = s => { let out = String(s); PHRASES.forEach(([a,b]) => { out = out.split(a).join(b); }); return out; };
+  App.fiscalAdvanceText = function(s){ return this.fiscalIsAdvance() ? swap(s) : s; };
+  const swapDom = (root) => {
+    if (!root) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(n => { const v = swap(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; });
+    root.querySelectorAll('input[placeholder]').forEach(i => { i.placeholder = swap(i.placeholder); });
+  };
+
+  /* ---------------------------------------------------------- advances */
+  const baseLoad = App.loadFiscalData;
+  App.loadFiscalData = async function(preferredYear = null){
+    await baseLoad.call(this, preferredYear);
+    if (!this.fiscal) return;
+    this.fiscal.advances = [];
+    if (this.fiscalIsAdvance() && this.canViewFiscal?.() && this.program?.id) {
+      try {
+        const { data, error } = await this.sb.rpc('holloway_fiscal_advances', { p_program_id: this.program.id, p_fiscal_year: this.fiscalBudgetYear });
+        if (!error) this.fiscal.advances = data || [];
+      } catch (_) {}
+    }
+  };
+
+  // Advance rows. City admins see their own unsaved edits; agency users see
+  // what the City has saved.
+  App.fiscalAdvanceRows = function(){
+    if (this.isAdmin()) {
+      return this.fiscalMonths().map(m => {
+        const p = this.fiscalPaymentFor?.(m.key) || {};
+        return { invoice_month: m.key, amount: this.fiscalPaymentAllocationTotal?.(m.key) || 0, payment_date: p.payment_date || null, payment_status: p.payment_status || 'not_paid' };
+      });
+    }
+    return (this.fiscal.advances || []).map(a => ({ ...a, invoice_month: this.dateOnly(a.invoice_month) }));
+  };
+  App.fiscalAdvancedThrough = function(month = null){
+    const key = month ? this.dateOnly(month) : null;
+    return this.fiscalAdvanceRows()
+      .filter(a => a.payment_status === 'paid' && (!key || this.dateOnly(a.invoice_month) <= key))
+      .reduce((s, a) => s + Number(a.amount || 0), 0);
+  };
+  App.fiscalAdvanceBudget = function(){
+    const plan = (this.fiscal.fundingPlan || []).reduce((s, r) => s + Number(r.planned_amount || 0), 0);
+    return plan || this.fiscalOfficialTotal();
+  };
+  // Expenses reported: submitted or approved reports only.
+  App.fiscalReportedThrough = function(month = null){
+    const key = month ? this.dateOnly(month) : null;
+    return (this.fiscal.submissions || [])
+      .filter(s => ['submitted','resubmitted','approved'].includes(s.status) && (!key || this.dateOnly(s.invoice_month) <= key))
+      .reduce((s, r) => s + Number(r.invoice_total || 0), 0);
+  };
+
+  /* ------------------------------------------------------- agency screens */
+  const baseKpis = App.fiscalKpisHtml;
+  App.fiscalKpisHtml = function(){
+    if (!this.fiscalIsAdvance()) return baseKpis.call(this);
+    const month = this.resolveFiscalMonth(), budget = this.fiscalOfficialTotal(), ytd = this.fiscalYtdTotal(month);
+    const advanced = this.fiscalAdvancedThrough(), unspent = advanced - ytd, cur = this.fiscalMonthTotal(month);
+    const docs = this.fiscalDocsFor(month).length, label = this.fiscalMonthRecord(month)?.label || 'selected month';
+    const k = (l, v, sub, cls = '') => `<div class="fiscal-kpi"><div class="label">${l}</div><div class="value ${cls}">${v}</div><div class="sub">${sub}</div></div>`;
+    return `<div class="fiscal-kpis">
+      ${k('Advance budget', this.fiscalMoney(budget), '10 reserved beds')}
+      ${k('Advances received', this.fiscalMoney(advanced), budget ? this.fiscalPct(advanced / budget) + ' of budget' : '')}
+      ${k('Expenses to date', this.fiscalMoney(ytd), 'Through ' + esc(label))}
+      ${k('Unspent advance', this.fiscalMoney(unspent), unspent < 0 ? 'Expenses exceed advances' : 'Advances minus expenses', unspent < 0 ? 'fiscal-over' : '')}
+      ${k('This month', this.fiscalMoney(cur), `${docs} file${docs === 1 ? '' : 's'} · ${esc(this.fiscalStatus(month).replaceAll('_', ' '))}`)}
+    </div>`;
+  };
+
+  const baseChecks = App.fiscalReconciliationChecks;
+  App.fiscalReconciliationChecks = function(month = this.resolveFiscalMonth()){
+    const checks = baseChecks.call(this, month);
+    if (!this.fiscalIsAdvance()) return checks;
+    const meta = this.fiscalMetaFor(month);
+    const out = checks.filter(c => c.label !== 'AHTF allocation').map(c => {
+      if (c.label === 'Invoice metadata') {
+        return { label: 'Report details', severity: meta.invoice_date ? 'ok' : 'error',
+          detail: `Report #: ${meta.invoice_number || 'not entered'} · Report date: ${meta.invoice_date || 'not entered'}`,
+          fix: meta.invoice_date ? 'No action needed.' : 'Enter the report date.' };
+      }
+      if (c.label === 'Monthly expense detail') return { ...c, detail: `This month: ${this.fiscalMoney(this.fiscalMonthTotal(month))}`, fix: c.severity === 'ok' ? c.fix : 'Enter this month’s expenses before submitting.' };
+      return c;
+    });
+    const ytd = this.fiscalYtdTotal(month), advanced = this.fiscalAdvancedThrough();
+    out.push({ label: 'Advance balance', severity: ytd > advanced + 0.005 ? 'warning' : 'ok',
+      detail: `Advances received ${this.fiscalMoney(advanced)} · expenses through this month ${this.fiscalMoney(ytd)} · unspent ${this.fiscalMoney(advanced - ytd)}`,
+      fix: ytd > advanced + 0.005 ? 'Expenses are ahead of the advance. The City may release the next advance after review.' : 'No action needed.' });
+    return out;
+  };
+
+  const baseChecksHtml = App.fiscalChecksHtml;
+  App.fiscalChecksHtml = function(month){ return this.fiscalAdvanceText(baseChecksHtml.call(this, month)); };
+  const baseMetaHtml = App.fiscalMetaHtml;
+  App.fiscalMetaHtml = function(month){ return this.fiscalAdvanceText(baseMetaHtml.call(this, month)); };
+  const baseSubPanel = App.fiscalSubmissionPanelHtml;
+  App.fiscalSubmissionPanelHtml = function(month){
+    let html = baseSubPanel.call(this, month);
+    if (!this.fiscalIsAdvance()) return html;
+    html = html.split(esc('I certify that the amounts reported on this invoice are accurate, eligible under the agreement, incurred during the service period shown, and supported by records maintained by the agency and the documentation submitted with this invoice.')).join(esc(REPORT_CERT));
+    return swap(html);
+  };
+
+  const baseFundingHtml = App.fiscalFundingBreakdownHtml;
+  App.fiscalFundingBreakdownHtml = function(month){ return this.fiscalIsAdvance() ? '' : baseFundingHtml.call(this, month); };
+
+  const baseReview = App.fiscalMonthlyReviewHtml;
+  App.fiscalMonthlyReviewHtml = function(){
+    if (!this.fiscalIsAdvance()) return baseReview.call(this);
+    const adv = new Map(this.fiscalAdvanceRows().filter(a => a.payment_status === 'paid').map(a => [this.dateOnly(a.invoice_month), Number(a.amount || 0)]));
+    const rows = this.fiscalMonths().map(m => {
+      const total = this.fiscalMonthTotal(m.key), docs = this.fiscalDocsFor(m.key), sub = this.fiscalSubmission(m.key);
+      const gl = docs.some(d => String(d.doc_type || '').toLowerCase() === 'general ledger'), active = m.key === this.resolveFiscalMonth();
+      const a = adv.get(this.dateOnly(m.key)) || 0;
+      return `<tr class="${active ? 'fiscal-month-row-active' : ''}"><td><button class="btn btn-ghost btn-sm" data-fiscal-month-link="${m.key}">${esc(m.label)}</button></td><td style="text-align:right">${total ? this.fiscalMoney(total) : '–'}</td><td style="text-align:right">${a ? this.fiscalMoney(a) : '–'}</td><td>${gl ? '<span class="badge badge-green">Uploaded</span>' : (total > 0 || sub ? '<span class="badge badge-amber">Missing</span>' : '<span class="field-hint">–</span>')}</td><td>${docs.length || '–'}</td><td>${(total > 0 || sub) ? this.fiscalStatusBadge(this.fiscalStatus(m.key)) : '<span class="field-hint">–</span>'}</td></tr>`;
+    }).join('');
+    return `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Month</th><th style="text-align:right">Expenses</th><th style="text-align:right">Advance paid</th><th>General Ledger</th><th>Files</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  };
+
+  const baseInvoice = App.fiscalInvoiceHtml;
+  App.fiscalInvoiceHtml = function(month = this.resolveFiscalMonth(), forPrint = false){
+    if (!this.fiscalIsAdvance()) return baseInvoice.call(this, month, forPrint);
+    const m = this.fiscalMonthRecord(month), meta = this.fiscalMetaFor(month), sub = this.fiscalSubmission(month), total = this.fiscalMonthTotal(month);
+    const location = this.budgetMods?.yearMeta?.service_location || '';
+    const rows = CATS.filter(c => this.fiscalCategoryBudget(c) || this.fiscalCategoryMonth(c, month))
+      .map(c => `<tr><td>${esc(CAT_LABEL[c])}</td><td style="text-align:right">${this.fiscalMoney(this.fiscalCategoryMonth(c, month))}</td><td style="text-align:right">${this.fiscalMoney(this.fiscalCategoryYtd(c, month))}</td><td style="text-align:right">${this.fiscalMoney(this.fiscalCategoryBudget(c))}</td></tr>`).join('');
+    const ytd = this.fiscalYtdTotal(month), advanced = this.fiscalAdvancedThrough(month), budget = this.fiscalOfficialTotal();
+    const docs = this.fiscalDocsFor(month);
+    const backupRows = docs.map(d => `<tr><td>${esc(d.doc_type || 'Backup')}</td><td>${esc(d.file_name || 'file')}</td><td>${esc(this.fiscalFormatBytes(d.file_size))}</td><td>${esc(d.uploaded_by || '—')}</td></tr>`).join('') || '<tr><td colspan="4">No backup documentation uploaded.</td></tr>';
+    const statusLabel = st => ({ draft:'Draft', submitted:'Submitted', resubmitted:'Resubmitted', revision_requested:'Revisions Requested', approved:'Approved', returned:'Returned' })[st] || String(st || 'Draft').replaceAll('_', ' ');
+    return `<div class="fiscal-invoice" id="fiscal-invoice">
+      <div class="fiscal-invoice-head"><div><img class="print-logo" src="${WEHO_LOGO_URL}" alt="City of West Hollywood logo"><div class="fiscal-invoice-title">MONTHLY EXPENSE REPORT</div><div class="field-hint">${esc(this.programName())} · ${esc(this.fiscalYearLabel())}</div></div><div class="fiscal-invoice-meta"><strong>Report #:</strong> ${esc(meta.invoice_number || '—')}<br><strong>Report Date:</strong> ${esc(meta.invoice_date ? this.formatDate(meta.invoice_date) : '—')}${meta.po_number ? `<br><strong>P.O. #:</strong> ${esc(meta.po_number)}` : ''}${meta.vendor_number ? `<br><strong>Vendor No.:</strong> ${esc(meta.vendor_number)}` : ''}<br><strong>Status:</strong> ${esc(statusLabel(sub?.status || 'draft'))}</div></div>
+      <div class="fiscal-address-grid"><div class="fiscal-address-box"><strong>Submitted to</strong><br>City of West Hollywood<br>Human Services Division<br>8300 Santa Monica Blvd.<br>West Hollywood, CA 90069</div><div class="fiscal-address-box"><strong>Agency</strong><br>${esc(this.agencyName())}${location ? `<br><br><strong>Service Location</strong><br>${esc(location).replace(', ', '<br>')}` : ''}</div></div>
+      <div class="notice navy"><div>i</div><div>Expenses for the 10 reserved beds, paid from the City’s advance. No payment is requested. Fee-for-service nights are billed on the Bed Night Invoice.<br><strong>Service period:</strong> ${esc(m ? `${this.formatDate(m.start)} – ${this.formatDate(m.end)}` : '—')}</div></div>
+      <table class="print-table invoice-summary-table"><thead><tr><th>Category</th><th style="text-align:right">This Month</th><th style="text-align:right">Year to Date</th><th style="text-align:right">Budget</th></tr></thead><tbody>${rows}<tr class="print-total-row"><td><strong>Total</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(total)}</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(ytd)}</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(budget)}</strong></td></tr></tbody></table>
+      <div style="margin-top:18px"><h2 style="color:var(--navy);font-size:14px;margin:0 0 7px">Advance Reconciliation</h2><table class="print-table invoice-summary-table"><tbody>
+        <tr><td>Advances received through ${esc(m?.label || 'this month')}</td><td style="text-align:right">${this.fiscalMoney(advanced)}</td></tr>
+        <tr><td>Expenses through ${esc(m?.label || 'this month')}</td><td style="text-align:right">${this.fiscalMoney(ytd)}</td></tr>
+        <tr class="print-total-row"><td><strong>${advanced - ytd < 0 ? 'Expenses above advances' : 'Unspent advance'}</strong></td><td style="text-align:right"><strong>${this.fiscalMoney(Math.abs(advanced - ytd))}</strong></td></tr>
+      </tbody></table></div>
+      <div class="fiscal-cert"><strong>Certification</strong><br>${esc(REPORT_CERT)}${sub ? `<div style="margin-top:8px"><strong>Certified/submitted by:</strong> ${esc(sub.certified_by || sub.submitted_by || '—')} · ${esc(this.formatDateTime(sub.certified_at || sub.submitted_at))}</div>` : '<div style="margin-top:8px">Draft — not yet certified or submitted.</div>'}</div>
+      ${meta.notes ? `<div style="margin-top:14px;font-size:11.5px"><strong>Fiscal note:</strong> ${esc(meta.notes)}</div>` : ''}
+      <div class="fiscal-print-backup" style="margin-top:28px"><h2 style="color:var(--navy);font-size:17px;border-bottom:2px solid var(--gold);padding-bottom:7px">Supporting Documentation Index</h2><table class="print-table"><thead><tr><th>Type</th><th>File</th><th>Size</th><th>Uploaded By</th></tr></thead><tbody>${backupRows}</tbody></table></div>
+    </div>`;
+  };
+
+  const basePrint = App.printFiscalInvoice;
+  App.printFiscalInvoice = function(){
+    if (!this.fiscalIsAdvance()) return basePrint.call(this);
+    if (!this.canViewFiscal()) { this.toast('Fiscal access is restricted.', { error: true }); return; }
+    if (this._fiscalDirty) { this.toast('Save the draft before printing the report.', { error: true }); return; }
+    const target = document.getElementById('print-report'); if (!target) return;
+    const m = this.fiscalMonthRecord(this.resolveFiscalMonth());
+    this.printAs?.(this.printFileLabel?.('Expense Report', m?.label || '') || 'Expense Report');
+    target.innerHTML = `<div class="print-page-header"><strong>${esc(this.programName())}</strong> · ${esc(this.fiscalYearLabel())} Monthly Expense Report · Generated ${new Date().toLocaleDateString()}</div>${this.fiscalInvoiceHtml(this.resolveFiscalMonth(), true)}<div class="print-footer"><img class="print-footer-logo" src="${WEHO_LOGO_URL}" alt="City of West Hollywood logo">City of West Hollywood Human Services Division</div>`;
+    window.print();
+  };
+
+  const baseRender = App.renderFiscal;
+  App.renderFiscal = async function(){
+    await baseRender.call(this);
+    if (!this.fiscalIsAdvance() || this.view !== 'fiscal') return;
+    const el = document.getElementById('view-fiscal'); if (!el) return;
+    const t = el.querySelector('.page-title'); if (t) t.textContent = 'Expense Reports';
+    // AHTF does not apply to this contract.
+    el.querySelector('#fiscal-funding-live')?.closest('.card')?.remove();
+    el.querySelectorAll('.section-label').forEach(s => { s.textContent = s.textContent.replace('FY27', this.fiscalYearLabel()); });
+    swapDom(el);
+  };
+
+  /* ---------------------------------------------------- City: advances */
+  const baseCityKpis = App.fiscalCityPaymentKpisHtml;
+  App.fiscalCityPaymentKpisHtml = function(){
+    if (!this.fiscalIsAdvance()) return baseCityKpis.call(this);
+    const budget = this.fiscalAdvanceBudget(), advanced = this.fiscalAdvancedThrough(), reported = this.fiscalReportedThrough();
+    const k = (l, v, sub, cls = '') => `<div class="fiscal-kpi"><div class="label">${l}</div><div class="value ${cls}">${v}</div><div class="sub">${sub}</div></div>`;
+    return `<div class="fiscal-city-kpis">
+      ${k('Advance budget', this.fiscalMoney(budget), '10 reserved beds')}
+      ${k('Advanced to date', this.fiscalMoney(advanced), 'Marked paid')}
+      ${k('Not yet advanced', this.fiscalMoney(budget - advanced), 'Remaining on the budget', budget - advanced < 0 ? 'fiscal-over' : '')}
+      ${k('Expenses reported', this.fiscalMoney(reported), 'Submitted and approved reports')}
+      ${k('Unspent advance', this.fiscalMoney(advanced - reported), 'Held by the agency', advanced - reported < 0 ? 'fiscal-over' : '')}
+    </div>`;
+  };
+
+  App.fiscalAdvanceTrackerHtml = function(){
+    const code = (this.fiscal.fundingPlan || [])[0]?.funding_code || 'general_fund';
+    let runAdv = 0, runExp = 0;
+    const rows = this.fiscalMonths().map(m => {
+      const pay = this.fiscalPaymentFor(m.key) || {}, status = pay.payment_status || 'not_paid';
+      const amt = Number(this.fiscalPaymentAllocationFor(m.key, code)?.amount || 0);
+      const sub = this.fiscalSubmission(m.key), reported = ['submitted','resubmitted','approved'].includes(sub?.status) ? Number(sub.invoice_total || 0) : 0;
+      if (status === 'paid') runAdv += amt; runExp += reported;
+      const bal = runAdv - runExp;
+      return `<tr data-payment-row="${m.key}"><td><strong>${esc(m.short)}</strong><div class="field-hint">${esc(m.label)}</div></td>
+        <td><input type="number" min="0" step="0.01" style="width:120px" data-payment-allocation data-payment-month="${m.key}" data-funding-code="${esc(code)}" value="${amt || ''}"></td>
+        <td><input type="date" data-payment-date="${m.key}" value="${esc(pay.payment_date || '')}"></td>
+        <td><select data-payment-status="${m.key}">${['not_paid','processing','paid'].map(s => `<option value="${s}" ${status === s ? 'selected' : ''}>${s === 'not_paid' ? 'Not paid' : this.fiscalPaymentStatusLabel(s)}</option>`).join('')}</select></td>
+        <td><input class="payment-ref" style="width:110px" data-payment-ref="${m.key}" value="${esc(pay.payment_reference || '')}" placeholder="AP / check #"></td>
+        <td style="text-align:right">${reported ? this.fiscalMoney(reported) : '–'}<div class="field-hint">${esc(sub?.status ? sub.status.replaceAll('_', ' ') : 'no report')}</div></td>
+        <td style="text-align:right" data-advance-balance="${m.key}" class="${bal < 0 ? 'fiscal-over' : ''}">${this.fiscalMoney(bal)}</td></tr>`;
+    }).join('');
+    return `<div class="fiscal-payment-table-wrap"><table class="fiscal-payment-table"><thead><tr><th>Month</th><th>Advance</th><th>Date Paid</th><th>Status</th><th>Reference</th><th>Expenses Reported</th><th>Unspent Balance</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  };
+
+  const baseCityHtml = App.fiscalCityPaymentHtml;
+  App.fiscalCityPaymentHtml = function(){
+    if (!this.fiscalIsAdvance()) return baseCityHtml.call(this);
+    if (!this.isAdmin()) return '';
+    if (!this.fiscal.paymentSetupReady) return `<div class="notice amber"><div>!</div><div><strong>Advance tracking isn’t set up yet.</strong></div></div>`;
+    const y = this.fiscalYearRecord(), st = y.source_totals || {};
+    const ffs = Number(st.ffs_allocation || 0), contract = Number(st.contract_total || 0);
+    return `<div id="fiscal-city-payment-kpis-live">${this.fiscalCityPaymentKpisHtml()}</div>
+      ${contract ? `<div class="notice navy"><div>i</div><div>Contract year total ${this.fiscalMoney(contract)}: ${this.fiscalMoney(this.fiscalAdvanceBudget())} advanced for the 10 reserved beds${ffs ? ` and up to ${this.fiscalMoney(ffs)} for fee-for-service nights, paid from the Bed Night Invoice` : ''}.</div></div>` : ''}
+      <div class="card"><div class="card-header"><div><h2 class="card-title">Advances</h2><div class="field-hint">Enter each advance in the month it is paid. Only advances marked Paid count toward the balance.</div></div><button class="btn btn-primary" id="btn-save-fiscal-payments">Save Advances</button></div><div class="card-body" id="fiscal-advance-tracker-live">${this.fiscalAdvanceTrackerHtml()}</div></div>`;
+  };
+
+  const baseRefreshPay = App.refreshFiscalPaymentLive;
+  App.refreshFiscalPaymentLive = function(){
+    if (!this.fiscalIsAdvance()) return baseRefreshPay.call(this);
+    if (!this.isAdmin()) return;
+    const k = document.getElementById('fiscal-city-payment-kpis-live'); if (k) k.innerHTML = this.fiscalCityPaymentKpisHtml();
+    let runAdv = 0, runExp = 0;
+    const code = (this.fiscal.fundingPlan || [])[0]?.funding_code || 'general_fund';
+    this.fiscalMonths().forEach(m => {
+      const pay = this.fiscalPaymentFor(m.key) || {}, sub = this.fiscalSubmission(m.key);
+      if ((pay.payment_status || 'not_paid') === 'paid') runAdv += Number(this.fiscalPaymentAllocationFor(m.key, code)?.amount || 0);
+      if (['submitted','resubmitted','approved'].includes(sub?.status)) runExp += Number(sub.invoice_total || 0);
+      const cell = document.querySelector(`[data-advance-balance="${m.key}"]`);
+      if (cell) { cell.textContent = this.fiscalMoney(runAdv - runExp); cell.className = runAdv - runExp < 0 ? 'fiscal-over' : ''; }
+    });
+  };
+
+  const basePaymentsPage = App.renderPaymentsPage;
+  App.renderPaymentsPage = async function(){
+    await basePaymentsPage.call(this);
+    if (!this.fiscalIsAdvance()) return;
+    const el = document.getElementById('view-payments'); if (!el) return;
+    const t = el.querySelector('.page-title'); if (t) t.textContent = 'Advances';
+    const st = el.querySelector('.page-subtitle'); if (st) st.textContent = 'Advances paid for the reserved beds and the unspent balance.';
+    // A date entered on an unpaid month marks it paid.
+    el.querySelectorAll('[data-payment-date]').forEach(x => x.addEventListener('change', () => {
+      const p = this.ensureFiscalPayment(x.dataset.paymentDate);
+      if (x.value && (p.payment_status || 'not_paid') === 'not_paid') {
+        p.payment_status = 'paid';
+        const sel = el.querySelector(`[data-payment-status="${x.dataset.paymentDate}"]`); if (sel) sel.value = 'paid';
+        this.refreshFiscalPaymentLive();
+      }
+    }));
+  };
+
+  const baseSavePay = App.saveFiscalPaymentTracking;
+  App.saveFiscalPaymentTracking = async function(){
+    if (!this.fiscalIsAdvance()) return baseSavePay.call(this);
+    const toast = this.toast;
+    this.toast = (msg, opts) => toast.call(this, String(msg).replace('City payment tracking saved.', 'Advances saved.').replace('Payment tracking save failed', 'Advance save failed'), opts);
+    try { return await baseSavePay.call(this); } finally { this.toast = toast; }
+  };
+
+  /* ------------------------------------------- City: load budget line items */
+  // The contract year starts with one line for the whole advance. When the
+  // Exhibit B line items arrive, the City pastes them here.
+  App.bmLoadLinesHtml = function(){
+    const lines = this.fiscal.budgetLines || [];
+    const hasActuals = (this.fiscal.actuals || []).some(a => Number(a.amount || 0));
+    return `<div class="card" style="margin-top:16px"><div class="card-header"><div><h2 class="card-title">Replace line items</h2><div class="field-hint">Paste one line per row: Category, Line item, Amount. Categories: Personnel, Facility, Program, Administrative. The total must equal ${this.fiscalMoney(this.fiscalOfficialTotal())}.</div></div></div>
+      <div class="card-body">${hasActuals ? '<div class="notice amber"><div>!</div><div>Expenses are already entered against the current lines, so they can’t be replaced here. Use a budget modification instead.</div></div>' : `
+        <textarea class="field-textarea" id="bm-load-lines" style="min-height:140px;font-family:monospace" placeholder="Personnel, Program Manager, 12000&#10;Program, Bed costs, 200000">${esc(lines.map(l => `${l.category}, ${l.line_name}, ${Number(l.approved_budget || 0)}`).join('\n'))}</textarea>
+        <div id="bm-load-msg" class="field-hint" style="margin:8px 0"></div>
+        <button class="btn btn-primary" id="bm-load-save">Replace line items</button>`}</div></div>`;
+  };
+  App.bmParseLines = function(text){
+    const errors = [], rows = [];
+    String(text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean).forEach((line, i) => {
+      const m = line.match(/^\s*([^,\t]+)[,\t]\s*(.+?)\s*[,\t]\s*\$?\s*(-?[\d,]+(?:\.\d+)?)\s*$/);
+      if (!m) { errors.push(`Row ${i + 1}: needs category, line item and amount.`); return; }
+      const cat = CATS.find(c => c.toLowerCase() === m[1].trim().toLowerCase());
+      const amount = Number(m[3].replace(/,/g, ''));
+      const name = m[2].trim();
+      if (!cat) errors.push(`Row ${i + 1}: “${parts[0]}” is not a category.`);
+      if (!name) errors.push(`Row ${i + 1}: missing line item name.`);
+      if (!Number.isFinite(amount) || amount < 0) errors.push(`Row ${i + 1}: amount isn’t a number.`);
+      rows.push({ category: cat, line_name: name, approved_budget: Math.round(amount * 100) / 100 });
+    });
+    if (!rows.length) errors.push('Paste at least one line.');
+    const total = rows.reduce((s, r) => s + (r.approved_budget || 0), 0);
+    if (!errors.length && Math.abs(total - this.fiscalOfficialTotal()) > 0.5) errors.push(`Lines total ${this.fiscalMoney(total)}, not ${this.fiscalMoney(this.fiscalOfficialTotal())}.`);
+    return { rows, errors, total };
+  };
+  App.bmSaveLoadedLines = async function(){
+    const box = document.getElementById('bm-load-lines'), msg = document.getElementById('bm-load-msg'); if (!box) return;
+    const { rows, errors } = this.bmParseLines(box.value);
+    if (errors.length) { msg.innerHTML = `<span style="color:var(--red,#b91c1c)">${errors.map(esc).join('<br>')}</span>`; return; }
+    if (!window.confirm(`Replace the ${this.fiscal.budgetLines.length} current line${this.fiscal.budgetLines.length === 1 ? '' : 's'} with ${rows.length}?`)) return;
+    const used = new Set(), slug = s => { let b = String(s).toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24) || 'LINE'; let c = b, n = 2; while (used.has(c)) c = `${b}_${n++}`; used.add(c); return c; };
+    const pid = this.program.id, fy = this.fiscalBudgetYear;
+    const payload = rows.map((r, i) => ({ program_id: pid, fiscal_year: fy, line_code: slug(r.line_name), category: r.category, subcategory: null, line_name: r.line_name, approved_budget: r.approved_budget, sort_order: (CATS.indexOf(r.category) + 1) * 100 + i }));
+    const del = await this.sb.from('holloway_fiscal_budget_lines').delete().eq('program_id', pid).eq('fiscal_year', fy);
+    if (del.error) { msg.textContent = 'Could not remove the current lines: ' + del.error.message; return; }
+    const ins = await this.sb.from('holloway_fiscal_budget_lines').insert(payload);
+    if (ins.error) { msg.textContent = 'Could not save the new lines: ' + ins.error.message + '. Reload before trying again.'; return; }
+    await this.loadFiscalData(fy);
+    this.toast('Budget line items replaced.');
+    this.renderFiscal();
+  };
+
+  const baseBudgetPage = App.renderBudgetPage;
+  App.renderBudgetPage = async function(){
+    await baseBudgetPage.call(this);
+    if (!this.fiscalIsAdvance()) return;
+    const el = document.getElementById('view-budget'); if (!el) return;
+    const st = el.querySelector('.page-subtitle');
+    if (st) st.textContent = `${this.fiscalYearLabel()} · City advance for 10 reserved beds · fee-for-service billed separately`;
+    if (this.isAdmin() && this.budgetTab === 'lines' && this.fiscal.setupReady) {
+      el.querySelector('#fiscal-budgetmods')?.insertAdjacentHTML('beforeend', this.bmLoadLinesHtml());
+      el.querySelector('#bm-load-save')?.addEventListener('click', () => this.bmSaveLoadedLines());
+    }
+  };
+
+  /* --------------------------------------------------------------- sidebar */
+  const baseSidebar = App.renderSidebarForRole;
+  App.renderSidebarForRole = function(...args){
+    const r = baseSidebar.apply(this, args);
+    const adv = this.fiscalIsAdvance();
+    const setLabel = (id, text) => { const n = document.getElementById(id); const t = n && [...n.childNodes].find(x => x.nodeType === 3 && x.textContent.trim()); if (t) t.textContent = text; };
+    setLabel('nav-fiscal', adv ? 'Expense Reports' : 'Invoices');
+    setLabel('nav-payments', adv ? 'Advances' : 'Payments');
+    // Bed Night Invoice sits with the other fiscal pages.
+    if (adv) {
+      const ffs = document.getElementById('nav-ffs'), anchor = document.getElementById('nav-payments') || document.getElementById('nav-budget');
+      if (ffs && anchor && anchor.nextElementSibling !== ffs && getComputedStyle(document.getElementById('nav-fiscal')).display !== 'none') anchor.after(ffs);
+      document.querySelectorAll('.sidebar-section').forEach(section => { const items = [...section.querySelectorAll('.sidebar-item')]; if (items.length) section.style.display = items.some(x => getComputedStyle(x).display !== 'none') ? '' : 'none'; });
+    }
+    return r;
+  };
 })();
 
 document.addEventListener('DOMContentLoaded', () => App.init());
