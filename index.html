@@ -1046,6 +1046,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 
 /* ── LIVE CENSUS (Active Caseload) ───────────────────────────────────── */
 .census-card { margin-bottom:16px; }
+.bed-tile-kind { font-size:10px; font-weight:700; letter-spacing:.03em; padding:1px 6px; border-radius:999px; margin-left:4px; vertical-align:middle; }
+.bed-tile-kind.k-res { background:#e7f1fb; color:#1e3a5f; }
+.bed-tile-kind.k-ffs { background:#f9eeda; color:#8a5a00; }
 .census-head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; }
 .census-title { font-size:13px; font-weight:800; letter-spacing:.03em; color:var(--navy); margin:0; }
 .census-asof { font-size:11px; color:var(--gray-400); }
@@ -2072,6 +2075,8 @@ button, input, select, textarea { font-family: var(--font-ui); }
  *   ROSTER_PAGE_SIZE      Page size for client_rosters paging.
  */
 const CONFIG = {
+  // Glendale uses Holloway's navigation and single-page client form.
+  SHELTER_HOLLOWAY_LAYOUT: true,
   PROGRAM_NAME: 'Holloway Interim Housing Program',
   // The portal's own name, as distinct from the name of whichever program is
   // being worked on. Held once so a rename is one edit rather than seven, and
@@ -11978,17 +11983,24 @@ const App = {
     });
   };
 
+  // Beds are grouped by what staff need to act on: open beds first, then
+  // beds that are held or out of service, then occupied beds. Within each
+  // group reserved beds come before fee-for-service beds.
   App.bedGridHtml = function(){
+    const order = b => (b.designation === 'reserved' ? 0 : 1) * 1000 + (Number(b.sort_order) || 0);
     const groups = [
-      ['Reserved',         b => b.designation === 'reserved'],
-      ['Fee-for-service',  b => b.designation === 'fee_for_service']
+      ['Available',               ['vacant_available','released'], 'Ready for a client'],
+      ['Held or unavailable',     ['held','unavailable'],          'Not open for placement'],
+      ['Occupied',                ['occupied','pending_discharge'], 'Client in the bed']
     ];
-    return groups.map(([title, match]) => {
-      const beds = this.bedsFor().filter(match);
+    const all = this.bedsFor();
+    return groups.map(([title, statuses, hint]) => {
+      const beds = all.filter(b => statuses.includes(this.bedStatus(b))).sort((x, y) => order(x) - order(y));
       if (!beds.length) return '';
-      const filled = beds.filter(b => ['occupied','pending_discharge'].includes(this.bedStatus(b))).length;
+      const res = beds.filter(b => b.designation === 'reserved').length, ffs = beds.length - res;
+      const split = [res ? `${res} reserved` : '', ffs ? `${ffs} fee-for-service` : ''].filter(Boolean).join(' · ');
       return `<div class="bed-group">
-        <div class="bed-group-title">${esc(title)} <span class="bed-group-count">${filled} of ${beds.length} occupied</span></div>
+        <div class="bed-group-title">${esc(title)} <span class="bed-group-count">${beds.length} bed${beds.length === 1 ? '' : 's'} · ${esc(split)}</span></div>
         <div class="bed-grid">${beds.map(b => this.bedTileHtml(b)).join('')}</div>
       </div>`;
     }).join('');
@@ -12004,10 +12016,10 @@ const App = {
          <div class="bed-tile-meta">Since ${esc(this.formatDate(stay.start_date))}</div>`
       : (ev && ev.reason && status !== 'vacant_available'
           ? `<div class="bed-tile-meta">${esc(ev.reason)}${ev.expected_return_date ? ' · back ' + esc(this.formatDate(ev.expected_return_date)) : ''}</div>`
-          : `<div class="bed-tile-empty">Ready for a participant</div>`);
+          : `<div class="bed-tile-empty">Ready for a client</div>`);
     return `<button type="button" class="bed-tile s-${status}" data-bed-id="${esc(bed.id)}">
       <div class="bed-tile-top">
-        <span class="bed-tile-label">${esc(bed.label)}</span>
+        <span class="bed-tile-label">${esc(bed.label)} <span class="bed-tile-kind ${bed.designation === 'reserved' ? 'k-res' : 'k-ffs'}">${bed.designation === 'reserved' ? 'Reserved' : 'FFS'}</span></span>
         <span class="badge ${status==='occupied'?'badge-green':status==='unavailable'?'badge-red':status==='held'||status==='pending_discharge'?'badge-amber':'badge-gray'}">${esc(BED_STATUS_SHORT[status])}</span>
       </div><div class="bed-tile-body">${detail}</div></button>`;
   };
@@ -12296,7 +12308,7 @@ const App = {
           <div class="bed-stat"><div class="bed-stat-label">Billable</div><div class="bed-stat-value">${billable.length}</div><div class="bed-stat-sub">fee-for-service nights</div></div>
           <div class="bed-stat"><div class="bed-stat-label">Amount</div><div class="bed-stat-value">${this.fiscalMoney ? this.fiscalMoney(amount) : '$'+amount.toFixed(2)}</div><div class="bed-stat-sub">${locked ? locked + ' night(s) invoiced and locked' : 'not yet invoiced'}</div></div>
         </div>
-        ${rows.length ? '' : '<div class="field-hint" style="margin-top:12px">Nothing generated for this month yet.</div>'}
+        ${rows.length ? '' : '<div class="field-hint" style="margin-top:12px">No nights counted for this month yet.</div>'}
         <p class="bed-msg" id="census-msg"></p>
       </div></div>`;
   };
@@ -13031,7 +13043,7 @@ const App = {
           <td>${num(v.billable)}</td>
           <td>${v.available ? Math.round((v.occupied / v.available) * 100) + '%' : '—'}</td>
         </tr>`).join('')}</tbody></table></div>`
-      : '<div class="mr-empty">No bed nights yet. Generate the census on the Bed Board.</div>';
+      : '<div class="mr-empty">No bed nights counted for this month yet.</div>';
 
     const statusChanges = Object.entries((r?.bed_status_breakdown?.status_changes) || {});
     const statusTable = statusChanges.length ? `<div class="client-table-wrap"><table class="client-table">
@@ -13098,7 +13110,7 @@ const App = {
           <div class="mr-grid">
             ${stat('Beds in service', num(r?.beds_total), `${num(Number(r?.beds_total||0) - Number(r?.ffs_beds||0))} reserved &middot; ${num(r?.ffs_beds)} fee-for-service`)}
             ${stat('Bed nights available', num(r?.bed_nights_available), 'across all beds')}
-            ${stat('Bed nights occupied', num(r?.bed_nights_occupied), r?.bed_nights_available ? Math.round((r.bed_nights_occupied / r.bed_nights_available)*100) + '% utilisation' : 'no nights generated')}
+            ${stat('Bed nights occupied', num(r?.bed_nights_occupied), r?.bed_nights_available ? Math.round((r.bed_nights_occupied / r.bed_nights_available)*100) + '% utilisation' : 'no nights counted')}
             ${stat('Fee-for-service', num(r?.ffs_nights_billable), money(r?.ffs_amount) + ' billable')}
           </div>
           ${bedTable}
@@ -14663,7 +14675,7 @@ const App = {
             : 'Annual cap ' + this.ffsMoney(cap) + '.'}</div>
           ${inv?.generated_at ? `<div class="mr-generated">Lines generated from the census
             ${this.formatDate(this.dateOnly(inv.generated_at))}${inv.generated_by ? ' by ' + esc(inv.generated_by) : ''}.</div>`
-            : '<div class="mr-empty" style="margin-top:8px">Nothing generated for this month yet.</div>'}
+            : '<div class="mr-empty" style="margin-top:8px">No nights counted for this month yet.</div>'}
           ${canEdit && !this.isAdmin?.() ? `
             <div class="field-group" style="margin-top:14px"><label class="field-label" for="ffs-certifier">Certified by</label>
               <input type="text" class="field-input" id="ffs-certifier"
@@ -14708,7 +14720,7 @@ const App = {
           <td style="text-align:right"><strong>${rows.reduce((t,r)=>t+r.nights,0)}</strong></td><td></td>
           <td style="text-align:right"><strong>${this.ffsMoney(rows.reduce((t,r)=>t+r.amount,0))}</strong></td></tr>
       </tbody></table>`
-      : '<div class="mr-empty">No billable nights this month. Generate the census on the Bed Board.</div>';
+      : '<div class="mr-empty">No billable nights this month.</div>';
 
     return `<div class="fiscal-invoice" id="ffs-invoice">
       <div class="fiscal-invoice-head">
@@ -19449,6 +19461,9 @@ const App = {
         h.textContent = 'Ends when the exit is recorded. Use the Bed Board to move beds.';
     });
 
+    // Glendale uses the same single-page client form as Holloway.
+    if (CONFIG.SHELTER_HOLLOWAY_LAYOUT) return;
+
     // Follow-ups for this participant (recorded on the Follow-Ups screen).
     const fus = id ? (this.data.housingFollowUps || []).filter(f => f.client_id === id)
                       .sort((a,b) => String(a.due_date||'').localeCompare(String(b.due_date||''))) : [];
@@ -19506,7 +19521,7 @@ const App = {
       `<button type="button" role="tab" class="participant-tab ${v === active ? 'active' : ''}" data-ptview="${v}">${esc(l)}</button>`).join('')}</div>`;
   };
   App.addParticipantTabs = function(view){
-    if (!this.isShelterProgram()) return;
+    if (!this.isShelterProgram() || CONFIG.SHELTER_HOLLOWAY_LAYOUT) return;
     const el = document.getElementById('view-' + view);
     if (!el) return;
     el.querySelector('.participant-tabs')?.remove();
@@ -19523,7 +19538,7 @@ const App = {
     });
 
   App.applyShelterNav = function(){
-    if (!this.isShelterProgram() || this._shelterNavApplied) return;
+    if (!this.isShelterProgram() || this._shelterNavApplied || CONFIG.SHELTER_HOLLOWAY_LAYOUT) return;
     const item = v => document.querySelector(`.sidebar-item[data-view="${v}"]`);
     const ws = item('dashboard')?.closest('.sidebar-section');
     if (!ws) return;
@@ -19573,7 +19588,7 @@ const App = {
   App.showView = function(view){
     if (this.isShelterProgram() && view === 'income') view = 'clients';
     previousShowView.call(this, view);
-    if (!this.isShelterProgram()) return;
+    if (!this.isShelterProgram() || CONFIG.SHELTER_HOLLOWAY_LAYOUT) return;
     const clients = document.querySelector('.sidebar-item[data-view="clients"]');
     const inParticipants = PARTICIPANT_VIEWS.some(([v]) => v === this.view);
     clients?.classList.toggle('active', inParticipants);
@@ -21050,6 +21065,186 @@ const App = {
     }
     return r;
   };
+})();
+
+/* ============================================================
+   Live counts for bed programs.
+
+   Bed nights, the monthly report's figures and the draft Bed Night Invoice
+   used to exist only after someone pressed Generate. The database now keeps
+   bed nights current whenever a stay or absence changes; this module asks it
+   to count the days that have passed since the last visit, then refreshes
+   the monthly report figures and the draft invoice for the month on screen.
+   Submitted reports and invoices are never touched.
+
+   The monthly report also gets a day-by-day census chart showing when the
+   census was above the reserved beds, i.e. when fee-for-service applies.
+   ============================================================ */
+(function(){
+  const esc = s => App.escape(s ?? '');
+  const OPEN_REPORT = s => !s || ['draft','returned','revision_requested'].includes(s);
+  const OPEN_INVOICE = s => !s || ['draft','returned','revision_requested'].includes(s);
+
+  App._liveAt = {};
+  App.refreshLiveCounts = async function(force = false){
+    if (!this.program?.id || !this.programHas?.('has_beds')) return false;
+    const pid = this.program.id, now = Date.now();
+    if (!force && this._liveAt[pid] && now - this._liveAt[pid] < 60000) return false;
+    this._liveAt[pid] = now;
+    try { const { error } = await this.sb.rpc('holloway_refresh_bed_nights', { p_program_id: pid }); return !error; }
+    catch (_) { return false; }
+  };
+
+  // Month-level refreshes run once per month per visit to a screen.
+  App._liveDone = {};
+  const once = (key) => { if (App._liveDone[key] && Date.now() - App._liveDone[key] < 60000) return false; App._liveDone[key] = Date.now(); return true; };
+
+  App.liveRefreshMonthly = async function(month){
+    if (!month || !this.programHas?.('has_monthly_report')) return false;
+    const r = this.monthlyReport?.(month);
+    if (!OPEN_REPORT(r?.status)) return false;
+    if (!once('mr|' + this.program.id + '|' + month)) return false;
+    const { error } = await this.sb.rpc('holloway_generate_monthly_report', { p_program_id: this.program.id, p_month: month });
+    return !error;
+  };
+  App.liveRefreshFfs = async function(month){
+    if (!month || !this.programHas?.('has_ffs_invoice')) return false;
+    const inv = this.ffsInvoice?.(month);
+    if (!OPEN_INVOICE(inv?.status)) return false;
+    if (!once('ffs|' + this.program.id + '|' + month)) return false;
+    const { error } = await this.sb.rpc('holloway_generate_ffs_invoice', { p_program_id: this.program.id, p_month: month });
+    return !error;
+  };
+
+  const LIVE_VIEWS = ['beds', 'monthly', 'ffs', 'dashboard'];
+  const baseShow = App.showView;
+  App.showView = function(view){
+    const r = baseShow.apply(this, arguments);
+    if (LIVE_VIEWS.includes(view) && this.programHas?.('has_beds')) this.liveRefreshView(view);
+    return r;
+  };
+  App.liveRefreshView = async function(view){
+    const counted = await this.refreshLiveCounts();
+    let changed = counted;
+    if (view === 'monthly') changed = (await this.liveRefreshMonthly(this.monthlyMonth?.())) || changed;
+    if (view === 'ffs') changed = (await this.liveRefreshFfs(this.ffsMonth?.())) || changed;
+    if (!changed || this.view !== view) return;
+    if (view === 'beds') { await this.loadBedData(); if (this.view === 'beds') this.renderBeds(); return; }
+    await this.loadAll();
+    if (this.view !== view) return;
+    if (view === 'monthly') this.renderMonthly();
+    else if (view === 'ffs') this.renderFfsInvoice();
+    else if (view === 'dashboard') this.renderDashboard?.();
+  };
+
+  // Changing the month on either screen refreshes that month too.
+  const baseMonthly = App.renderMonthly;
+  App.renderMonthly = function(){
+    baseMonthly.apply(this, arguments);
+    const el = document.getElementById('view-monthly'); if (!el) return;
+    el.querySelector('#mr-generate')?.remove();
+    const month = this.monthlyMonth?.();
+    const r = this.monthlyReport?.(month);
+    const sub = el.querySelector('.page-subtitle');
+    if (sub && OPEN_REPORT(r?.status)) sub.textContent = 'Monthly operating report (section 12.2). Figures update from the portal as records change; add the narrative.';
+    if (this.programHas?.('has_beds')) this.renderCensusChart(month);
+    if (OPEN_REPORT(r?.status) && !App._liveDone['mr|' + this.program?.id + '|' + month]) {
+      this.liveRefreshMonthly(month).then(ok => { if (ok && this.view === 'monthly') this.loadAll().then(() => this.view === 'monthly' && this.renderMonthly()); });
+    }
+  };
+  const baseFfs = App.renderFfsInvoice;
+  App.renderFfsInvoice = function(){
+    baseFfs.apply(this, arguments);
+    const el = document.getElementById('view-ffs'); if (!el) return;
+    el.querySelector('#ffs-generate')?.remove();
+    const month = this.ffsMonth?.(), inv = this.ffsInvoice?.(month);
+    const sub = el.querySelector('.page-subtitle');
+    if (sub && OPEN_INVOICE(inv?.status)) sub.textContent = 'Fee-for-service nights at the contract rate. Updates as stays change until the invoice is submitted.';
+    if (OPEN_INVOICE(inv?.status) && !App._liveDone['ffs|' + this.program?.id + '|' + month]) {
+      this.liveRefreshFfs(month).then(ok => { if (ok && this.view === 'ffs') this.loadAll().then(() => this.view === 'ffs' && this.renderFfsInvoice()); });
+    }
+  };
+
+  // Bed Board: the census card no longer needs a button.
+  const baseCensus = App.censusSummaryHtml;
+  App.censusSummaryHtml = function(){
+    let html = baseCensus.apply(this, arguments);
+    html = html.replace(/<button class="btn btn-primary" id="census-generate">Generate census<\/button>/,
+      '<span class="field-hint" style="align-self:center">Counted through today</span>');
+    return html;
+  };
+
+  /* ------------------------------------------------ census chart (monthly) */
+  App.renderCensusChart = async function(month){
+    const el = document.getElementById('view-monthly'); if (!el || !month || !this.program?.id) return;
+    const end = this.monthEnd ? this.monthEnd(month) : month;
+    const { data, error } = await this.sb.from('holloway_bed_nights')
+      .select('service_date,designation,occupied,absent,billable')
+      .eq('program_id', this.program.id).gte('service_date', month).lte('service_date', end);
+    if (error || this.view !== 'monthly' || this.monthlyMonth?.() !== month) return;
+    const host = document.getElementById('view-monthly');
+    host.querySelector('#mr-census-chart')?.remove();
+    const anchor = [...host.querySelectorAll('.card')].find(c => /Beds and Occupancy/.test(c.querySelector('h2,.card-title')?.textContent || ''));
+    if (!anchor) return;
+    anchor.insertAdjacentHTML('afterend', this.censusChartHtml(month, data || []));
+  };
+
+  App.censusChartHtml = function(month, rows){
+    const reserved = Number(this.contractPeriod?.reservedBeds ?? this.contractPeriod?.reserved_beds ?? 10) || 10;
+    const rate = Number(this.contractPeriod?.ffsRate ?? 83) || 83;
+    const end = this.monthEnd ? this.monthEnd(month) : month;
+    const days = [];
+    for (let d = new Date(month + 'T12:00:00'); this.isoDate(d) <= end; d.setDate(d.getDate() + 1)) days.push(this.isoDate(d));
+    const by = {};
+    rows.forEach(r => {
+      const k = this.dateOnly(r.service_date), o = by[k] ||= { res: 0, ffs: 0, bill: 0, counted: true };
+      if (r.occupied && !r.absent) { if (r.designation === 'reserved') o.res++; else o.ffs++; }
+      if (r.billable) o.bill++;
+    });
+    const today = this.localDate ? this.localDate() : this.isoDate(new Date());
+    const max = Math.max(15, reserved + 5, ...days.map(d => (by[d]?.res || 0) + (by[d]?.ffs || 0)));
+    const W = 720, H = 200, padL = 28, padB = 22, padT = 10, cw = (W - padL - 4) / days.length;
+    const y = v => padT + (H - padT - padB) * (1 - v / max);
+    let bars = '', bands = '', labels = '';
+    days.forEach((d, i) => {
+      const o = by[d], x = padL + i * cw;
+      if (o?.bill) bands += `<rect x="${x}" y="${padT}" width="${cw}" height="${H - padT - padB}" fill="#f9eeda"/>`;
+      if (o) {
+        const hr = y(0) - y(o.res), hf = y(0) - y(o.ffs);
+        bars += `<rect x="${x + 1.5}" y="${y(o.res)}" width="${cw - 3}" height="${hr}" fill="#1e3a5f"><title>${this.formatDate(d)}: ${o.res} in reserved beds, ${o.ffs} in fee-for-service beds${o.bill ? `, ${o.bill} billable` : ''}</title></rect>`;
+        if (o.ffs) bars += `<rect x="${x + 1.5}" y="${y(o.res + o.ffs)}" width="${cw - 3}" height="${hf}" fill="${o.bill ? '#c8932b' : '#d9c7a0'}"><title>${this.formatDate(d)}: ${o.ffs} in fee-for-service beds, ${o.bill} billable</title></rect>`;
+      } else if (d > today) {
+        bars += `<rect x="${x + 1.5}" y="${y(0) - 2}" width="${cw - 3}" height="2" fill="#e5e7eb"/>`;
+      }
+      const dn = Number(d.slice(8));
+      if (dn === 1 || dn % 5 === 0) labels += `<text x="${x + cw / 2}" y="${H - 6}" font-size="10" text-anchor="middle" fill="#6b7280">${dn}</text>`;
+    });
+    const line = `<line x1="${padL}" x2="${W - 4}" y1="${y(reserved)}" y2="${y(reserved)}" stroke="#b91c1c" stroke-dasharray="4 3" stroke-width="1.5"/><rect x="${padL + 2}" y="${y(reserved) - 15}" width="92" height="13" fill="#fff" opacity="0.9"/><text x="${padL + 6}" y="${y(reserved) - 5}" font-size="10" fill="#b91c1c">${reserved} reserved beds</text>`;
+    const axis = [0, 5, 10, 15].filter(v => v <= max).map(v => `<text x="${padL - 6}" y="${y(v) + 3}" font-size="10" text-anchor="end" fill="#6b7280">${v}</text>`).join('');
+    // Periods when fee-for-service applied.
+    const periods = []; let cur = null;
+    days.forEach(d => { const b = by[d]?.bill || 0; if (b) { if (cur && cur.last === prev(d)) { cur.last = d; cur.n += b; } else { cur = { first: d, last: d, n: b }; periods.push(cur); } } });
+    function prev(d){ const t = new Date(d + 'T12:00:00'); t.setDate(t.getDate() - 1); return App.isoDate(t); }
+    const short = d => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const totalBill = periods.reduce((s, p) => s + p.n, 0);
+    const summary = periods.length
+      ? `Fee-for-service applied ${periods.map(p => p.first === p.last ? short(p.first) : `${short(p.first)}–${short(p.last)}`).join(', ')} · <strong>${totalBill} billable night${totalBill === 1 ? '' : 's'}</strong> · ${this.fiscalMoney ? this.fiscalMoney(totalBill * rate) : '$' + totalBill * rate}`
+      : `The census stayed at or below ${reserved} all month, so no fee-for-service nights are billable.`;
+    const counted = days.filter(d => by[d]).length;
+    return `<div class="card" id="mr-census-chart"><div class="card-header"><div><h2 class="card-title">Daily census and fee-for-service</h2>
+        <div class="field-hint">People housed each night. Fee-for-service is billable only on nights above the ${reserved} reserved beds (shaded).</div></div></div>
+      <div class="card-body">
+        <div class="notice ${periods.length ? 'amber' : 'navy'}" style="margin-bottom:12px"><div>${periods.length ? '$' : 'i'}</div><div>${summary}</div></div>
+        <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Daily census chart" style="max-width:100%;height:auto">${bands}${axis}${bars}${line}${labels}</svg>
+        <div class="field-hint" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px">
+          <span><span style="display:inline-block;width:10px;height:10px;background:#1e3a5f;margin-right:4px"></span>Reserved beds</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#c8932b;margin-right:4px"></span>Fee-for-service, billable</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#d9c7a0;margin-right:4px"></span>Fee-for-service, not billable</span>
+          <span>${counted} of ${days.length} days counted${days.some(d => d > today) ? ' so far' : ''}</span>
+        </div>
+      </div></div>`;
+  };
+  App.isoDate = App.isoDate || function(d){ return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 })();
 
 document.addEventListener('DOMContentLoaded', () => App.init());
