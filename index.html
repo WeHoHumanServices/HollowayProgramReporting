@@ -2075,8 +2075,6 @@ button, input, select, textarea { font-family: var(--font-ui); }
  *   ROSTER_PAGE_SIZE      Page size for client_rosters paging.
  */
 const CONFIG = {
-  // Glendale uses Holloway's navigation and single-page client form.
-  SHELTER_HOLLOWAY_LAYOUT: true,
   PROGRAM_NAME: 'Holloway Interim Housing Program',
   // The portal's own name, as distinct from the name of whichever program is
   // being worked on. Held once so a rename is one edit rather than seven, and
@@ -2511,11 +2509,8 @@ const App = {
   ethnicityKeys: CONFIG.DEMOGRAPHICS.ethnicityKeys,
   languageKeys: CONFIG.DEMOGRAPHICS.languageKeys,
   genderKeys: CONFIG.DEMOGRAPHICS.genderKeys,
-  cumulativeScope: CONFIG.CUMULATIVE_SCOPE_KEYS,
   scopeMap: CONFIG.SCOPE_MAP,
 
-  // v3 autosave + roster paging state
-  autosaveTimer: null,
   lastSavedAt: null,
   savedTickerInterval: null,
   rosterPage: 0,
@@ -2718,11 +2713,6 @@ const App = {
     else target.textContent = `Saved ${Math.floor(secs/3600)}h ago`;
   },
 
-  scheduleAutosave(type='quarterly') {
-    // Debounced (CONFIG.AUTOSAVE_DEBOUNCE_MS).
-    clearTimeout(this.autosaveTimer);
-    this.autosaveTimer = setTimeout(() => this.autosave(type), CONFIG.AUTOSAVE_DEBOUNCE_MS);
-  },
 
   async login() {
     const email = document.getElementById('login-email').value.trim().toLowerCase();
@@ -2887,18 +2877,11 @@ const App = {
     if (this.isAgencyFiscal()) return false;
     return this.hasRole('agency_reporter','reporter','agency_signer','agency_admin','agency_support','agency_management','city_admin');
   },
-  canCityReview() {
-    return this.isAdmin();
-  },
 
   // v3 program/agency helpers — single place for fallback to CONFIG defaults.
   programName() {
     return this.program?.name || CONFIG.PROGRAM_NAME;
   },
-  // Used wherever the sentence is about the system rather than about one
-  // program, so those places name the portal instead of reaching for a
-  // placeholder.
-  portalName() { return CONFIG.PORTAL_NAME; },
   agencyName() {
     return this.program?.agency_name || this.program?.organization || this.program?.agency || CONFIG.AGENCY_DEFAULTS.name;
   },
@@ -3240,12 +3223,6 @@ const App = {
     else this.showView(this.view);
   },
 
-  setDashboardScope(scope, q=null) {
-    this.dashboardScope = scope;
-    if (q) this.currentQuarter = q;
-    this.renderDeadlineChip();
-    this.showView(this.view);
-  },
 
   renderQuarterButtons() {
     return `<div class="quarter-selector">
@@ -3264,24 +3241,7 @@ const App = {
     container.querySelectorAll('[data-quarter]:not([data-action])').forEach(btn => btn.addEventListener('click', () => this.setQuarter(btn.dataset.quarter)));
   },
 
-  renderDashboardScopeSelector() {
-    const ytdActive = this.dashboardScope === 'ytd';
-    return `<div class="quarter-selector">
-      <span class="quarter-selector-label">Quarter</span>
-      ${Object.keys(this.quarters).map(q => {
-        const st = this.bundleStatus(q);
-        const active = !ytdActive && q===this.currentQuarter;
-        return `<button class="q-btn ${st} ${active?'active':''}" data-quarter="${q}">${q} ${this.statusSymbol(st)}</button>`;
-      }).join('')}
-      <button class="q-btn ytd ${ytdActive?'active':''}" data-dash-scope="ytd" type="button">YTD</button>
-    </div>`;
-  },
 
-  bindDashboardScopeSelector(container=document) {
-    container.querySelectorAll('[data-quarter]:not([data-action])').forEach(btn => btn.addEventListener('click', () => this.setQuarter(btn.dataset.quarter)));
-    const ytdBtn = container.querySelector('[data-dash-scope="ytd"]');
-    if (ytdBtn) ytdBtn.addEventListener('click', () => this.setDashboardScope('ytd'));
-  },
 
   bindSubmitBundleButton(container=document) {
     const btn = container.querySelector('[data-action="submit-bundle"]');
@@ -3383,7 +3343,6 @@ const App = {
     return !!entry && entry < s && (!exit || exit >= s);
   },
   quarterKeys() { return Object.keys(this.quarters); },
-  lastQuarterKey() { const k = this.quarterKeys(); return k[k.length-1] || 'Q1'; },
 
   /* Adopt a contract period: sets the fiscal-year tag every query filters on,
      rebuilds the quarter map, and re-picks the current quarter. Everything
@@ -3576,11 +3535,6 @@ const App = {
     return list.join(' · ');
   },
   hmisRaceEthnicityOptions() { return ['American Indian, Alaska Native, or Indigenous','Asian or Asian American','Black, African American, or African','Hispanic/Latina/e/o','Middle Eastern or North African','Native Hawaiian or Pacific Islander','White','Additional Race/Ethnicity Detail','Client doesn’t know','Client prefers not to answer','Data not collected']; },
-  hmisYesNoOptions() { return ['Yes','No','Client doesn’t know','Client prefers not to answer','Data not collected']; },
-  housingPlanStatusOptions() { return ['Not Started','Assessment','Document Collection','Benefits / Income','Housing Search','Application Submitted','Lease Pending','Move-In Scheduled','Permanently Housed','Inactive / On Hold']; },
-  // Flat list of service type labels, kept for any caller that just wants the
-  // names. The form uses serviceTypeGroups() so the optgroups survive.
-  serviceTypeOptions() { return CONFIG.SERVICE_TYPES.map(t => t.label); },
 
   serviceTypeMeta(label) { return CONFIG.SERVICE_TYPES.find(t => t.label === label) || null; },
 
@@ -3813,47 +3767,10 @@ const App = {
     </div></div>`;
   },
   ytdClientsServed(q=this.currentQuarter) { const order=this.quarterKeys(); const idx=Math.max(0,order.indexOf(q)); const end=this.qRange(order[idx]||q).end; const fyStart=this.fyStart(); return (this.data.clients||[]).filter(c=>this.dateOnly(c.entry_date)<=end && (!this.dateOnly(c.exit_date) || this.dateOnly(c.exit_date)>=fyStart)); },
-  countQuarterUpdates(q,field,value){ return (this.data.clientUpdates||[]).filter(u=>u.quarter===q && String(u[field]||'')===value).length; },
   clientOptionList(selected='') { return (this.data.clients||[]).map(c=>`<option value="${this.escape(c.id)}" ${c.id===selected?'selected':''}>${this.escape(c.id)}${this.isAdmin()?'':' · '+this.escape(c.client_name||'')}</option>`).join(''); },
 
   openOverlay(name){ const m=document.getElementById('modal-'+name); if(m) m.classList.add('open'); },
 
-  renderDashboard() {
-    const el = document.getElementById('view-dashboard');
-    const q = this.currentQuarter;
-    const scope = this.dashboardScope;
-    const todayClamped = this.dateMin(this.localDate(), this.fyEnd());
-    const periodLabel = scope === 'ytd'
-      ? `Year to date &middot; ${this.escape(ContractPeriods.longDate(ContractPeriods.parse(this.fyStart())))} &ndash; ${this.formatDate(todayClamped)}`
-      : `${this.escape(q)} &middot; ${this.escape(this.quarters[q].period)} &middot; Due ${this.formatDate(this.quarters[q].due)}`;
-    el.innerHTML = `
-      <div class="page-header">
-        <div><h1 class="page-title">${this.isAdmin() ? 'City Admin Dashboard' : 'Agency Reporting Workspace'}</h1>
-        <div class="page-subtitle">${this.escape(this.programName())} · Contract year: ${this.escape(ContractPeriods.longDate(ContractPeriods.parse(this.fyStart())))} – ${this.escape(ContractPeriods.longDate(ContractPeriods.parse(this.fyEnd())))}</div></div>
-        <div style="display:flex;gap:10px;">
-          <button class="btn btn-ghost btn-sm" id="btn-print-current">Print / Save PDF</button>
-          <button class="btn btn-gold" data-open="quarterly">${this.bundleStatus(q)==='accepted'?'View Report':'Start / Continue Report'}</button>
-        </div>
-      </div>
-      <div class="dash-toprow">
-        ${this.renderDashboardScopeSelector()}
-        <span class="dash-period-label">${periodLabel}</span>
-        ${this.renderAttentionChip(q)}
-      </div>
-      <h2 class="section-label">Contract Performance${scope==='ytd' ? ' — Year to Date' : ''}</h2>
-      ${this.renderProgramPerformance(q, scope)}
-      <h2 class="section-label" style="margin-top:20px;">Early Warning Indicators</h2>
-      ${this.renderRiskIndicators(q, scope)}
-      <h2 class="section-label" style="margin-top:20px;">Daily Work</h2>
-      ${this.renderTodayPanel(q)}
-      ${this.renderProgramDetailDrawer(q)}`;
-    this.bindDashboardScopeSelector(el);
-    this.bindSubmitBundleButton(el);
-    el.querySelectorAll('[data-open]').forEach(btn => btn.addEventListener('click', () => this.openForm(btn.dataset.open)));
-    el.querySelectorAll('[data-attention-open]').forEach(btn => btn.addEventListener('click', () => this.openForm(btn.dataset.attentionOpen)));
-    el.querySelectorAll('[data-view-shortcut]').forEach(btn => btn.addEventListener('click', () => this.showView(btn.dataset.viewShortcut)));
-    el.querySelector('#btn-print-current').addEventListener('click', () => this.printReport(q));
-  },
 
   /* ── Quarterly trends ───────────────────────────────────────────────────
      Four quarters of client records were already in memory and the dashboard
@@ -3901,19 +3818,6 @@ const App = {
     return { n, denom, rate: denom ? Math.round((n / denom) * 100) : null };
   },
 
-  // Scores a value against its benchmark. Only the contract figure sets tone;
-  // regional numbers are context and never colour a metric the agency is not
-  // formally held to.
-  benchmarkTone(key, value) {
-    const b = CONFIG.BENCHMARKS[key];
-    if (!b || value == null || b.contract == null) return 'neutral';
-    if (b.direction === 'below') {
-      if (value > b.contract) return 'bad';
-      return value > b.contract * 0.75 ? 'warn' : 'good';
-    }
-    if (value >= b.contract) return 'good';
-    return value >= b.contract * 0.7 ? 'warn' : 'bad';
-  },
 
   // The grey comparison chip. Carries its own provenance in the title so a
   // reader can hover and see exactly where the number came from rather than
@@ -3937,29 +3841,6 @@ const App = {
     return parts.join('');
   },
 
-  quarterTrends() {
-    const cacheKey = `${(this.data.clients||[]).length}:${(this.data.clientServices||[]).length}:${this.currentQuarter}`;
-    if (this._trendCache && this._trendCache.key === cacheKey) return this._trendCache.value;
-    const order = Object.keys(this.quarters);
-    const upto = Math.max(0, order.indexOf(this.currentQuarter));
-    const series = order.slice(0, upto + 1).map(q => {
-      const m = this.clientMetrics(q);
-      const o = this.outcomeSummary(q, 'quarter');
-      return {
-        q,
-        phRate: o.phRate,
-        countedExits: o.countedExits,
-        phCount: o.byBand?.['Permanent Housing'] || 0,
-        served: m.served.length,
-        occupancy: m.available ? Math.round((m.occupied / m.available) * 100) : null,
-        avgLos: m.avgLos || null,
-        intakes: m.intakes.length,
-        exits: m.exits.length
-      };
-    });
-    this._trendCache = { key: cacheKey, value: series };
-    return series;
-  },
 
   // 4-point sparkline. Single series, so no legend (the label names it); line in
   // the de-emphasis gray with the current quarter in the accent, per the stat
@@ -3993,19 +3874,6 @@ const App = {
       ${dot}${hits}</svg>`;
   },
 
-  // Signed delta against the prior quarter. Colour is direction × whether up is
-  // good — occupancy rising is fine, average stay rising is not, so callers pass
-  // goodDirection explicitly rather than assuming up means better.
-  deltaChip(current, prior, opts={}) {
-    if (current == null || prior == null) return '';
-    const diff = Math.round((current - prior) * 10) / 10;
-    const priorQ = opts.priorLabel || 'prior quarter';
-    if (diff === 0) return `<span class="delta delta-flat">no change vs ${this.escape(priorQ)}</span>`;
-    const good = opts.goodDirection === 'down' ? diff < 0 : diff > 0;
-    const arrow = diff > 0 ? '▲' : '▼';
-    const unit = opts.unit || '';
-    return `<span class="delta ${good ? 'delta-good' : 'delta-bad'}"><span aria-hidden="true">${arrow}</span> ${Math.abs(diff)}${unit} vs ${this.escape(priorQ)}</span>`;
-  },
 
   /* Early warning indicators. Neither is in the contract, so neither is
      scored pass/fail — tone comes from the benchmark table, which leaves
@@ -4080,104 +3948,6 @@ const App = {
     </details>`;
   },
 
-  renderProgramPerformance(q=this.currentQuarter, scope='quarter') {
-    const qtr = this.outcomeSummary(q, 'quarter');
-    const ytd = this.outcomeSummary(q, 'ytd');
-    const retention = this.confirmedRetentionSummary();
-    const s = (this.data.clients||[]).length ? this.generatedScopeFromClients(q) : this.reportScope(q);
-    const ytdPersons = (this.data.clients||[]).length ? s.unduplicatedYTD : (this.data.reports[q]?.persons_ytd ?? this.calcPersonsYtd(q));
-    const active = (this.data.clients||[]).filter(c=>this.clientStatus(c)==='Active');
-    const capacity = this.bedCapacity();
-    const servedBase = Number(s.residentsServed || s.activeResidents || 0);
-    const incomePct = servedBase ? Math.round((Number(s.incomeIncrease||0) / servedBase) * 100) : null;
-    const src = scope === 'ytd' ? ytd : qtr;
-    const other = scope === 'ytd' ? qtr : ytd;
-    const heroPrimary = src.phRate;
-    const target = this.phRateTarget ? this.phRateTarget() : CONFIG.PH_RATE_TARGET;
-    const minN = CONFIG.MIN_EXITS_FOR_RATE;
-
-    // Below the small-n threshold a percentage overstates what the data can
-    // support — one placement out of three is not a 33% rate — so show the
-    // fraction instead and say plainly that it is too early to rate.
-    const thin = src.countedExits > 0 && src.countedExits < minN;
-    const heroValue = heroPrimary == null
-      ? '—'
-      : thin
-        ? `${src.byBand?.['Permanent Housing']||0}<span class="hero-of">of ${src.countedExits}</span>`
-        : `${heroPrimary}%`;
-    const tone = heroPrimary == null || thin ? 'neutral'
-      : heroPrimary >= target ? 'good'
-      : heroPrimary >= target * 0.7 ? 'warn'
-      : 'bad';
-    const targetNote = heroPrimary == null
-      ? `Target ${target}%`
-      : thin
-        ? `Too few exits to rate · target ${target}%`
-        : heroPrimary === target
-          ? `Meets the ${target}% target`
-          : heroPrimary > target
-            ? `${heroPrimary - target} pts above the ${target}% target`
-            : `${target - heroPrimary} pts below the ${target}% target`;
-    const heroSub = scope === 'ytd'
-      ? `${qtr.phRate!=null ? qtr.phRate+'% this quarter' : 'No exits this quarter'} &middot; ${ytd.byBand?.['Permanent Housing']||0} of ${ytd.countedExits||0} exits YTD`
-      : `${other.phRate!=null ? other.phRate+'% YTD' : 'No YTD exits yet'} &middot; ${qtr.byBand?.['Permanent Housing']||0} of ${qtr.countedExits||0} exits this quarter`;
-    const meterPct = heroPrimary == null ? 0 : Math.min(100, heroPrimary);
-    const targetPct = Math.min(100, target);
-
-    // Trend context. Deltas compare the selected quarter with the one before it;
-    // in YTD scope there is no "prior period" to compare against, so the hero
-    // shows the sparkline only.
-    const trends = this.quarterTrends();
-    const idx = trends.findIndex(t => t.q === q);
-    const cur = idx >= 0 ? trends[idx] : null;
-    const prev = idx > 0 ? trends[idx-1] : null;
-    const spark = (key, fmt) => this.sparkline(trends.map(t => ({
-      label: t.q, value: t[key], display: fmt ? fmt(t[key]) : t[key]
-    })));
-    const phSpark = this.sparkline(trends.map(t => ({
-      label: t.q, value: t.phRate,
-      display: t.phRate==null ? 'no exits' : `${t.phCount} of ${t.countedExits} exits (${t.phRate}%)`
-    })));
-    const phDelta = (scope === 'ytd' || thin) ? '' : this.deltaChip(cur?.phRate, prev?.phRate, { priorLabel: prev?.q, unit:' pts' });
-    // The per-quarter readout uses fractions, not percentages. A quarter with
-    // three exits would render "67%" here and invite exactly the over-reading
-    // the hero's small-n guard exists to prevent; "2 of 3" cannot mislead.
-    const phSeries = trends.map(t => `${t.q} ${t.countedExits ? `${t.phCount}/${t.countedExits}` : '—'}`).join(' · ');
-    const losNow = this.clientMetrics(q).avgLos;
-
-    return `<div class="card perf-card"><div class="card-body">
-      <div class="perf-hero-row">
-        <div class="perf-hero">
-          <div class="kpi-label">PH exit rate${scope==='ytd' ? ' (YTD)' : ''}</div>
-          <div class="perf-hero-value tone-${tone}">${heroValue}</div>
-          <div class="hero-target hero-target-${tone}">${this.escape(targetNote)}${this.referenceChip('phRate')}</div>
-          <div class="hero-meter" role="img" aria-label="${heroPrimary==null?'No rate yet':heroPrimary+' percent against a '+target+' percent target'}">
-            <div class="hero-meter-fill tone-${tone}" style="width:${meterPct}%;"></div>
-            <div class="hero-meter-target" style="left:${targetPct}%;"></div>
-          </div>
-          ${phSpark ? `<div class="trend-row">${phSpark}<div class="trend-text">${phDelta}<span class="trend-series">PH exits ${this.escape(phSeries)}</span></div></div>` : ''}
-          <div class="kpi-sub">${heroSub}</div>
-        </div>
-        <div class="perf-sub">
-          <div class="kpi-label">Confirmed retention ${this.referenceChip('retention')}</div>
-          <div class="perf-sub-value">${retention.total ? retention.rate+'%' : '—'}</div>
-          <div class="kpi-sub">${retention.total ? `${retention.stable} of ${retention.total} completed check-ins${retention.total < CONFIG.MIN_EXITS_FOR_RATE ? ' — too few to rate' : ''}` : '6- and 12-month combined · no check-ins yet'}</div>
-        </div>
-        <div class="perf-sub">
-          <div class="kpi-label">Avg length of stay</div>
-          <div class="perf-sub-value">${losNow}</div>
-          ${spark('avgLos', v => v==null ? 'no data' : v+' days') ? `<div class="trend-row">${spark('avgLos', v => v==null?'no data':v+' days')}${this.deltaChip(cur?.avgLos, prev?.avgLos, { priorLabel: prev?.q, unit:' d', goodDirection:'down' })}</div>` : ''}
-          <div class="kpi-sub" title="Published length-of-stay norms are emergency shelter figures; interim housing runs materially longer by design, so no sector comparison is shown here.">days, served clients · no sector comparison</div>
-        </div>
-      </div>
-      <div class="perf-strip-row">
-        <div><div class="kpi-label">Persons served YTD</div><div class="perf-strip-value">${ytdPersons ?? '—'}</div>${spark('served', v=>v==null?'—':v+' served') ? `<div class="trend-row">${spark('served', v=>v==null?'—':v+' served')}${this.deltaChip(cur?.served, prev?.served, { priorLabel: prev?.q })}</div>` : ''}</div>
-        <div><div class="kpi-label">Occupancy ${this.referenceChip('occupancy')}</div><div class="perf-strip-value">${this.percent(s.bedNightsOcc, s.bedNightsAvail)}</div>${spark('occupancy', v=>v==null?'—':v+'%') ? `<div class="trend-row">${spark('occupancy', v=>v==null?'—':v+'%')}${this.deltaChip(cur?.occupancy, prev?.occupancy, { priorLabel: prev?.q, unit:' pts' })}</div>` : ''}</div>
-        <button type="button" class="perf-strip-link" data-view-shortcut="clients"><div class="kpi-label">Current census</div><div class="perf-strip-value">${active.length}/${capacity}<span class="strip-go" aria-hidden="true">→</span></div><div class="kpi-sub">${Math.max(0,capacity-active.length)} open · view caseload</div></button>
-        <div><div class="kpi-label">Income increased</div><div class="perf-strip-value">${incomePct!=null ? incomePct+'%' : '—'}</div><div class="kpi-sub">of residents served this quarter</div></div>
-      </div>
-    </div></div>`;
-  },
 
   participantDemographicsYtd(q=this.currentQuarter) {
     const r = this.data.reports[q] || {};
@@ -4284,7 +4054,6 @@ const App = {
   },
 
   readiness(q) {
-    const r = this.data.reports[q];
     const roster = this.data.rosters[q];
     const exits = this.data.exits.filter(e => e.quarter === q);
     return [
@@ -4352,7 +4121,6 @@ const App = {
     const ageYtd = this.ageBands.reduce((sum, age) => sum + this.sumDemoRow(this.calcAgeGenderYtd(q, age)), 0);
     const ethYtd = this.ethnicityKeys.reduce((sum, k) => sum + Number(this.calcSimpleDemoYtd(q, 'demographics_ethnicity', k, r.demographics_ethnicity?.[k] || 0) || 0), 0);
     const langYtd = this.languageKeys.reduce((sum, k) => sum + Number(this.calcSimpleDemoYtd(q, 'demographics_language', k, r.demographics_language?.[k] || 0) || 0), 0);
-    const roster = this.data.rosters[q] || {};
     const bedOk = Number(s.bedNightsOcc || 0) <= Number(s.bedNightsAvail || 0);
     return [
       { ok: demo.qAge === persons && demo.qEth === persons && demo.qLang === persons, label:'Quarter demographic totals tie to Persons Served This Quarter', detail:`Age/Gender ${demo.qAge}, Ethnicity ${demo.qEth}, Language ${demo.qLang}, Persons ${persons}` },
@@ -5531,7 +5299,6 @@ const App = {
   renderExitsForm() {
     const q = this.currentQuarter;
     const { start, end } = this.qRange(q);
-    const clientMap = new Map((this.data.clients||[]).map(c => [c.id, c]));
     const savedRows = this.data.exits.filter(e => e.quarter === q);
     const savedByClientId = new Map(savedRows.filter(e => e.client_id).map(e => [e.client_id, e]));
 
@@ -5934,9 +5701,6 @@ const App = {
   printReport(q=this.currentQuarter) {
     const r = this.data.reports[q] || {};
     const s = this.reportScope(q);
-    const roster = this.data.rosters[q] || {};
-    const exits = this.data.exits.filter(e => e.quarter === q);
-    const b = this.data.bundles[q] || {};
     const status = (this.bundleStatus(q) || 'incomplete').replaceAll('_',' ');
     const movement = this.programMovement(q);
     const generatedMode = this.useClientGeneratedReporting();
@@ -6237,7 +6001,6 @@ const App = {
   formatDate(d) { return d ? new Date(d + (String(d).includes('T')?'':'T12:00:00')).toLocaleDateString() : '—'; },
   formatDateTime(d) { return d ? new Date(d).toLocaleString() : '—'; },
   escape(s) { return (s ?? '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); },
-  scopeLabel(k) { return k.replace(/([A-Z])/g,' $1').replace(/^./, c => c.toUpperCase()); }
 };
 
 
@@ -6273,7 +6036,6 @@ const App = {
   App.activeClientsNow = function(){ return (this.data.clients||[]).filter(c=>this.clientStatus(c)==='Active'); };
   App.phExitClients = function(){ return (this.followUpClients?this.followUpClients():(this.data.clients||[])).filter(c=>c.exit_date && this.isPermanentExit(c)); };
   App.followUpKey = function(clientId, type){ return clientId+'::'+type; };
-  App.followUpsForClient = function(clientId){ return (this.data.housingFollowUps||[]).filter(f=>f.client_id===clientId); };
   App.expectedFollowUps = function(){
     const existing = new Map((this.data.housingFollowUps||[]).map(f=>[this.followUpKey(f.client_id,f.followup_type),f]));
     const rows=[];
@@ -6512,61 +6274,6 @@ const App = {
     this.wireNarrativeAutoGrow(pane);
   };
 
-  App.generateNarrativeSection = async function(section, targetId, btn){
-    const target = document.getElementById(targetId);
-    const state = document.getElementById('narrative-page-save-state');
-    if (!target) return;
-
-    let roughNotes;
-    if (section === 'success_story') {
-      roughNotes = (document.getElementById('narr-success-notes')?.value || '').trim();
-      if (!roughNotes) {
-        if (state) state.textContent = 'Add a few rough notes above the success story box first — nothing is invented from scratch.';
-        return;
-      }
-    }
-
-    const run = async () => {
-      const originalLabel = btn.textContent;
-      btn.disabled = true;
-      btn.textContent = 'Generating…';
-      if (state) state.textContent = 'Generating draft…';
-      try {
-        const q = this.currentQuarter;
-        const { data, error } = await this.sb.functions.invoke('generate-narrative', {
-          body: {
-            section,
-            sectionLabel: this.narrativeSectionLabels[section] || section,
-            programName: this.programName(),
-            agencyName: this.agencyName(),
-            quarterLabel: q,
-            quarterPeriod: this.quarters[q]?.period || '',
-            metrics: this.quarterSummaryMetrics(q),
-            roughNotes: roughNotes || undefined
-          }
-        });
-        if (error || !data || data.error) {
-          if (state) state.textContent = 'AI draft failed: ' + ((data && data.error) || error?.message || 'unknown error');
-          return;
-        }
-        target.value = data.draft;
-        this.autoGrowTextarea(target);
-        this.updateNarrativeSectionWordCount(target);
-        if (state) state.textContent = `AI draft inserted into "${this.narrativeSectionLabels[section] || section}" — review and edit, then Save Narrative.`;
-      } catch (e) {
-        if (state) state.textContent = 'AI draft failed: ' + (e?.message || e);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = originalLabel;
-      }
-    };
-
-    if ((target.value || '').trim()) {
-      this.confirm(`This will replace the current text in "${this.narrativeSectionLabels[section] || section}" with an AI-generated draft. Continue?`, run);
-    } else {
-      await run();
-    }
-  };
 
   App.collectNarrativePageSections = function(){
     return {
@@ -6607,7 +6314,6 @@ const App = {
   // Replace the narrative tab in the legacy modal with the same structured fields.
   App.renderNarrativeForm = function(q){
     const r = this.data.reports[q] || {};
-    const sections = this.parseNarrativeSections(r.narrative_text || '');
     document.getElementById('qr-narrative-body').innerHTML = `<div class="form-section"><div class="form-section-title">Quarterly Narrative</div><div class="notice navy"><div aria-hidden="true"><svg class="n-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div><div><strong>Complete the narrative sections.</strong><br>Include context for the quarter, challenges, planned improvements, and one de-identified success story.</div></div>
       <div class="field-group" data-field-group="qr-narrative-text"><label class="field-label required" for="qr-narrative-text">Combined Narrative</label><textarea class="field-textarea" id="qr-narrative-text" required style="min-height:220px;line-height:1.65;">${this.escape(r.narrative_text || '')}</textarea><span class="field-error">Narrative is required before submission.</span></div>
       <div class="form-row"><div class="field-group"><label class="field-label required" for="qr-narrative-name">Submitted By</label><input class="field-input" id="qr-narrative-name" required value="${this.escape(r.narrative_submitted_by || r.signatory_name || this.defaultSignatory())}"></div><div class="field-group"><label class="field-label required" for="qr-narrative-date">Date</label><input type="date" class="field-input" id="qr-narrative-date" required value="${r.narrative_date || ''}"></div></div>
@@ -7594,39 +7300,7 @@ const App = {
     return rows;
   };
 
-  App.exportDataToExcel = function(){
-    if (typeof XLSX === 'undefined') { this.toast('Excel export library failed to load. Check your network connection.', { error:true }); return; }
 
-    const addSheet = (wb, rows, name) => {
-      const safeRows = rows.length ? rows : [{ 'No data': 'No records available for this program/fiscal year yet.' }];
-      const ws = XLSX.utils.json_to_sheet(safeRows, { cellDates: true });
-      ws['!cols'] = Object.keys(safeRows[0]).map(k => ({ wch: Math.min(42, Math.max(12, String(k).length + 2)) }));
-      XLSX.utils.book_append_sheet(wb, ws, name.slice(0,31));
-    };
-
-    const wb = XLSX.utils.book_new();
-    addSheet(wb, this.buildClientExportRows(), 'Clients');
-    addSheet(wb, this.buildServiceExportRows(), 'Services');
-    addSheet(wb, this.buildFollowUpExportRows(), 'Housing Follow-Ups');
-    addSheet(wb, this.buildQuarterlyMetricExportRows(), 'Quarterly Metrics');
-    addSheet(wb, this.buildDemographicExportRows(), 'Demographics');
-
-    const progName = (this.programName ? this.programName() : CONFIG.PORTAL_NAME).replace(/[^\w\- ]+/g,'').trim() || CONFIG.PORTAL_NAME;
-    const filename = `${progName} Data Export ${this.localDate()}.xlsx`;
-    XLSX.writeFile(wb, filename, { cellDates: true });
-    this.toast('Excel export ready — check your downloads.');
-  };
-
-  const oldRenderDashboardForExport = App.renderDashboard;
-  App.renderDashboard = function(){
-    oldRenderDashboardForExport.call(this);
-    const el = document.getElementById('view-dashboard');
-    const printBtn = el?.querySelector('#btn-print-current');
-    if (printBtn && !document.getElementById('btn-export-excel')) {
-      printBtn.insertAdjacentHTML('afterend', '<button class="btn btn-ghost btn-sm" id="btn-export-excel">Export to Excel</button>');
-      el.querySelector('#btn-export-excel')?.addEventListener('click', () => this.exportDataToExcel());
-    }
-  };
 })();
 
 
@@ -7905,19 +7579,6 @@ const App = {
     return !(Number(r.income_increase||0) > 0 || Number(r.income_maintained||0) > 0);
   };
 
-  App.goToIncomeEntry = function(){
-    this.openForm('quarterly');
-    this.switchTab('qr-scope');
-    setTimeout(()=>{
-      const target = document.getElementById('scope-incomeIncrease');
-      const target2 = document.getElementById('scope-incomeMaintained');
-      if (target) { target.scrollIntoView({behavior:'smooth', block:'center'}); target.focus(); }
-      [target, target2].forEach(t=>{
-        const row = t?.closest('tr');
-        if (row) { row.classList.add('income-flash'); setTimeout(()=>row.classList.remove('income-flash'), 3200); }
-      });
-    }, 120);
-  };
 
 
   const previousRenderQuarterlyFormForIncome = App.renderQuarterlyForm;
@@ -9008,13 +8669,6 @@ const App = {
   `;
   const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
-  App.formatFileSize = function(bytes){
-    const n = Number(bytes || 0);
-    if (!n) return '';
-    if (n < 1024) return n + ' B';
-    if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
-    return (n / 1048576).toFixed(1) + ' MB';
-  };
 
   App.downloadRosterFile = async function(path, filename){
     if (!path){ this.toast('No file path on record for this roster.', { error: true }); return; }
@@ -9513,68 +9167,7 @@ const App = {
 (function(){
   App._narrativeUndo = {};
 
-  App.improveNarrativeSection = async function(section, targetId, btn){
-    const target = document.getElementById(targetId);
-    const state = document.getElementById('narrative-page-save-state');
-    if (!target) return;
 
-    const existing = (target.value || '').trim();
-    const label = this.narrativeSectionLabels?.[section] || section;
-    if (existing.length < 40) {
-      if (state) state.textContent = `Write a few sentences in "${label}" first — Improve with AI edits your own wording rather than inventing content.`;
-      return;
-    }
-
-    const originalLabel = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Improving…';
-    if (state) state.textContent = `Improving "${label}"…`;
-    try {
-      const q = this.currentQuarter;
-      const { data, error } = await this.sb.functions.invoke('generate-narrative', {
-        body: {
-          section,
-          sectionLabel: label,
-          mode: 'improve',
-          existingText: existing,
-          programName: this.programName(),
-          agencyName: this.agencyName(),
-          quarterLabel: q,
-          quarterPeriod: this.quarters[q]?.period || '',
-          metrics: this.quarterSummaryMetrics(q),
-          roughNotes: existing
-        }
-      });
-      if (error || !data || data.error || !data.draft) {
-        if (state) state.textContent = 'AI improve failed: ' + ((data && data.error) || error?.message || 'unknown error');
-        return;
-      }
-      this._narrativeUndo[targetId] = existing;
-      target.value = data.draft;
-      this.autoGrowTextarea(target);
-      this.updateNarrativeSectionWordCount(target);
-      this.markDirty?.('narrative');
-      if (state) {
-        state.innerHTML = `"${this.escape(label)}" improved — review before saving. <button type="button" class="btn btn-ghost btn-sm" data-narr-undo="${this.escape(targetId)}">Undo</button>`;
-        state.querySelector('[data-narr-undo]')?.addEventListener('click', () => this.undoNarrativeImprove(targetId));
-      }
-    } finally {
-      btn.disabled = false;
-      btn.textContent = originalLabel;
-    }
-  };
-
-  App.undoNarrativeImprove = function(targetId){
-    const target = document.getElementById(targetId);
-    const prior = this._narrativeUndo[targetId];
-    if (!target || prior == null) return;
-    target.value = prior;
-    delete this._narrativeUndo[targetId];
-    this.autoGrowTextarea(target);
-    this.updateNarrativeSectionWordCount(target);
-    const state = document.getElementById('narrative-page-save-state');
-    if (state) state.textContent = 'Reverted to your original wording.';
-  };
 })();
 
 
@@ -9631,50 +9224,6 @@ const App = {
     App[method] = function(){ this.preserveViewState(sectionId, base); };
   });
 
-  /* ---- Accessibility ---------------------------------------------------
-     Status was communicated with bare emoji in three renderers. Two of them
-     wrapped it in aria-hidden and one did not, so screen readers announced
-     "check mark" / "warning sign" as if it were content. Wrap them all and
-     give the demographic bars real progressbar semantics.              */
-
-  const hideDecorativeGlyphs = (root) => {
-    if (!root) return;
-    root.querySelectorAll('.readiness-check > span:first-child, .check-row > span:first-child').forEach(span => {
-      if (span.hasAttribute('aria-hidden')) return;
-      const glyph = span.textContent.trim();
-      if (!glyph || glyph.length > 2) return;
-      span.setAttribute('aria-hidden','true');
-      const label = glyph === '✓' || glyph === '✅' ? 'Complete: ' : 'Needs attention: ';
-      const sr = document.createElement('span');
-      sr.className = 'sr-only';
-      sr.textContent = label;
-      span.parentNode.insertBefore(sr, span.nextSibling);
-    });
-  };
-
-  const labelDemoBars = (root) => {
-    if (!root) return;
-    root.querySelectorAll('.demo-bar-row').forEach(row => {
-      const track = row.querySelector('.demo-bar-track');
-      const fill = row.querySelector('.demo-bar-fill');
-      if (!track || !fill || track.hasAttribute('role')) return;
-      const label = row.querySelector('.demo-bar-label')?.textContent?.trim() || '';
-      const pct = parseInt(String(fill.style.width).replace('%',''), 10) || 0;
-      track.setAttribute('role','progressbar');
-      track.setAttribute('aria-valuenow', String(pct));
-      track.setAttribute('aria-valuemin','0');
-      track.setAttribute('aria-valuemax','100');
-      track.setAttribute('aria-label', `${label}: ${pct}% of participants`);
-    });
-  };
-
-  const baseRenderDashboardForA11y = App.renderDashboard;
-  App.renderDashboard = function(){
-    baseRenderDashboardForA11y.call(this);
-    const el = document.getElementById('view-dashboard');
-    hideDecorativeGlyphs(el);
-    labelDemoBars(el);
-  };
 
   /* ---- Attention popover dismissal -------------------------------------
      It is a <details> positioned over page content. Native <details> does
@@ -9714,7 +9263,6 @@ const App = {
     start: '2026-07-01',
     end: '2027-06-30'
   };
-  const DOC_TYPES = ['General Ledger','Payroll Register','Check Register','Receipt / Invoice','Allocation Worksheet','Other Backup'];
   const STORAGE_BUCKET = 'holloway-fiscal-documents';
   const CERT_TEXT = 'I certify that the amounts reported on this invoice are accurate, eligible under the agreement, incurred during the service period shown, and supported by records maintained by the agency and the documentation submitted with this invoice.';
 
@@ -9889,8 +9437,6 @@ const App = {
   App.fiscalMonthTotal = function(month=this.resolveFiscalMonth()){ return ['Personnel','Facility','Program','Administrative'].reduce((s,c)=>s+this.fiscalCategoryMonth(c,month),0); };
   App.fiscalYtdTotal = function(month=this.resolveFiscalMonth()){ return ['Personnel','Facility','Program','Administrative'].reduce((s,c)=>s+this.fiscalCategoryYtd(c,month),0); };
   App.fiscalCategoryBudget = function(category){ return (this.fiscal.budgetLines||[]).filter(l=>l.category===category).reduce((s,l)=>s+Number(l.approved_budget||0),0); };
-  App.fiscalLineDetailBudget = function(){ return (this.fiscal.budgetLines||[]).reduce((s,l)=>s+Number(l.approved_budget||0),0); };
-  App.fiscalSourceSubtotalSum = function(){ const t=this.fiscalSourceTotals(); return Number(t.personnel||0)+Number(t.facility||0)+Number(t.program||0)+Number(t.administrative||0); };
 
   // AHTF allocation mirrors the formulas in the agency's existing Holloway
   // fiscal workbook. ahtf_percent is stored with each protected budget line:
@@ -9970,30 +9516,7 @@ const App = {
     </div>`;
   };
 
-  App.fiscalBudgetTableHtml = function(month=this.resolveFiscalMonth()){
-    const editable=this.fiscalCanEditMonth(month), lines=(this.fiscal.budgetLines||[]).slice().sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0));
-    if(!lines.length) return `<div class="notice amber"><div>!</div><div>No budget lines are configured for ${this.escape(this.fiscalBudgetYear)}.</div></div>`;
-    let html='', lastCat='', lastSub='';
-    for(const l of lines){
-      if(l.category!==lastCat){ html+=`<tr class="fiscal-section-row"><td colspan="7">${this.escape(l.category)}</td></tr>`; lastCat=l.category; lastSub=''; }
-      if(l.subcategory && l.subcategory!==lastSub){ const many=new Set(lines.filter(x=>x.category===l.category).map(x=>x.subcategory)).size>1; if(many) html+=`<tr class="fiscal-subsection-row"><td colspan="7">${this.escape(l.subcategory)}</td></tr>`; lastSub=l.subcategory; }
-      const a=this.fiscalActualFor(month,l.line_code)||{}, current=Number(a.amount||0), ytd=this.fiscalLineYtd(l.line_code,month), budget=Number(l.approved_budget||0), remaining=budget-ytd, ratio=budget?ytd/budget:0;
-      const detail=l.fte_count!=null?`${Number(l.fte_count).toFixed(2)} FTE`:'';
-      const remClass=remaining<0?'fiscal-over':ratio>=.9?'fiscal-near':'';
-      html+=`<tr><td><strong>${this.escape(l.line_name)}</strong>${detail?`<div class="field-hint">${this.escape(detail)}</div>`:''}</td><td style="text-align:right">${this.fiscalMoney(budget)}</td><td style="text-align:right">${editable?`<input class="fiscal-amount-input" type="number" step="0.01" min="0" data-fiscal-amount="${this.escape(l.line_code)}" value="${current||''}" aria-label="${this.escape(l.line_name)} current month actual">`:this.fiscalMoney(current)}</td><td style="text-align:right">${this.fiscalMoney(ytd)}</td><td style="text-align:right" class="${remClass}">${this.fiscalMoney(remaining)}</td><td style="text-align:right" class="${ratio>1?'fiscal-over':ratio>=.9?'fiscal-near':''}">${this.fiscalPct(ratio)}</td><td>${editable?`<input class="fiscal-note-input" data-fiscal-note="${this.escape(l.line_code)}" value="${this.escape(a.notes||'')}" placeholder="Optional note">`:this.escape(a.notes||'—')}</td></tr>`;
-    }
-    const cats=['Personnel','Facility','Program','Administrative'];
-    const totals=cats.map(c=>({c,b:this.fiscalCategoryBudget(c),m:this.fiscalCategoryMonth(c,month),y:this.fiscalCategoryYtd(c,month)}));
-    const totalBudget=this.fiscalOfficialTotal(), totalMonth=this.fiscalMonthTotal(month), totalYtd=this.fiscalYtdTotal(month);
-    html+=`<tr class="fiscal-total-row"><td><strong>Grand Total</strong></td><td style="text-align:right">${this.fiscalMoney(totalBudget)}</td><td style="text-align:right">${this.fiscalMoney(totalMonth)}</td><td style="text-align:right">${this.fiscalMoney(totalYtd)}</td><td style="text-align:right">${this.fiscalMoney(totalBudget-totalYtd)}</td><td style="text-align:right">${this.fiscalPct(totalBudget?totalYtd/totalBudget:0)}</td><td></td></tr>`;
-    return `<div class="fiscal-budget-wrap"><table class="fiscal-budget-table"><thead><tr><th>Budget Line</th><th style="text-align:right">Budget</th><th style="text-align:right">This Month</th><th style="text-align:right">YTD</th><th style="text-align:right">Remaining</th><th style="text-align:right">% Spent</th><th>Notes</th></tr></thead><tbody>${html}</tbody></table></div>`;
-  };
 
-  App.fiscalDocumentsHtml = function(month=this.resolveFiscalMonth()){
-    const docs=this.fiscalDocsFor(month), editable=this.fiscalCanEditMonth(month);
-    const list=docs.map(d=>`<div class="fiscal-doc-row"><div><strong>${this.escape(d.doc_type||'Backup')}</strong> · ${this.escape(d.file_name||'file')}<div class="fiscal-doc-meta">${this.escape(this.formatBytes?.(d.file_size) || this.fiscalFormatBytes(d.file_size))} · uploaded by ${this.escape(d.uploaded_by||'—')} · ${this.escape(this.formatDateTime(d.uploaded_at))}</div></div><div class="client-actions"><button class="btn btn-ghost btn-sm" data-fiscal-open-doc="${this.escape(d.id)}">Open</button>${editable?`<button class="btn btn-ghost btn-sm" data-fiscal-delete-doc="${this.escape(d.id)}">Delete</button>`:''}</div></div>`).join('') || `<div class="field-hint">No fiscal backup has been uploaded for this month.</div>`;
-    return `<div class="card" style="margin-top:18px"><div class="card-header"><div><h2 class="card-title">Supporting Documentation</h2><div class="field-hint">General Ledger required. Add payroll, receipts or other backup as needed.</div></div></div><div class="card-body">${editable?`<div class="fiscal-doc-upload"><div class="form-row"><div class="field-group"><label class="field-label">Document Type</label><select class="field-select" id="fiscal-doc-type">${DOC_TYPES.map(x=>`<option>${this.escape(x)}</option>`).join('')}</select></div><div class="field-group"><label class="field-label">GL / Backup File</label><input class="field-input" id="fiscal-doc-file" type="file" accept=".pdf,.xlsx,.xls,.csv"></div></div><button class="btn btn-ghost btn-sm" id="btn-fiscal-upload">Upload Documentation</button><div class="field-hint" style="margin-top:8px">PDF, XLSX, XLS, or CSV · maximum 20 MB.</div></div>`:''}<div class="fiscal-doc-list">${list}</div></div></div>`;
-  };
   App.fiscalFormatBytes = function(n){ n=Number(n)||0; if(n<1024)return n+' B'; if(n<1048576)return (n/1024).toFixed(1)+' KB'; return (n/1048576).toFixed(1)+' MB'; };
 
   App.fiscalMetaHtml = function(month=this.resolveFiscalMonth()){
@@ -10020,7 +9543,7 @@ const App = {
   };
 
   App.fiscalSubmissionPanelHtml = function(month=this.resolveFiscalMonth()){
-    const sub=this.fiscalSubmission(month), status=this.fiscalStatus(month), editable=this.fiscalCanEditMonth(month), blocking=this.fiscalBlockingIssues(month), canSubmit=editable && !blocking.length;
+    const sub=this.fiscalSubmission(month), status=this.fiscalStatus(month), blocking=this.fiscalBlockingIssues(month);
     if(this.isAdmin()){
       const reviewable=['submitted','resubmitted'].includes(status);
       return `<div class="card"><div class="card-header"><div><h2 class="card-title">City Review</h2></div>${this.fiscalStatusBadge(status)}</div><div class="card-body">${sub?`<div class="field-hint">Submitted by ${this.escape(sub.submitted_by||'—')} · ${this.escape(this.formatDateTime(sub.submitted_at))}</div>`:'<div class="field-hint">No invoice has been submitted for this month.</div>'}${sub?.review_note?`<div class="notice amber" style="margin-top:12px"><div>!</div><div><strong>Most recent City note</strong><br>${this.escape(sub.review_note)}</div></div>`:''}${reviewable?`<div class="field-group" style="margin-top:14px"><label class="field-label">Review Comment</label><textarea class="field-textarea" id="fiscal-review-note" placeholder="Required when requesting revisions"></textarea></div><div class="fiscal-review-actions"><button class="btn btn-primary" id="btn-fiscal-approve">Approve Invoice</button><button class="btn btn-ghost" id="btn-fiscal-revisions">Request Revisions</button></div>`:''}</div></div>`;
@@ -10054,44 +9577,7 @@ const App = {
     function statusLabel(st){ return ({draft:'Draft',submitted:'Submitted',resubmitted:'Resubmitted',revision_requested:'Revisions Requested',approved:'Approved',returned:'Returned'})[st]||String(st||'Draft').replaceAll('_',' '); }
   };
 
-  App.renderFiscal = async function(){
-    const el=document.getElementById('view-fiscal'); if(!el) return;
-    if(!this.canViewFiscal()){ el.innerHTML='<div class="notice red"><div>!</div><div><strong>Fiscal access is restricted.</strong> Available to Agency Management, Agency-Fiscal and City admins.</div></div>'; return; }
-    if(!this.fiscal.years.length){ el.innerHTML='<div class="notice navy"><div>i</div><div>Loading fiscal workspace…</div></div>'; await this.loadFiscalData(); }
-    const month=this.resolveFiscalMonth(), m=this.fiscalMonthRecord(month), status=this.fiscalStatus(month), editable=this.fiscalCanEditMonth(month);
-    const years=(this.fiscal.years||[]).map(y=>`<option value="${this.escape(y.fiscal_year)}" ${y.fiscal_year===this.fiscalBudgetYear?'selected':''}>${this.escape(y.budget_label||y.fiscal_year)}</option>`).join('');
-    const months=this.fiscalMonths().map(x=>`<option value="${x.key}" ${x.key===month?'selected':''}>${this.escape(x.label)}</option>`).join('');
-    const setupNotice=this.fiscal.setupReady?'':`<div class="notice amber"><div>!</div><div><strong>Fiscal setup is incomplete.</strong> Contact the portal administrator.</div></div>`;
-    const source=this.fiscalYearRecord().source_name||'Protected fiscal budget record';
-    el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Fiscal Reporting</h1><div class="page-subtitle">Monthly actuals, backup and invoice review.</div></div>${this.fiscalStatusBadge(status)}</div>
-      ${setupNotice}
-      <div class="fiscal-toolbar"><div class="fiscal-controls"><label class="fiscal-control">Fiscal Year<select id="fiscal-year-select">${years}</select></label><label class="fiscal-control">Invoice Month<select id="fiscal-month-select">${months}</select></label></div><div class="client-actions">${editable?'<button class="btn btn-primary" id="btn-fiscal-save">Save Fiscal Draft</button>':''}<button class="btn btn-ghost" id="btn-fiscal-print">Print / Save Invoice PDF</button></div></div>
-      
-      ${this.fiscalKpisHtml()}
-      <div class="fiscal-tabs"><button class="fiscal-tab ${this.fiscalTab==='data'?'active':''}" data-fiscal-tab="data">Monthly Actuals</button><button class="fiscal-tab ${this.fiscalTab==='review'?'active':''}" data-fiscal-tab="review">Reconciliation</button><button class="fiscal-tab ${this.fiscalTab==='invoice'?'active':''}" data-fiscal-tab="invoice">Invoice Preview</button></div>
-      <div style="display:${this.fiscalTab==='data'?'block':'none'}">${this.fiscalMetaHtml(month)}<div class="section-label">FY27 Budget Lines · ${this.escape(m?.label||'Selected Month')}</div>${this.fiscalBudgetTableHtml(month)}${this.fiscalDocumentsHtml(month)}</div>
-      <div style="display:${this.fiscalTab==='review'?'block':'none'}"><div class="fiscal-summary-grid"><div class="card"><div class="card-header"><div><h2 class="card-title">Reconciliation & Readiness</h2><div class="field-hint">Errors block submission.</div></div></div><div class="card-body">${this.fiscalChecksHtml(month)}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Budget vs. Actuals</h2><div class="field-hint">YTD through ${this.escape(m?.label||'selected month')}.</div></div></div><div class="card-body">${this.fiscalBudgetSummaryHtml(month)}</div></div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">AHTF Eligibility</h2><div class="field-hint">Security is split 60% eligible / 40% not eligible.</div></div></div><div class="card-body">${this.fiscalFundingBreakdownHtml(month)}</div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Monthly Fiscal Review</h2><div class="field-hint">Invoice, AHTF and submission status by month.</div></div></div><div class="card-body">${this.fiscalMonthlyReviewHtml()}</div></div>${this.fiscalSubmissionPanelHtml(month)}</div>
-      <div style="display:${this.fiscalTab==='invoice'?'block':'none'}">${this.fiscalInvoiceHtml(month)}</div>`;
-    this.bindFiscalEvents();
-  };
 
-  App.bindFiscalEvents = function(){
-    const el=document.getElementById('view-fiscal'); if(!el) return;
-    el.querySelector('#fiscal-year-select')?.addEventListener('change',async e=>{ if(this._fiscalDirty&&!window.confirm('Discard unsaved fiscal changes and switch fiscal years?')){e.target.value=this.fiscalBudgetYear;return;} this._fiscalDirty=false; await this.loadFiscalData(e.target.value); this.renderFiscal(); });
-    el.querySelector('#fiscal-month-select')?.addEventListener('change',e=>{ if(this._fiscalDirty&&!window.confirm('Discard unsaved fiscal changes and switch months?')){e.target.value=this.fiscalMonth;return;} this._fiscalDirty=false; this.fiscalMonth=e.target.value; this.renderFiscal(); });
-    el.querySelectorAll('[data-fiscal-tab]').forEach(b=>b.addEventListener('click',()=>{ if(this._fiscalDirty&&!window.confirm('You have unsaved fiscal changes. Discard them and switch sections?'))return; this._fiscalDirty=false; this.fiscalTab=b.dataset.fiscalTab;this.renderFiscal();}));
-    el.querySelectorAll('[data-fiscal-amount],[data-fiscal-note],#fiscal-invoice-number,#fiscal-invoice-date,#fiscal-po-number,#fiscal-vendor-number,#fiscal-month-notes').forEach(x=>x.addEventListener('input',()=>{this._fiscalDirty=true;}));
-    el.querySelector('#btn-fiscal-save')?.addEventListener('click',()=>this.saveFiscalDraft());
-    el.querySelector('#btn-fiscal-upload')?.addEventListener('click',()=>this.uploadFiscalDocument());
-    el.querySelectorAll('[data-fiscal-open-doc]').forEach(b=>b.addEventListener('click',()=>this.openFiscalDocument(b.dataset.fiscalOpenDoc)));
-    el.querySelectorAll('[data-fiscal-delete-doc]').forEach(b=>b.addEventListener('click',()=>this.deleteFiscalDocument(b.dataset.fiscalDeleteDoc)));
-    el.querySelectorAll('[data-fiscal-month-link]').forEach(b=>b.addEventListener('click',()=>{ if(this._fiscalDirty&&!window.confirm('Discard unsaved fiscal changes and switch months?'))return; this._fiscalDirty=false; this.fiscalMonth=b.dataset.fiscalMonthLink; this.renderFiscal(); }));
-    el.querySelector('#fiscal-cert-check')?.addEventListener('change',e=>{ const btn=el.querySelector('#btn-fiscal-submit'); if(btn) btn.disabled=!e.target.checked||this.fiscalBlockingIssues().length>0; });
-    el.querySelector('#btn-fiscal-submit')?.addEventListener('click',()=>this.submitFiscalInvoice());
-    el.querySelector('#btn-fiscal-approve')?.addEventListener('click',()=>this.reviewFiscalInvoice('approved'));
-    el.querySelector('#btn-fiscal-revisions')?.addEventListener('click',()=>this.reviewFiscalInvoice('revision_requested'));
-    el.querySelector('#btn-fiscal-print')?.addEventListener('click',()=>this.printFiscalInvoice());
-  };
 
   App.collectFiscalMeta = function(){
     const old=this.fiscalMetaFor(); return {program_id:this.program.id,fiscal_year:this.fiscalBudgetYear,invoice_month:this.resolveFiscalMonth(),invoice_number:document.getElementById('fiscal-invoice-number')?.value?.trim()||old.invoice_number||'',invoice_date:document.getElementById('fiscal-invoice-date')?.value||old.invoice_date||this.localDate(),po_number:document.getElementById('fiscal-po-number')?.value?.trim()||old.po_number||'',vendor_number:document.getElementById('fiscal-vendor-number')?.value?.trim()||old.vendor_number||'',notes:document.getElementById('fiscal-month-notes')?.value?.trim()||old.notes||'',updated_by:this.user?.email||'',updated_at:new Date().toISOString()};
@@ -10220,7 +9706,6 @@ const App = {
     Object.entries(ids).forEach(([id,key])=>{const el=document.getElementById(id);if(el)meta[key]=el.value?.trim?.()??el.value??'';});
   };
 
-  const baseFiscalBudgetTableHtml=App.fiscalBudgetTableHtml;
   App.fiscalBudgetTableHtml = function(month=this.resolveFiscalMonth()){
     const editable=this.fiscalCanEditMonth(month), lines=(this.fiscal.budgetLines||[]).slice().sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0));
     if(!lines.length) return `<div class="notice amber"><div>!</div><div>No budget lines are configured for ${this.escape(this.fiscalBudgetYear)}.</div></div>`;
@@ -10404,7 +9889,6 @@ const App = {
     this.toast('Fiscal Excel report exported.');
   };
 
-  const baseFiscalRender=App.renderFiscal;
   App.renderFiscal = async function(){
     const el=document.getElementById('view-fiscal'); if(!el)return;
     if(!this.canViewFiscal()){el.innerHTML='<div class="notice red"><div>!</div><div><strong>Fiscal access is restricted.</strong> Available to Agency Management, Agency-Fiscal and City admins.</div></div>';return;}
@@ -10413,7 +9897,6 @@ const App = {
     const years=(this.fiscal.years||[]).map(y=>`<option value="${this.escape(y.fiscal_year)}" ${y.fiscal_year===this.fiscalBudgetYear?'selected':''}>${this.escape(y.budget_label||y.fiscal_year)}</option>`).join('');
     const months=this.fiscalMonths().map(x=>`<option value="${x.key}" ${x.key===month?'selected':''}>${this.escape(x.label)}</option>`).join('');
     const setupNotice=this.fiscal.setupReady?'':`<div class="notice amber"><div>!</div><div><strong>Fiscal setup is incomplete.</strong> Contact the portal administrator.</div></div>`;
-    const source=this.fiscalYearRecord().source_name||'Protected fiscal budget record';
     if(!this.isAdmin()&&this.fiscalTab==='payments')this.fiscalTab='data';
     el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Fiscal Reporting</h1><div class="page-subtitle">Monthly actuals, backup and invoice review.</div></div>${this.fiscalStatusBadge(status)}</div>${setupNotice}<div class="fiscal-toolbar"><div class="fiscal-controls"><label class="fiscal-control">Fiscal Year<select id="fiscal-year-select">${years}</select></label><label class="fiscal-control">Invoice Month<select id="fiscal-month-select">${months}</select></label></div><div class="client-actions">${editable?'<button class="btn btn-primary" id="btn-fiscal-save">Save Fiscal Draft</button>':''}<button class="btn btn-ghost" id="btn-fiscal-export">Export Fiscal Report</button><button class="btn btn-ghost" id="btn-fiscal-print">Print / Save Invoice PDF</button></div></div><div id="fiscal-kpis-live">${this.fiscalKpisHtml()}</div><div class="fiscal-tabs"><button class="fiscal-tab ${this.fiscalTab==='data'?'active':''}" data-fiscal-tab="data">Monthly Actuals</button><button class="fiscal-tab ${this.fiscalTab==='review'?'active':''}" data-fiscal-tab="review">Reconciliation</button><button class="fiscal-tab ${this.fiscalTab==='invoice'?'active':''}" data-fiscal-tab="invoice">Invoice Preview</button>${this.isAdmin()?`<button class="fiscal-tab ${this.fiscalTab==='payments'?'active':''}" data-fiscal-tab="payments">Payments</button>`:''}</div><div style="display:${this.fiscalTab==='data'?'block':'none'}">${this.fiscalMetaHtml(month)}<div class="section-label">FY27 Budget Lines · ${this.escape(m?.label||'Selected Month')}</div>${this.fiscalBudgetTableHtml(month)}${this.fiscalDocumentsHtml(month)}</div><div style="display:${this.fiscalTab==='review'?'block':'none'}"><div class="fiscal-summary-grid"><div class="card"><div class="card-header"><div><h2 class="card-title">Reconciliation & Readiness</h2><div class="field-hint">Errors block submission.</div></div></div><div class="card-body" id="fiscal-checks-live">${this.fiscalChecksHtml(month)}</div></div><div class="card"><div class="card-header"><div><h2 class="card-title">Budget vs. Actuals</h2><div class="field-hint">YTD through ${this.escape(m?.label||'selected month')}.</div></div></div><div class="card-body" id="fiscal-budget-summary-live">${this.fiscalBudgetSummaryHtml(month)}</div></div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">AHTF Eligibility</h2><div class="field-hint">Security is split 60% eligible / 40% not eligible.</div></div></div><div class="card-body" id="fiscal-funding-live">${this.fiscalFundingBreakdownHtml(month)}</div></div><div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Monthly Fiscal Review</h2><div class="field-hint">Invoice, AHTF and submission status by month.</div></div></div><div class="card-body" id="fiscal-monthly-review-live">${this.fiscalMonthlyReviewHtml()}</div></div><div id="fiscal-submission-live">${this.fiscalSubmissionPanelHtml(month)}</div></div><div id="fiscal-invoice-live" style="display:${this.fiscalTab==='invoice'?'block':'none'}">${this.fiscalInvoiceHtml(month)}</div>${this.isAdmin()?`<div style="display:${this.fiscalTab==='payments'?'block':'none'}">${this.fiscalCityPaymentHtml()}</div>`:''}`;
     this.bindFiscalEvents();
@@ -10654,7 +10137,6 @@ const App = {
     const el=document.getElementById('view-dashboard');
     const q=this.currentQuarter;
     const through=DashboardYTD.throughDate(this);
-    const p=DashboardYTD.performance(this);
     const fiscalOnly=this.isAgencyFiscal?.();
     const headerActions=fiscalOnly
       ? `<button class="btn btn-gold" data-view-shortcut="fiscal">Open Fiscal Reporting →</button>`
@@ -11143,24 +10625,6 @@ const App = {
 
   /* ---- computed cross-check for the Program Scope form ---------------- */
 
-  // Counts clients whose latest reading on or before the quarter end moved
-  // against their previous reading. Advisory only — the reported figure stays
-  // whatever staff type into the Scope form.
-  App.computedIncomeCounts = function(q = this.currentQuarter){
-    const { start, end } = this.qRange(q);
-    let increased = 0, maintained = 0, decreased = 0, noData = 0;
-    (this.data.clients || []).forEach(c => {
-      if (!this.clientOverlaps?.(c, start, end)) return;
-      const series = this.incomeReadingsForClient(c.id)
-        .filter(r => this.dateOnly(r.measured_on) <= end)
-        .sort((a,b) => String(a.measured_on).localeCompare(String(b.measured_on)));
-      if (series.length < 2){ noData++; return; }
-      const cur  = this.incomeTotals(series[series.length - 1]).cash;
-      const prev = this.incomeTotals(series[series.length - 2]).cash;
-      if (cur > prev) increased++; else if (cur < prev) decreased++; else maintained++;
-    });
-    return { increased, maintained, decreased, noData };
-  };
 
 })();
 
@@ -11266,36 +10730,15 @@ const App = {
       docLabel:'Attach case notes or current housing plan', conditional:true }
   ];
 
-  const TEXT_FIELDS = [
-    { id:'ref-agency',      key:'referring_agency',      label:'Referring Agency' },
-    { id:'ref-cm-name',     key:'case_manager_name',     label:'Case Manager' },
-    { id:'ref-cm-phone',    key:'case_manager_phone',    label:'Phone' },
-    { id:'ref-cm-email',    key:'case_manager_email',    label:'Email', type:'email' },
-    { id:'ref-member',      key:'community_member_name', label:'Name of Community Member' },
-    { id:'ref-dob',         key:'date_of_birth',         label:'Date of Birth', type:'date' },
-    { id:'ref-contact',     key:'member_contact_info',   label:'Contact Information (phone number and email)' },
-    { id:'ref-signature',   key:'case_manager_signature',label:'Case Manager Signature (type your full name)' },
-    { id:'ref-cert-date',   key:'certification_date',    label:'Certification Date', type:'date' },
-    { id:'ref-submitted',   key:'date_submitted',        label:'Date Submitted', type:'date' }
-  ];
 
   const STATUSES = ['New','In Review','Accepted','Declined','Withdrawn'];
   const STATUS_BADGE = { 'New':'badge-navy', 'In Review':'badge-amber', 'Accepted':'badge-green',
                          'Declined':'badge-red', 'Withdrawn':'badge-gray' };
 
   const esc = s => App.escape(s ?? '');
-  const todayStr = () => App.today ? App.today() : new Date().toISOString().slice(0,10);
 
   /* ================= public referral flow ================= */
 
-  App.openReferralScreen = function(){
-    this._referral = { step:'code', token:null, agencyName:null, error:'', busy:false, files:{} };
-    document.getElementById('loading-screen')?.style.setProperty('display','none');
-    document.getElementById('login-screen')?.style.setProperty('display','none');
-    document.getElementById('app')?.style.setProperty('display','none');
-    document.getElementById('referral-screen').style.display = 'block';
-    this.renderReferralStep();
-  };
 
   App.closeReferralScreen = function(){
     document.getElementById('referral-screen').style.display = 'none';
@@ -11304,223 +10747,14 @@ const App = {
     if (location.hash === '#referral') history.replaceState(null, '', location.pathname + location.search);
   };
 
-  App.renderReferralStep = function(){
-    const st = this._referral || {};
-    const body = document.getElementById('referral-body');
-    if (!body) return;
-    if (st.step === 'code') body.innerHTML = this.referralCodeStepHtml(st);
-    else if (st.step === 'form') body.innerHTML = this.referralFormStepHtml(st);
-    else body.innerHTML = this.referralDoneStepHtml(st);
-    this.bindReferralStep();
-  };
 
-  App.referralCodeStepHtml = function(st){
-    return `<div class="referral-step-head"><h3>Enter your agency code</h3><span class="referral-progress">Step 1 of 2</span></div>
-      <p class="field-hint" style="margin-bottom:16px;">No code? Contact the City’s Human Services Division.</p>
-      <div class="field-group">
-        <label class="field-label required" for="ref-code">Agency Code</label>
-        <input id="ref-code" class="field-input referral-code-input" autocomplete="off" spellcheck="false" placeholder="00000" inputmode="numeric" maxlength="12" ${st.busy?'disabled':''}>
-      </div>
-      <button class="login-submit" id="ref-code-submit" ${st.busy?'disabled':''}>${st.busy?'Checking…':'Continue &rarr;'}</button>
-      ${st.error?`<p class="referral-error">${esc(st.error)}</p>`:''}
-      <button type="button" class="login-link-btn" id="ref-back-login" style="margin-top:16px;">&larr; Back to staff sign in</button>`;
-  };
 
-  App.referralFormStepHtml = function(st){
-    const field = f => `<div class="field-group">
-      <label class="field-label required" for="${f.id}">${esc(f.label)}</label>
-      <input id="${f.id}" type="${f.type||'text'}" class="field-input" value="${esc(f.value||'')}">
-    </div>`;
 
-    const crit = (c, i) => {
-      const showDoc = c.doc && (!c.conditional || st.caseNotesMethod === 'Documents attached');
-      const chosen = st.files[c.doc];
-      return `<div class="referral-crit" data-crit="${c.key}">
-        <label class="referral-crit-top">
-          <input type="checkbox" class="ref-crit" data-key="${c.key}" id="chk-${c.key}">
-          <span>${esc(c.label)}</span>
-        </label>
-        ${c.conditional ? `<div class="referral-file">
-            <div class="field-label" style="margin-bottom:6px;">How will this be met?</div>
-            <div class="segmented-row" id="ref-casenotes-method">
-              ${['Documents attached','Accompanied at intake'].map(v =>
-                `<button type="button" class="segment-btn ${st.caseNotesMethod===v?'active':''}" data-cn-method="${v}">${v}</button>`).join('')}
-            </div>
-          </div>` : ''}
-        ${showDoc ? `<div class="referral-file">
-            <label class="field-label" for="file-${c.doc}">${esc(c.docLabel)} <span style="color:#C0392B;">*</span></label>
-            <input type="file" id="file-${c.doc}" data-doc="${c.doc}" class="ref-file" accept=".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx">
-            ${chosen ? `<div class="referral-doc-note">Selected: ${esc(chosen.name)}</div>` : ''}
-          </div>` : ''}
-      </div>`;
-    };
 
-    return `<div class="referral-step-head"><h3>Referral for ${esc(st.agencyName||'your agency')}</h3><span class="referral-progress">Step 2 of 2</span></div>
-      <p class="field-hint" style="margin-bottom:18px;">All fields are required.</p>
 
-      <div class="form-section"><div class="form-section-title">Referring Agency and Case Manager Information</div>
-        <div class="client-form-grid">${TEXT_FIELDS.slice(0,4).map(field).join('')}</div></div>
 
-      <div class="form-section"><div class="form-section-title">Information About Community Members</div>
-        <div class="client-form-grid">${TEXT_FIELDS.slice(4,7).map(field).join('')}</div></div>
 
-      <div class="form-section"><div class="form-section-title">Eligibility Criteria Checklist</div>
-        <div class="referral-criteria">${CRITERIA.map(crit).join('')}</div></div>
 
-      <div class="form-section"><div class="form-section-title">Referring Agency Certification</div>
-        <p class="field-hint" style="margin-bottom:12px;">I certify that the eligibility criteria above have been reviewed and verified to the best of my knowledge prior to submitting this referral.</p>
-        <div class="client-form-grid">${TEXT_FIELDS.slice(7).map(f =>
-          field({...f, value: f.key==='certification_date' || f.key==='date_submitted' ? todayStr() : ''})).join('')}</div></div>
-
-      <div class="form-section"><div class="form-section-title">Additional Supporting Information</div>
-        <p class="field-hint" style="margin-bottom:10px;">Optional. Income verification, subsidies or other supporting documents.</p>
-        <input type="file" id="file-supporting" data-doc="supporting" class="ref-file" multiple accept=".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx">
-        ${st.files.supporting ? `<div class="referral-doc-note">${st.files.supporting.length||1} file(s) selected</div>` : ''}
-      </div>
-
-      <button class="login-submit" id="ref-submit" ${st.busy?'disabled':''}>${st.busy?(st.busyMsg||'Submitting…'):'Submit Referral'}</button>
-      ${st.error?`<p class="referral-error">${esc(st.error)}</p>`:''}
-      <button type="button" class="login-link-btn" id="ref-back-login" style="margin-top:16px;">Cancel and return to sign in</button>`;
-  };
-
-  App.referralDoneStepHtml = function(st){
-    return `<div class="referral-done">
-      <div class="tick">&#10003;</div>
-      <h3 style="margin:8px 0 6px;color:var(--navy);">Referral submitted</h3>
-      <p class="field-hint">${esc(st.doneMessage || 'The Holloway team will be in touch with your agency.')}</p>
-      ${st.referralId?`<p class="field-hint" style="margin-top:10px;">Reference: <strong>${esc(String(st.referralId).slice(0,8).toUpperCase())}</strong></p>`:''}
-      <button class="login-submit" id="ref-another" style="margin-top:20px;">Submit another referral</button>
-      <button type="button" class="login-link-btn" id="ref-back-login" style="margin-top:14px;">Return to staff sign in</button>
-    </div>`;
-  };
-
-  App.bindReferralStep = function(){
-    const st = this._referral;
-    document.getElementById('ref-back-login')?.addEventListener('click', () => this.closeReferralScreen());
-    document.getElementById('ref-another')?.addEventListener('click', () => this.openReferralScreen());
-
-    const codeInput = document.getElementById('ref-code');
-    if (codeInput){
-      codeInput.focus();
-      codeInput.addEventListener('keydown', e => { if (e.key === 'Enter') this.referralValidateCode(); });
-      document.getElementById('ref-code-submit')?.addEventListener('click', () => this.referralValidateCode());
-    }
-
-    document.querySelectorAll('#ref-casenotes-method [data-cn-method]').forEach(b =>
-      b.addEventListener('click', () => {
-        st.caseNotesMethod = b.dataset.cnMethod;
-        this.referralCaptureForm();
-        this.renderReferralStep();
-      }));
-
-    document.querySelectorAll('.ref-file').forEach(inp =>
-      inp.addEventListener('change', () => {
-        const doc = inp.dataset.doc;
-        if (doc === 'supporting') st.files.supporting = [...inp.files];
-        else if (inp.files[0]) st.files[doc] = inp.files[0];
-        else delete st.files[doc];
-        this.referralCaptureForm();
-        this.renderReferralStep();
-      }));
-
-    // Restore anything typed before a re-render.
-    if (st.step === 'form'){
-      TEXT_FIELDS.forEach(f => { const el = document.getElementById(f.id); if (el && st.values?.[f.key] != null) el.value = st.values[f.key]; });
-      CRITERIA.forEach(c => { const el = document.getElementById('chk-'+c.key); if (el) el.checked = !!st.crits?.[c.key]; });
-      document.getElementById('ref-submit')?.addEventListener('click', () => this.referralSubmit());
-    }
-  };
-
-  App.referralCaptureForm = function(){
-    const st = this._referral;
-    st.values = st.values || {}; st.crits = st.crits || {};
-    TEXT_FIELDS.forEach(f => { const el = document.getElementById(f.id); if (el) st.values[f.key] = el.value; });
-    CRITERIA.forEach(c => { const el = document.getElementById('chk-'+c.key); if (el) st.crits[c.key] = el.checked; });
-  };
-
-  App.referralValidateCode = async function(){
-    const st = this._referral;
-    const code = (document.getElementById('ref-code')?.value || '').trim();
-    if (!code){ st.error = 'Enter the code your agency was issued.'; this.renderReferralStep(); return; }
-    st.busy = true; st.error = ''; this.renderReferralStep();
-    const { data, error } = await this.sb.rpc('holloway_referral_start', { p_code: code });
-    st.busy = false;
-    if (error){ st.error = 'Could not reach the referral service. Please try again.'; this.renderReferralStep(); return; }
-    if (!data?.ok){ st.error = data?.message || 'That code was not recognised.'; this.renderReferralStep(); return; }
-    st.token = data.token; st.agencyName = data.agency_name; st.step = 'form';
-    st.values = { referring_agency: data.agency_name, certification_date: todayStr(), date_submitted: todayStr() };
-    st.crits = {}; st.files = {}; st.caseNotesMethod = null;
-    this.renderReferralStep();
-  };
-
-  App.referralValidationErrors = function(){
-    const st = this._referral, missing = [];
-    TEXT_FIELDS.forEach(f => { if (!String(st.values?.[f.key] || '').trim()) missing.push(f.label); });
-    const email = String(st.values?.case_manager_email || '');
-    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) missing.push('a valid case manager email');
-    CRITERIA.forEach(c => { if (!st.crits?.[c.key]) missing.push('the "' + c.label.slice(0, 42).trim() + '…" criterion'); });
-    if (!st.caseNotesMethod) missing.push('how the case notes criterion will be met');
-    ['identification','homeless_verification','disability_verification'].forEach(d => {
-      if (!st.files?.[d]) missing.push('the ' + d.replace(/_/g,' ') + ' document');
-    });
-    if (st.caseNotesMethod === 'Documents attached' && !st.files?.case_notes) missing.push('the case notes / housing plan document');
-    return missing;
-  };
-
-  App.referralSubmit = async function(){
-    const st = this._referral;
-    this.referralCaptureForm();
-    const missing = this.referralValidationErrors();
-    if (missing.length){
-      st.error = 'Still needed: ' + missing.slice(0,4).join('; ') + (missing.length>4 ? `; and ${missing.length-4} more.` : '.');
-      this.renderReferralStep();
-      document.querySelector('.referral-error')?.scrollIntoView({ behavior:'smooth', block:'center' });
-      return;
-    }
-
-    st.busy = true; st.busyMsg = 'Uploading files…'; st.error = ''; this.renderReferralStep();
-
-    const queue = [];
-    ['identification','homeless_verification','disability_verification','case_notes'].forEach(d => {
-      if (st.files[d]) queue.push({ doc_type:d, file:st.files[d] });
-    });
-    (st.files.supporting || []).forEach(f => queue.push({ doc_type:'supporting', file:f }));
-
-    const attachments = [];
-    for (const item of queue){
-      const safe = item.file.name.replace(/[^\w.\-]+/g, '_').slice(-80);
-      const path = `${st.token}/${(crypto.randomUUID ? crypto.randomUUID() : Date.now()+'-'+Math.random())}-${safe}`;
-      const up = await this.sb.storage.from(BUCKET).upload(path, item.file, {
-        upsert:false, contentType:item.file.type || undefined
-      });
-      if (up.error){
-        st.busy = false;
-        st.error = `Could not upload ${item.file.name}: ${up.error.message}`;
-        this.renderReferralStep();
-        return;
-      }
-      attachments.push({ doc_type:item.doc_type, file_path:path, file_name:item.file.name,
-                         file_size:String(item.file.size||''), mime_type:item.file.type||null });
-    }
-
-    st.busyMsg = 'Submitting…'; this.renderReferralStep();
-
-    const payload = { ...st.values, ...st.crits, case_notes_method: st.caseNotesMethod };
-    const { data, error } = await this.sb.rpc('holloway_referral_submit', {
-      p_token: st.token, p_payload: payload, p_attachments: attachments
-    });
-    st.busy = false;
-
-    if (error){ st.error = 'Submission failed: ' + error.message; this.renderReferralStep(); return; }
-    if (!data?.ok){
-      st.error = data?.message || 'The referral could not be submitted.';
-      if (Array.isArray(data?.missing) && data.missing.length) st.error += ' (' + data.missing.join(', ') + ')';
-      this.renderReferralStep();
-      return;
-    }
-    st.step = 'done'; st.doneMessage = data.message; st.referralId = data.referral_id;
-    this.renderReferralStep();
-  };
 
   // Entry points: the login-card link, and a #referral deep link agencies can bookmark.
   document.getElementById('btn-open-referral')?.addEventListener('click', () => App.openReferralScreen());
@@ -11977,7 +11211,6 @@ const App = {
       b.addEventListener('click', () => { this._bedTab = b.dataset.bedTab; this.renderBeds(); }));
     el.querySelectorAll('[data-bed-id]').forEach(b =>
       b.addEventListener('click', () => this.openBedPanel(b.dataset.bedId)));
-    el.querySelector('#census-generate')?.addEventListener('click', () => this.generateCensus());
     el.querySelector('#census-month')?.addEventListener('change', async (e) => {
       this._censusMonth = e.target.value; await this.loadBedData(); this.renderBeds();
     });
@@ -12298,7 +11531,7 @@ const App = {
           <select class="field-select" id="census-month" style="max-width:190px">
             ${months.map(m => `<option value="${m.value}" ${m.value===month?'selected':''}>${esc(m.label)}</option>`).join('')}
           </select>
-          <button class="btn btn-primary" id="census-generate">Generate census</button>
+          <span class="field-hint" style="align-self:center">Counted through today</span>
         </div>
       </div>
       <div class="card-body">
@@ -12333,27 +11566,6 @@ const App = {
     return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0,10);
   };
 
-  App.generateCensus = async function(){
-    const month = document.getElementById('census-month')?.value || this.censusMonth();
-    this._censusMonth = month;
-    const el = document.getElementById('census-msg');
-    if (el) { el.textContent = 'Generating…'; el.className = 'bed-msg'; }
-    const { data, error } = await this.sb.rpc('holloway_generate_bed_nights', {
-      p_program_id: this.program.id, p_from: month, p_to: this.monthEnd(month)
-    });
-    if (error) {
-      if (el) { el.textContent = 'Could not generate: ' + error.message; el.className = 'bed-msg err'; }
-      return;
-    }
-    await this.loadBedData();
-    this.renderBeds();
-    const m = document.getElementById('census-msg');
-    if (m) {
-      m.textContent = `${data.rows_written} night${data.rows_written===1?'':'s'} written, ${data.billable_nights} billable`
-        + (data.locked_skipped ? ` · ${data.locked_skipped} already invoiced and left untouched` : '');
-      m.className = 'bed-msg ok';
-    }
-  };
 
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-close="bed"]').forEach(b =>
@@ -12462,16 +11674,6 @@ const App = {
 
   /* --------------------------------------------------------- presentation */
 
-  App.slaBadge = function(state, due, daysLate, label){
-    const text = {
-      met:       `${label} on time`,
-      met_late:  `${label} ${daysLate} business day${daysLate===1?'':'s'} late`,
-      open:      `${label} due ${this.formatDate(due)}`,
-      due_today: `${label} due today`,
-      overdue:   `${label} ${daysLate} business day${daysLate===1?'':'s'} overdue`
-    }[state] || `${label} —`;
-    return `<span class="sla-badge sla-${esc(state)}">${esc(text)}</span>`;
-  };
 
   App.referralStage = function(r){
     if (r.actual_admission_date) return 'Admitted';
@@ -13090,7 +12292,6 @@ const App = {
             overdue ? ' &middot; past due' : ''}</div>
         </div>
         <div class="client-actions">
-          ${canEdit ? `<button class="btn btn-ghost" id="mr-generate">Generate Figures</button>` : ''}
           ${canEdit ? `<button class="btn btn-gold" id="mr-save">Save Narrative</button>` : ''}
           ${canEdit && !this.isAdmin?.() && this.canSign?.() ? `<button class="btn btn-primary" id="mr-submit">Certify and Submit</button>` : ''}
           ${this.isAdmin?.() && status === 'submitted'
@@ -13172,7 +12373,7 @@ const App = {
             <span>I certify that the figures and narrative in this report are accurate and complete to the best of my knowledge.</span>
           </label>` : ''}
           <p class="mr-msg" id="mr-msg"></p>
-          ${r?.generated_at ? `<div class="mr-generated">Figures last generated ${this.formatDate(this.dateOnly(r.generated_at))}${
+          ${r?.generated_at ? `<div class="mr-generated">Figures last updated ${this.formatDate(this.dateOnly(r.generated_at))}${
             r.generated_by ? ' by ' + esc(r.generated_by) : ''}.</div>` : ''}
           ${r?.review_note ? `<div class="mr-locked" style="margin-top:12px;border-left-color:#98241F;">City review note: ${esc(r.review_note)}</div>` : ''}
         </div></div>
@@ -13186,7 +12387,6 @@ const App = {
     el.querySelector('#mr-month')?.addEventListener('change', e => {
       this._monthlyMonth = e.target.value; this.renderMonthly();
     });
-    el.querySelector('#mr-generate')?.addEventListener('click', () => this.generateMonthly());
     el.querySelector('#mr-save')?.addEventListener('click', () => this.saveMonthlyNarrative());
     el.querySelector('#mr-submit')?.addEventListener('click', () => this.submitMonthly());
     el.querySelector('#mr-accept')?.addEventListener('click', () => this.reviewMonthly('accepted'));
@@ -13200,17 +12400,6 @@ const App = {
 
   /* ------------------------------------------------------------- actions */
 
-  App.generateMonthly = async function(){
-    const month = this.monthlyMonth();
-    this.mrMsg('Generating figures…');
-    const { error } = await this.sb.rpc('holloway_generate_monthly_report', {
-      p_program_id: this.program.id, p_month: month
-    });
-    if (error) { this.mrMsg('Could not generate: ' + error.message, 'err'); return; }
-    await this.loadAll();
-    this.renderMonthly();
-    this.mrMsg('Figures generated from this month’s beds, referrals, stays and services.', 'ok');
-  };
 
   // The narrative is saved on its own so a long write-up is never lost to a
   // regeneration, and so saving does not imply certifying.
@@ -13398,11 +12587,7 @@ const App = {
     });
   };
 
-  App.countTargets = function(){
-    return (this.data?.programTargets || []).filter(t => t.kind === 'count');
-  };
 
-  const previousBenchmarkTone = App.benchmarkTone;
   App.benchmarkTone = function(key, value){
     const b = this.benchmark(key);
     if (!b || value == null || b.contract == null) return 'neutral';
@@ -13426,10 +12611,6 @@ const App = {
     finally { CONFIG.BENCHMARKS[key] = saved; }
   };
 
-  App.phRateTarget = function(){
-    const b = this.benchmark('phRate');
-    return b?.contract != null ? b.contract : CONFIG.PH_RATE_TARGET;
-  };
 
   /* -------------------------------------------------------- plan reviews */
 
@@ -14627,7 +13808,6 @@ const App = {
             </select></div>
         </div>
         <div class="client-actions">
-          ${canEdit ? `<button class="btn btn-ghost" id="ffs-generate">Generate from Census</button>` : ''}
           ${canEdit ? `<button class="btn btn-gold" id="ffs-save">Save Invoice Details</button>` : ''}
           ${canEdit && !this.isAdmin?.() ? `<button class="btn btn-primary" id="ffs-submit">Certify and Submit</button>` : ''}
           <button class="btn btn-ghost" id="ffs-print">Print / Save Invoice PDF</button>
@@ -14673,7 +13853,7 @@ const App = {
           <div class="field-hint" style="margin-top:10px">${cap == null
             ? 'No annual cap on file.'
             : 'Annual cap ' + this.ffsMoney(cap) + '.'}</div>
-          ${inv?.generated_at ? `<div class="mr-generated">Lines generated from the census
+          ${inv?.generated_at ? `<div class="mr-generated">Nights last counted
             ${this.formatDate(this.dateOnly(inv.generated_at))}${inv.generated_by ? ' by ' + esc(inv.generated_by) : ''}.</div>`
             : '<div class="mr-empty" style="margin-top:8px">No nights counted for this month yet.</div>'}
           ${canEdit && !this.isAdmin?.() ? `
@@ -14691,7 +13871,6 @@ const App = {
     el.querySelector('#ffs-month')?.addEventListener('change', e => {
       this._ffsMonth = e.target.value; this.renderFfsInvoice();
     });
-    el.querySelector('#ffs-generate')?.addEventListener('click', () => this.generateFfsInvoice());
     el.querySelector('#ffs-save')?.addEventListener('click', () => this.saveFfsInvoice());
     el.querySelector('#ffs-submit')?.addEventListener('click', () => this.submitFfsInvoice());
     el.querySelector('#ffs-print')?.addEventListener('click', () => this.printFfsInvoice());
@@ -14778,20 +13957,6 @@ const App = {
     if (el) { el.textContent = text; el.className = 'mr-msg' + (kind ? ' ' + kind : ''); }
   };
 
-  App.generateFfsInvoice = async function(){
-    const month = this.ffsMonth();
-    this.ffsMsg('Generating from the census…');
-    const { data, error } = await this.sb.rpc('holloway_generate_ffs_invoice', {
-      p_program_id: this.program.id, p_month: month
-    });
-    if (error) { this.ffsMsg('Could not generate: ' + error.message, 'err'); return; }
-    await this.loadAll();
-    this.renderFfsInvoice();
-    const nights = data?.nights_billed ?? 0;
-    this.ffsMsg(`${nights} billable bed night${nights===1?'':'s'} totalling ${this.ffsMoney(data?.amount)}.`
-      + (data?.cap_state === 'over_cap' ? ' This month takes the year past the annual cap.' : ''),
-      data?.cap_state === 'over_cap' ? 'err' : 'ok');
-  };
 
   App.saveFfsInvoice = async function(){
     const month = this.ffsMonth();
@@ -15019,7 +14184,6 @@ const App = {
       : `${email} no longer has access to ${this.programNameById(programId)}.`;
   };
 
-  App.programName2 = function(id){ return this.programNameById(id); };
 })();
 
 
@@ -16364,9 +15528,6 @@ const App = {
     App.bmRules = function(){ const r=this.budgetMods?.rules||{}, x=this.budgetMods?.settings||{}; return {flag_pct:Number(r.flag_pct??25), flag_min_amount:Number(r.flag_min_amount??5000), flag_any_amount:x.flag_any_amount==null?(x.program_id?null:10000):Number(x.flag_any_amount), indirect_cap_pct:r.indirect_cap_pct==null?null:Number(r.indirect_cap_pct), locked:r.locked_line_codes||[], second_threshold:r.second_approval_threshold==null?null:Number(r.second_approval_threshold), city_emails:r.city_notify_emails||[], deadline:x.routine_deadline||null}; };
     App.bmRequestType = function(v){ return (v && this.budgetMods?.types?.[v.id]) || 'routine'; };
     App.bmPastDeadline = function(){ const d=this.bmRules().deadline; return !!d && this.localDate()>this.dateOnly(d); };
-    App.bmDeadlineText = function(){ const d=this.bmRules().deadline; if(!d) return ''; const days=Math.round((new Date(this.dateOnly(d)+'T12:00:00')-new Date(this.localDate()+'T12:00:00'))/864e5);
-      const when=new Date(this.dateOnly(d)+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-      return days>=0?`Routine budget modifications are due by <strong>${when}</strong> (${days} day${days===1?'':'s'} left). After that, only close-out modifications can be submitted.`:`The routine modification deadline (${when}) has passed. Only close-out modifications can be submitted; the City may disallow them.`; };
     App.bmRequestNo = function(v){
       if(!v) return '';
       const m=this.bmMeta(v); if(m.request_no) return m.request_no;
@@ -16491,7 +15652,6 @@ const App = {
       const sum=(rs,k)=>rs.reduce((s,r)=>s+Number(r[k]||0),0);
       const ncol = compare ? 8 : 5;
       const pct=(ch,base)=>{ if(Math.round(ch)===0) return ''; if(!base) return '<span class="field-hint">new</span>'; const p=ch/base*100; return `<span class="${p<0?'bm-neg':''}">${p>0?'+':''}${p.toFixed(1)}%</span>`; };
-      const ofRev=(v,rev,light)=>rev>0&&v>0?`<div class="${light?'':'field-hint'}" style="font-weight:400;${light?'font-size:11px;opacity:.8':''}">${Math.round(v/rev*100)}% of revised</div>`:'';
       const isChanged=r=>Math.round(r.change)!==0 || (cityEdit && this.bmAdj && Math.round(this.bmAdj[r.line_code]??r.revised)!==Math.round(r.revised));
       const threads=this.bmThreads||{}, canComment=versionId && this.budgetMods.versions.some(v=>v.id===versionId && BM_OPEN.includes(v.status)) && (this.isAdmin()||this.canEditFiscal?.());
       const thread=r=>{
@@ -16560,9 +15720,8 @@ const App = {
 
     // ------------------------------------------------------ summary tiles
     App.bmSummaryHtml = function(rows, v){
-      const changed=rows.filter(r=>Math.round(r.change)!==0), inc=changed.filter(r=>r.change>0).reduce((s,r)=>s+r.change,0), dec=changed.filter(r=>r.change<0).reduce((s,r)=>s+r.change,0);
+      const changed=rows.filter(r=>Math.round(r.change)!==0), inc=changed.filter(r=>r.change>0).reduce((s,r)=>s+r.change,0);
       const total=rows.reduce((s,r)=>s+r.approved,0);
-      const cat=SECTIONS.map(sec=>{ const ch=rows.filter(r=>r.category===sec.cat).reduce((s,r)=>s+r.change,0); return Math.round(ch)?`${sec.cat} ${ch>0?'+':'–'}${this.bmPlain(Math.abs(ch))}`:null; }).filter(Boolean);
       const flagged=rows.filter(r=>(r.flags||[]).length), kinds={};
       flagged.forEach(r=>r.flags.forEach(f=>{ const k=f.replace(/<[^>]+>/g,''); kinds[k]=(kinds[k]||0)+1; }));
       const comments=(this.budgetMods.comments[v.id]||[]).length;
@@ -16642,13 +15801,6 @@ const App = {
         <div class="field-hint" style="margin-top:6px"><span class="bm-legend"></span>Yellow fill: Ascencia enters the requested change and reason. &nbsp; 🔒 Locked lines change only through a contract amendment.</div></details>`;
     };
 
-    App.bmCurrentHtml = function(){
-      const cur=this.bmCurrentVersion(); const open=this.bmOpenVersion();
-      const curTxt = cur ? `<strong>Version ${cur.version_no} · ${this.escape(this.bmRequestNo(cur))}</strong> · approved ${this.escape(this.formatDate(cur.effective_date||cur.reviewed_at))} · ${this.bmMoney(this.bmApprovedTotal())}` : `<strong>No versioned budget yet.</strong> Version 1 is recorded automatically when the first modification is started.`;
-      const openTxt = open ? `<div class="notice ${open.status==='returned'?'red':open.status==='submitted'?'amber':'navy'}" style="margin:12px 0 0"><div>i</div><div><strong>${this.escape(this.bmRequestNo(open))} · ${this.escape(BM_LABEL[open.status])}</strong>${open.status==='returned'&&open.review_note?` — City comment: “${this.escape(open.review_note)}”`:''}${open.status==='submitted'?` · submitted ${this.escape(this.formatDateTime(open.submitted_at))}`:''}${this.bmAwaitingSecond(open)?' · <strong>first approval given; awaiting second City approval</strong>':''}</div></div>`:'';
-      const dl=this.bmDeadlineText(); const dlHtml=dl?`<div class="field-hint" style="margin-top:10px">🗓 ${dl}</div>`:'';
-      return `<div class="card" style="margin-bottom:18px"><div class="card-header"><div><h2 class="card-title">Budget in Effect</h2></div></div><div class="card-body">${curTxt}${openTxt}${dlHtml}</div></div>`;
-    };
 
     App.bmIssuesHtml = function(){
       const {blocking,warnings}=this.bmIssues();
@@ -16784,18 +15936,6 @@ const App = {
       return `<div class="notice green"><div>✉</div><div class="bm-noticebar" style="flex:1"><span><strong>Let them know:</strong> ${this.escape(n.subject||'')} — to ${this.escape((n.to||[]).join(', ')||'(no recipients set)')}</span><span><a class="btn btn-primary btn-sm" href="${href}" id="bm-notice-open">Open email</a> <button class="btn btn-ghost btn-sm" id="bm-notice-dismiss">Dismiss</button></span></div></div>`;
     };
 
-    App.budgetModsHtml = function(){
-      if(this.budgetMods?.error) return `<div class="notice red"><div>!</div><div><strong>Budget modifications couldn't load.</strong> ${this.escape(this.budgetMods.error.message||'')}</div></div>`;
-      if(!this.budgetMods?.ready) return '<div class="notice navy"><div>i</div><div>Loading budget versions…</div></div>';
-      const open=this.bmOpenVersion();
-      let work='';
-      if(open?.status==='submitted') work=this.bmSubmittedHtml(open);
-      else if(open && this.bmCanDraft()) work=this.bmEditorHtml();
-      else if(open) work=`<div class="notice navy"><div>i</div><div>${this.escape(this.bmAgency())} is preparing ${this.escape(this.bmRequestNo(open))}.</div></div>`;
-      else if(this.bmDraft?.started && this.bmCanDraft()) work=this.bmEditorHtml();
-      else if(this.bmCanDraft()) work=`<div class="client-actions" style="margin-bottom:18px"><button class="btn btn-primary" id="bm-start">Start a Budget Modification Request</button></div>`;
-      return this.bmNoticeHtml()+this.bmCurrentHtml()+work+this.bmHistoryHtml()+this.bmRulesHtml();
-    };
 
     // ------------------------------------------------- live refresh
     App.bmRefreshLive = function(lineCode){
@@ -18805,7 +17945,6 @@ const App = {
 
   const esc = s => App.escape(s ?? '');
   const PLAN_BUCKET = 'holloway-client-documents';
-  const DESIGNATION = { reserved:'Reserved', fee_for_service:'Fee-for-service' };
   const GENDER_LABEL = { men:'Men', women:'Women' };
 
   App.SERVICE_MIGRATION_FIELDS = [...(App.SERVICE_MIGRATION_FIELDS || []), 'housing_plan_id', 'housing_plan_goal'];
@@ -19371,13 +18510,12 @@ const App = {
     if (this.view === 'dashboard') this.renderDashboard();
   };
 
-  // Open a participant's record on the Exit tab with the exit date filled in.
+  // Open a client's record at the exit section with the exit date filled in.
   App.openExitFor = function(clientId, exitDate){
     this.openClientForm(clientId);
     document.querySelector('[data-status="Exited"]')?.click();
     const d = document.getElementById('cf-exit-date');
     if (d && !d.value && exitDate) d.value = exitDate;
-    this.showProfileTab?.('exit');
   };
 
   const previousEndBedStay = App.endBedStay;
@@ -19407,36 +18545,6 @@ const App = {
     return bed ? bed.label : '';
   };
 
-  /* ======================================= 3. participant record tabs */
-
-  const PROFILE_TABS = [
-    ['intake',   'Intake & Bed'],
-    ['plan',     'Plan & Services'],
-    ['exit',     'Exit'],
-    ['followups','Follow-Ups']
-  ];
-  const SECTION_TAB = {
-    'Intake & Demographics':'intake', 'Bed Assignment':'intake', 'Demographics':'intake', 'Priority Populations':'intake',
-    'Housing & Case Management':'plan', 'Assigned Case Managers':'plan', 'Housing Plan Reviews':'plan',
-    'Service Contacts':'plan', 'Case Notes':'plan', 'Incident History':'plan', 'Income Readings':'plan',
-    'Income / Benefits Updates':'plan', 'Housing Plan':'plan',
-    'Exit Information':'exit', 'Exit':'exit',
-    'Follow-Ups':'followups'
-  };
-
-  App.showProfileTab = function(key){
-    const body = document.getElementById('client-body');
-    if (!body || !body.querySelector('.profile-tabs')) return;
-    this._profileTab = key;
-    body.querySelectorAll('.profile-tabs [data-ptab]').forEach(b => b.classList.toggle('active', b.dataset.ptab === key));
-    body.querySelectorAll('[data-ptab-section]').forEach(s => { s.style.display = s.dataset.ptabSection === key ? '' : 'none'; });
-    // The exit section hides itself until the status is Exited; on the Exit tab
-    // say how to start one instead of showing an empty tab.
-    const exitSec = document.getElementById('cf-exit-section');
-    const prompt = document.getElementById('ptab-exit-prompt');
-    if (prompt) prompt.style.display = (key === 'exit' && exitSec && exitSec.classList.contains('is-hidden')) ? '' : 'none';
-  };
-
   const previousOpenClientForm = App.openClientForm;
   App.openClientForm = function(id = null){
     previousOpenClientForm.call(this, id);
@@ -19461,119 +18569,14 @@ const App = {
         h.textContent = 'Ends when the exit is recorded. Use the Bed Board to move beds.';
     });
 
-    // Glendale uses the same single-page client form as Holloway.
-    if (CONFIG.SHELTER_HOLLOWAY_LAYOUT) return;
-
-    // Follow-ups for this participant (recorded on the Follow-Ups screen).
-    const fus = id ? (this.data.housingFollowUps || []).filter(f => f.client_id === id)
-                      .sort((a,b) => String(a.due_date||'').localeCompare(String(b.due_date||''))) : [];
-    const fuHtml = `<div class="form-section" id="ptab-followups"><div class="form-section-title">Follow-Ups</div>
-      ${fus.length ? `<div class="client-table-wrap"><table class="client-table"><thead><tr><th>Check</th><th>Due</th><th>Completed</th><th>Housing status</th></tr></thead><tbody>
-        ${fus.map(f => `<tr><td>${esc(f.followup_type || '')}</td><td>${f.due_date ? this.formatDate(this.dateOnly(f.due_date)) : '—'}</td>
-          <td>${f.completed_date ? this.formatDate(this.dateOnly(f.completed_date)) : '<span class="badge badge-amber">Open</span>'}</td>
-          <td>${esc(f.housing_status || f.stable_at_followup || '')}</td></tr>`).join('')}</tbody></table></div>`
-        : `<div class="field-hint">${c.exit_date ? 'No follow-ups recorded yet.' : 'Follow-ups start after the participant exits.'}</div>`}
-      <button type="button" class="btn btn-ghost btn-sm" id="ptab-open-followups" style="margin-top:8px">Open Follow-Ups</button></div>`;
-    const exitPrompt = `<div class="form-section" id="ptab-exit-prompt"><div class="form-section-title">Exit</div>
-      <div class="field-hint" style="margin-bottom:8px">Recording an exit also ends the bed stay.</div>
-      <button type="button" class="btn btn-primary btn-sm" id="ptab-start-exit">Record an exit</button></div>`;
-
-    const layout = body.querySelector('.client-entry-layout > div') || body;
-    layout.insertAdjacentHTML('beforeend', exitPrompt + fuHtml);
-
-    // Tag every section with its tab.
-    body.querySelectorAll('.form-section').forEach(sec => {
-      const title = sec.querySelector('.form-section-title')?.textContent.trim() || '';
-      sec.dataset.ptabSection = sec.id === 'ptab-exit-prompt' ? 'exit' : (SECTION_TAB[title] || 'intake');
-    });
-
-    const counts = { plan: (this.data.clientServices || []).filter(s => s.client_id === id).length, followups: fus.filter(f => !f.completed_date).length };
-    const bar = document.createElement('div');
-    bar.className = 'profile-tabs';
-    bar.setAttribute('role', 'tablist');
-    bar.innerHTML = PROFILE_TABS.map(([k, label]) =>
-      `<button type="button" role="tab" class="profile-tab" data-ptab="${k}">${esc(label)}${
-        counts[k] ? ` <span class="profile-tab-count">${counts[k]}</span>` : ''}</button>`).join('');
-    const steps = body.querySelector('.wizard-steps');
-    if (steps) steps.replaceWith(bar); else body.prepend(bar);
-    body.querySelector('.notice')?.style.setProperty('display', 'none');
-
-    bar.querySelectorAll('[data-ptab]').forEach(b => b.addEventListener('click', () => this.showProfileTab(b.dataset.ptab)));
-    document.getElementById('ptab-start-exit')?.addEventListener('click', () => {
-      document.querySelector('[data-status="Exited"]')?.click();
-      this.showProfileTab('exit');
-      document.getElementById('cf-exit-date')?.focus();
-    });
-    document.getElementById('ptab-open-followups')?.addEventListener('click', () => { this.closeForm('client'); this.showView('housing-followups'); });
-    // Status buttons live on the Intake tab; keep the Exit tab in step with them.
-    body.querySelectorAll('[data-status]').forEach(b => b.addEventListener('click', () => this.showProfileTab(this._profileTab || 'intake')));
-
-    this.showProfileTab(id ? (this._profileTabNext || 'intake') : 'intake');
-    this._profileTabNext = null;
   };
 
-  /* ===================================== 3. navigation for shelters */
-
-  const PARTICIPANT_VIEWS = [['clients','Participants'],['services','Services'],['client-exits','Exits'],['housing-followups','Follow-Ups']];
-
-  App.participantTabsHtml = function(active){
-    return `<div class="participant-tabs" role="tablist">${PARTICIPANT_VIEWS.map(([v, l]) =>
-      `<button type="button" role="tab" class="participant-tab ${v === active ? 'active' : ''}" data-ptview="${v}">${esc(l)}</button>`).join('')}</div>`;
-  };
-  App.addParticipantTabs = function(view){
-    if (!this.isShelterProgram() || CONFIG.SHELTER_HOLLOWAY_LAYOUT) return;
-    const el = document.getElementById('view-' + view);
-    if (!el) return;
-    el.querySelector('.participant-tabs')?.remove();
-    el.insertAdjacentHTML('afterbegin', this.participantTabsHtml(view));
-    el.querySelectorAll('[data-ptview]').forEach(b => b.addEventListener('click', () => this.showView(b.dataset.ptview)));
-  };
-  [['renderClients','clients'],['renderServices','services'],['renderClientExits','client-exits'],['renderHousingFollowUps','housing-followups']]
-    .forEach(([fn, view]) => {
-      const prev = App[fn];
-      if (typeof prev !== 'function') return;
-      App[fn] = function(...args){ const r = prev.apply(this, args);
-        if (r && typeof r.then === 'function') return r.then(v => { this.addParticipantTabs(view); return v; });
-        this.addParticipantTabs(view); return r; };
-    });
-
-  App.applyShelterNav = function(){
-    if (!this.isShelterProgram() || this._shelterNavApplied || CONFIG.SHELTER_HOLLOWAY_LAYOUT) return;
-    const item = v => document.querySelector(`.sidebar-item[data-view="${v}"]`);
-    const ws = item('dashboard')?.closest('.sidebar-section');
-    if (!ws) return;
-    this._shelterNavApplied = true;
-
-    // Workspace: Dashboard, Referrals, Bed Board, Participants, Incidents.
-    const clients = item('clients');
-    const caret = document.getElementById('clients-subnav-toggle');
-    if (clients) {
-      const label = [...clients.childNodes].find(n => n.nodeType === 3 && n.textContent.trim() === 'Clients');
-      if (label) label.textContent = 'Participants';
-      clients.classList.remove('sidebar-parent');
-    }
-    caret?.style.setProperty('display', 'none');
-    const sub = document.getElementById('clients-subnav');
-    ['referrals', 'beds', 'clients', 'incident-log'].forEach(v => { const el = item(v) || (v === 'beds' ? document.getElementById('nav-beds') : null); if (el) ws.insertBefore(el, sub); });
-    const inc = item('incident-log');
-    if (inc) { const t = [...inc.childNodes].find(n => n.nodeType === 3 && /Incident Log/.test(n.textContent)); if (t) t.textContent = 'Incidents'; }
-    if (sub) sub.style.display = 'none';
-    ['nav-review', 'nav-access'].forEach(i => { const el = document.getElementById(i); if (el) ws.appendChild(el); });
-
-    // Reports: Monthly Report, Bed Night Invoice, Program Reports.
-    const reports = item('quarter')?.closest('.sidebar-section');
-    if (reports) {
-      const lab = reports.querySelector('.sidebar-label'); if (lab) lab.textContent = 'Reports';
-      const monthly = document.getElementById('nav-monthly'), ffs = document.getElementById('nav-ffs'), quarter = item('quarter');
-      [monthly, ffs, quarter].forEach(el => el && reports.appendChild(el));
-    }
-  };
+  /* ===================================== 3. shelter navigation */
 
   const previousRenderSidebar = App.renderSidebarForRole;
   App.renderSidebarForRole = function(...args){
     const r = previousRenderSidebar.apply(this, args);
     if (!this.isShelterProgram()) return r;
-    this.applyShelterNav();
     // Income Tracking is not used for shelter programs.
     const income = document.querySelector('.sidebar-item[data-view="income"]');
     if (income) income.style.display = 'none';
@@ -19588,11 +18591,6 @@ const App = {
   App.showView = function(view){
     if (this.isShelterProgram() && view === 'income') view = 'clients';
     previousShowView.call(this, view);
-    if (!this.isShelterProgram() || CONFIG.SHELTER_HOLLOWAY_LAYOUT) return;
-    const clients = document.querySelector('.sidebar-item[data-view="clients"]');
-    const inParticipants = PARTICIPANT_VIEWS.some(([v]) => v === this.view);
-    clients?.classList.toggle('active', inParticipants);
-    clients?.classList.remove('has-active-child');
   };
 
   /* ============================================= 4. dashboard to-do */
@@ -19727,11 +18725,6 @@ const App = {
   /* -------------------------------------------------------------- styles */
   const css = document.createElement('style');
   css.textContent = `
-    .profile-tabs, .participant-tabs { display:flex; gap:4px; border-bottom:1px solid var(--gray-200, #e5e7eb); margin:0 0 16px; flex-wrap:wrap; }
-    .profile-tab, .participant-tab { background:none; border:0; border-bottom:2px solid transparent; padding:8px 14px; font:inherit; font-weight:600;
-      color:var(--gray-500, #6b7280); cursor:pointer; margin-bottom:-1px; }
-    .profile-tab.active, .participant-tab.active { color:var(--navy, #1f3a5f); border-bottom-color:var(--gold, #c9a227); }
-    .profile-tab-count { display:inline-block; min-width:18px; padding:0 6px; border-radius:9px; background:var(--gray-100, #f3f4f6); font-size:11px; margin-left:4px; }
     .todo-list { display:flex; flex-direction:column; }
     .todo-row { display:grid; grid-template-columns:80px 1fr auto; gap:12px; align-items:center; padding:10px 0; border-top:1px solid var(--gray-100, #f3f4f6); }
     .todo-row:first-child { border-top:0; }
@@ -21081,7 +20074,6 @@ const App = {
    census was above the reserved beds, i.e. when fee-for-service applies.
    ============================================================ */
 (function(){
-  const esc = s => App.escape(s ?? '');
   const OPEN_REPORT = s => !s || ['draft','returned','revision_requested'].includes(s);
   const OPEN_INVOICE = s => !s || ['draft','returned','revision_requested'].includes(s);
 
@@ -21142,7 +20134,6 @@ const App = {
   App.renderMonthly = function(){
     baseMonthly.apply(this, arguments);
     const el = document.getElementById('view-monthly'); if (!el) return;
-    el.querySelector('#mr-generate')?.remove();
     const month = this.monthlyMonth?.();
     const r = this.monthlyReport?.(month);
     const sub = el.querySelector('.page-subtitle');
@@ -21156,22 +20147,12 @@ const App = {
   App.renderFfsInvoice = function(){
     baseFfs.apply(this, arguments);
     const el = document.getElementById('view-ffs'); if (!el) return;
-    el.querySelector('#ffs-generate')?.remove();
     const month = this.ffsMonth?.(), inv = this.ffsInvoice?.(month);
     const sub = el.querySelector('.page-subtitle');
     if (sub && OPEN_INVOICE(inv?.status)) sub.textContent = 'Fee-for-service nights at the contract rate. Updates as stays change until the invoice is submitted.';
     if (OPEN_INVOICE(inv?.status) && !App._liveDone['ffs|' + this.program?.id + '|' + month]) {
       this.liveRefreshFfs(month).then(ok => { if (ok && this.view === 'ffs') this.loadAll().then(() => this.view === 'ffs' && this.renderFfsInvoice()); });
     }
-  };
-
-  // Bed Board: the census card no longer needs a button.
-  const baseCensus = App.censusSummaryHtml;
-  App.censusSummaryHtml = function(){
-    let html = baseCensus.apply(this, arguments);
-    html = html.replace(/<button class="btn btn-primary" id="census-generate">Generate census<\/button>/,
-      '<span class="field-hint" style="align-self:center">Counted through today</span>');
-    return html;
   };
 
   /* ------------------------------------------------ census chart (monthly) */
@@ -21244,6 +20225,38 @@ const App = {
         </div>
       </div></div>`;
   };
+  /* Bed Night Invoice: load the invoice month's billable nights itself.
+     The detail used to read whatever month the Bed Board had loaded
+     (the current month), so a past month's invoice showed no participants. */
+  App._ffsNightCache = {};
+  const baseFfsNights = App.ffsNightsFor;
+  App.ffsNightsFor = function(month){
+    const key = (this.program?.id || '') + '|' + month;
+    const cached = this._ffsNightCache[key];
+    if (!cached) return baseFfsNights.call(this, month);
+    return cached.slice().sort((a,b) => a.service_date.localeCompare(b.service_date)
+      || String(a.client_id||'').localeCompare(String(b.client_id||'')));
+  };
+  App.loadFfsNights = async function(month){
+    if (!month || !this.program?.id) return false;
+    const { data, error } = await this.sb.from('holloway_bed_nights').select('*')
+      .eq('program_id', this.program.id).eq('billable', true)
+      .gte('service_date', month).lte('service_date', this.monthEnd(month));
+    if (error) return false;
+    this._ffsNightCache[this.program.id + '|' + month] = data || [];
+    return true;
+  };
+  const baseFfsRender2 = App.renderFfsInvoice;
+  App.renderFfsInvoice = function(){
+    baseFfsRender2.apply(this, arguments);
+    const month = this.ffsMonth?.(), key = (this.program?.id || '') + '|' + month;
+    if (month && !this._ffsNightCache[key]) {
+      this.loadFfsNights(month).then(ok => { if (ok && this.view === 'ffs' && this.ffsMonth?.() === month) this.renderFfsInvoice(); });
+    }
+  };
+  // Live refreshes can change billable nights; drop the cache so they reload.
+  const baseLiveView = App.liveRefreshView;
+  App.liveRefreshView = async function(view){ if (view === 'ffs') this._ffsNightCache = {}; return baseLiveView.apply(this, arguments); };
   App.isoDate = App.isoDate || function(d){ return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 })();
 
