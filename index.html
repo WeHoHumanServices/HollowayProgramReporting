@@ -2296,8 +2296,9 @@ const CONFIG = {
 
     { label:'Trauma Therapy',                        group:'On-Site Participation', session:true },
     { label:'Occupational Therapy',                  group:'On-Site Participation', session:true },
-    { label:'Mindful Floral Wellness Workshop',      group:'On-Site Participation', session:true },
-    { label:'Sunday Night Knitting Class',           group:'On-Site Participation', session:true },
+    // Holloway's own on-site activities; not offered at bed programs.
+    { label:'Mindful Floral Wellness Workshop',      group:'On-Site Participation', session:true, hollowayOnly:true },
+    { label:'Sunday Night Knitting Class',           group:'On-Site Participation', session:true, hollowayOnly:true },
     { label:'On-Site Service — Other',               group:'On-Site Participation', session:true, specify:true },
 
     { label:'Benefits Assistance',                 group:'Income & Benefits' },
@@ -3538,10 +3539,16 @@ const App = {
 
   serviceTypeMeta(label) { return CONFIG.SERVICE_TYPES.find(t => t.label === label) || null; },
 
+  // Service types offered for the program on screen.
+  serviceTypesForProgram() {
+    const beds = this.programHas?.('has_beds');
+    return CONFIG.SERVICE_TYPES.filter(t => !(t.hollowayOnly && beds));
+  },
+
   // Ordered [groupName, [types]] pairs for rendering <optgroup>s.
   serviceTypeGroups() {
     const out = [];
-    CONFIG.SERVICE_TYPES.forEach(t => {
+    this.serviceTypesForProgram().forEach(t => {
       let bucket = out.find(g => g[0] === t.group);
       if (!bucket) { bucket = [t.group, []]; out.push(bucket); }
       bucket[1].push(t);
@@ -7512,7 +7519,7 @@ const App = {
       const assignment=String(c.room_assignment||'').trim();
       const isDuplicate = assignment && duplicates.some(([k])=>k===assignment);
       const part=this.clientParticipation(c);
-      return `<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.statusBadge(this.simpleClientStatus(c).toLowerCase().replace(' ','-'))}</td><td>${this.escape(c.housing_plan_status||'—')}</td><td>${this.clientBedNights(c,this.dateOnly(c.entry_date),this.today()).toLocaleString()}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.escape(c.room_assignment||'—')}${isDuplicate?' <span class="badge badge-amber">Duplicate</span>':''}</td><td><span class="badge ${part.cssClass}" title="${this.escape(part.hint||'')}">${this.escape(part.label)}</span></td><td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button><button class="btn btn-ghost btn-sm" data-add-service="${c.id}">Add Service</button><button class="btn btn-ghost btn-sm" data-add-update="${c.id}">Add Update</button></div></td></tr>`;
+      return `<tr><td><strong>${this.escape(this.clientDisplayId(c))}</strong></td><td>${this.escape(this.clientName(c))}</td><td>${this.statusBadge(this.simpleClientStatus(c).toLowerCase().replace(' ','-'))}</td><td>${this.escape(c.housing_plan_status||'—')}</td><td>${this.clientBedNights(c,this.dateOnly(c.entry_date),this.today()).toLocaleString()}</td><td>${this.formatDate(c.entry_date)}</td><td>${this.escape(c.room_assignment||'—')}${isDuplicate?' <span class="badge badge-amber">Duplicate</span>':''}</td><td><span class="badge ${part.cssClass}" title="${this.escape(part.hint||'')}">${this.escape(part.label)}</span></td><td><div class="client-actions"><button class="btn btn-ghost btn-sm" data-edit-client="${c.id}">Open</button><button class="btn btn-ghost btn-sm" data-add-service="${c.id}">Add Service</button>${this.programHas?.('has_beds') ? '' : `<button class="btn btn-ghost btn-sm" data-add-update="${c.id}">Add Update</button>`}</div></td></tr>`;
     }).join('') || `<tr><td colspan="9" class="empty-table-state">${activeRaw.length ? 'No residents match the current filter.' : 'No active client records entered yet.'}</td></tr>`;
     const flagLabels = { all:'All residents', noplan:'Housing plan not started', quiet:'No contact in 14+ days', pending:'Scheduled intakes' };
     el.innerHTML=`<div class="page-header"><div><h1 class="page-title">Active Caseload</h1><div class="page-subtitle">Client records feed quarterly reporting.</div></div><button class="btn btn-gold" id="btn-new-client">+ Add Client</button></div>
@@ -7644,7 +7651,7 @@ const App = {
       .slice(0, 6);
 
     const caseChips = ['Case Management','Housing Navigation','Benefits Assistance','Document Readiness','Landlord Coordination','Mental Health Referral'];
-    const onsiteChips = CONFIG.SERVICE_TYPES.filter(t => t.session).map(t => t.label);
+    const onsiteChips = this.serviceTypesForProgram().filter(t => t.session).map(t => t.label);
 
     const chipRow = (types) => types.map(t =>
       `<button class="quick-chip${this.isGroupSessionType(t)?' quick-chip-onsite':''}" data-quick-service="${this.escape(t)}">+ ${this.escape(t)}</button>`).join('');
@@ -8348,7 +8355,9 @@ const App = {
   };
 
   App.injectDeleteButtons = function(el){
-    if (!el || this.isAdmin()) return;
+    // Bed programs delete from inside the record only, since a client's bed
+    // stays and billing go with them.
+    if (!el || this.isAdmin() || this.programHas?.('has_beds')) return;
     el.querySelectorAll('[data-edit-client]').forEach(b => {
       const holder = b.closest('.client-actions') || b.parentElement;
       if (!holder || holder.querySelector('[data-delete-client]')) return;
@@ -11274,7 +11283,7 @@ const App = {
       </tr>`;
     }).join('');
     return `<div class="client-table-wrap"><table class="client-table">
-      <thead><tr><th>Bed</th><th>Designation</th><th>Status</th><th>Participant</th><th>Since</th><th>Status changed</th><th></th></tr></thead>
+      <thead><tr><th>Bed</th><th>Designation</th><th>Status</th><th>Client</th><th>Since</th><th>Status changed</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   };
 
@@ -11314,7 +11323,7 @@ const App = {
     body.innerHTML = `
       <dl>
         <div class="bed-panel-row"><dt>Status</dt><dd>${esc(BED_STATUS[status])}</dd></div>
-        <div class="bed-panel-row"><dt>Participant</dt><dd>${stay ? esc(this.clientName(client) || client.id) : '<span class="field-hint">None</span>'}</dd></div>
+        <div class="bed-panel-row"><dt>Client</dt><dd>${stay ? esc(this.clientName(client) || client.id) : '<span class="field-hint">None</span>'}</dd></div>
         ${stay ? `<div class="bed-panel-row"><dt>Occupied since</dt><dd>${esc(this.formatDate(stay.start_date))}</dd></div>` : ''}
         ${ev ? `<div class="bed-panel-row"><dt>Last change</dt><dd>${esc(this.formatDateTime(ev.effective_at))}${ev.reason ? ' — ' + esc(ev.reason) : ''}${ev.changed_by ? '<div class="field-hint">by ' + esc(ev.changed_by) + '</div>' : ''}</dd></div>` : ''}
         ${ev && ev.expected_return_date ? `<div class="bed-panel-row"><dt>Back in service</dt><dd>${esc(this.formatDate(ev.expected_return_date))}</dd></div>` : ''}
@@ -11350,14 +11359,14 @@ const App = {
           <button class="btn btn-primary" id="bed-absence-btn" style="margin-top:12px">Record absence</button>
         </div>` : `
         <div class="bed-action-block">
-          <div class="bed-action-title">Assign a participant</div>
+          <div class="bed-action-title">Assign a client</div>
           <div class="form-row">
-            <div class="field-group"><label class="field-label required" for="bed-client">Participant</label>
+            <div class="field-group"><label class="field-label required" for="bed-client">Client</label>
               <select class="field-select" id="bed-client">
                 <option value="">Select…</option>
                 ${available.map(c => `<option value="${esc(c.id)}">${esc(this.clientName(c) || c.id)}</option>`).join('')}
               </select>
-              <div class="field-hint">${available.length} participant${available.length===1?'':'s'} without a bed</div></div>
+              <div class="field-hint">${available.length} client${available.length===1?'':'s'} without a bed</div></div>
             <div class="field-group"><label class="field-label required" for="bed-start-date">Start date</label>
               <input type="date" class="field-input" id="bed-start-date" value="${esc(this.localDate())}"></div>
           </div>
@@ -11402,7 +11411,7 @@ const App = {
     const bed = this.bedsFor().find(b => b.id === this._bedPanelId);
     const clientId = document.getElementById('bed-client')?.value;
     const start = document.getElementById('bed-start-date')?.value;
-    if (!clientId || !start) { this.bedMsg('Choose a participant and a start date.', 'err'); return; }
+    if (!clientId || !start) { this.bedMsg('Choose a client and a start date.', 'err'); return; }
     this.bedMsg('Assigning…');
     const { error } = await this.sb.from('holloway_stays').insert({
       program_id: this.program.id, client_id: clientId, bed_id: bed.id,
@@ -11411,11 +11420,11 @@ const App = {
     if (error) {
       // The database refuses to double-book a bed or a participant; say so plainly.
       this.bedMsg(/exclusion|overlap|conflict/i.test(error.message || '')
-        ? 'That participant or bed is already occupied for these dates.'
+        ? 'That client or bed is already occupied for these dates.'
         : 'Could not assign: ' + error.message, 'err');
       return;
     }
-    await this.logBedStatus(bed.id, 'occupied', { reason: 'Participant assigned' });
+    await this.logBedStatus(bed.id, 'occupied', { reason: 'Client assigned' });
     await this.loadBedData();
     this.renderBedPanel(); this.renderBeds();
     this.bedMsg('Assigned.', 'ok');
@@ -11526,7 +11535,7 @@ const App = {
     return `<div class="card" style="margin-top:22px">
       <div class="card-header">
         <div><h2 class="card-title">Bed night census</h2>
-        <div class="field-hint">Billed nights by participant.</div></div>
+        <div class="field-hint">Billed nights by client.</div></div>
         <div class="client-actions">
           <select class="field-select" id="census-month" style="max-width:190px">
             ${months.map(m => `<option value="${m.value}" ${m.value===month?'selected':''}>${esc(m.label)}</option>`).join('')}
@@ -11537,7 +11546,7 @@ const App = {
       <div class="card-body">
         <div class="bed-summary" style="margin-bottom:0">
           <div class="bed-stat"><div class="bed-stat-label">Nights recorded</div><div class="bed-stat-value">${rows.length}</div><div class="bed-stat-sub">bed nights in this month</div></div>
-          <div class="bed-stat"><div class="bed-stat-label">Occupied</div><div class="bed-stat-value">${rows.filter(n=>n.occupied).length}</div><div class="bed-stat-sub">participant in the bed</div></div>
+          <div class="bed-stat"><div class="bed-stat-label">Occupied</div><div class="bed-stat-value">${rows.filter(n=>n.occupied).length}</div><div class="bed-stat-sub">client in the bed</div></div>
           <div class="bed-stat"><div class="bed-stat-label">Billable</div><div class="bed-stat-value">${billable.length}</div><div class="bed-stat-sub">fee-for-service nights</div></div>
           <div class="bed-stat"><div class="bed-stat-label">Amount</div><div class="bed-stat-value">${this.fiscalMoney ? this.fiscalMoney(amount) : '$'+amount.toFixed(2)}</div><div class="bed-stat-sub">${locked ? locked + ' night(s) invoiced and locked' : 'not yet invoiced'}</div></div>
         </div>
@@ -13840,7 +13849,7 @@ const App = {
             <div class="mr-stat"><div class="mr-stat-label">Billable nights</div>
               <div class="mr-stat-value">${inv?.nights_billed ?? '—'}</div>
               <div class="mr-stat-sub">of ${inv?.nights_occupied ?? '—'} occupied</div></div>
-            <div class="mr-stat"><div class="mr-stat-label">Participants</div>
+            <div class="mr-stat"><div class="mr-stat-label">Clients</div>
               <div class="mr-stat-value">${inv?.participants ?? '—'}</div>
               <div class="mr-stat-sub">in fee-for-service beds</div></div>
             <div class="mr-stat"><div class="mr-stat-label">Rate</div>
@@ -13887,7 +13896,7 @@ const App = {
     const addr = (t) => esc(t || '').split('\n').join('<br>');
 
     const detail = rows.length ? `<table class="print-table"><thead><tr>
-        <th>Participant</th><th>Service dates</th><th style="text-align:right">Nights</th>
+        <th>Client</th><th>Service dates</th><th style="text-align:right">Nights</th>
         <th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
         <td>${esc(r.client_id)}</td>
@@ -15184,7 +15193,7 @@ const App = {
       const heads = [...table.querySelectorAll('thead th')];
       if (heads.length === COLS.length){
         heads.forEach((th, i) => th.classList.add('pipe-col-' + COLS[i]));
-        heads[1].textContent = 'Participant';   // fits the column without wrapping
+        heads[1].textContent = 'Client';   // fits the column without wrapping
       }
       table.querySelectorAll('tbody td').forEach(td => {
         if (td.textContent.trim() === '—' && !td.querySelector('.sla-badge')){
@@ -18026,9 +18035,9 @@ const App = {
           <div class="field-group"><label class="field-label">In this bed since</label>
             <div class="field-input" style="background:transparent">${this.formatDate(this.dateOnly(stay.start_date))}</div></div>
         </div>
-        <div class="field-hint">To move this participant to another bed or end the stay, use the Bed Board.</div>`;
+        <div class="field-hint">To move this client to another bed or end the stay, use the Bed Board.</div>`;
     } else if (exited) {
-      body = `<div class="field-hint">This participant has exited and has no open bed stay.</div>`;
+      body = `<div class="field-hint">This client has exited and has no open bed stay.</div>`;
     } else if (this.isAdmin()) {
       body = `<div class="field-hint">${id ? 'No bed assigned.' : 'Ascencia staff choose the bed at intake.'}</div>`;
     } else {
@@ -18107,8 +18116,8 @@ const App = {
     if (error) {
       const taken = /exclusion|overlap|conflict/i.test(error.message || '');
       this.toast(taken
-        ? 'Participant saved, but that bed was just taken. Assign a bed on the Bed Board.'
-        : 'Participant saved, but the bed could not be assigned: ' + error.message, { error:true });
+        ? 'Client saved, but that bed was just taken. Assign a bed on the Bed Board.'
+        : 'Client saved, but the bed could not be assigned: ' + error.message, { error:true });
     } else {
       await this.logBedStatus(bedId, 'occupied', { reason: 'Assigned at intake' });
       const bed = this.bedsFor().find(b => b.id === bedId);
@@ -18237,18 +18246,18 @@ const App = {
         <td>${fileCell}</td>
         <td>${admin ? '' : `<button type="button" class="btn btn-ghost btn-sm" data-upload-plan="${esc(c.id)}">${plan ? 'New version' : 'Upload plan'}</button>`}</td>
       </tr>`;
-    }).join('') || '<tr><td colspan="6" class="empty-table-state">No active participants.</td></tr>';
+    }).join('') || '<tr><td colspan="6" class="empty-table-state">No active clients.</td></tr>';
 
     const card = document.createElement('div');
     card.className = 'card'; card.id = 'housing-plans-card'; card.style.margin = '16px 0'; card.style.padding = '16px 20px';
     card.innerHTML = `
       <div class="page-header" style="margin-bottom:8px"><div>
         <h2 class="page-title" style="font-size:1.1rem">Housing Plans</h2>
-        <div class="page-subtitle">${withPlan.length} of ${active.length} active participants have a plan on file ·
+        <div class="page-subtitle">${withPlan.length} of ${active.length} active clients have a plan on file ·
           ${linked.length} of ${inQuarter.length} service contacts this quarter tied to a plan</div></div></div>
       <div id="hp-form" style="display:none"></div>
       <div class="client-table-wrap"><table class="client-table"><thead><tr>
-        <th>Participant</th><th>Plan date</th><th>Goals</th><th style="text-align:right">Plan services this quarter</th><th>Document</th><th></th>
+        <th>Client</th><th>Plan date</th><th>Goals</th><th style="text-align:right">Plan services this quarter</th><th>Document</th><th></th>
       </tr></thead><tbody>${rows}</tbody></table></div>`;
     const anchor = el.querySelector('.generated-metric-grid') || el.querySelector('.page-header');
     anchor ? anchor.parentNode.insertBefore(card, anchor.nextSibling) : el.prepend(card);
@@ -18475,10 +18484,10 @@ const App = {
 
   App.endStayForExit = async function(stay, exitDate, reason){
     const { error } = await this.sb.from('holloway_stays')
-      .update({ end_date: exitDate, end_reason: reason || 'Participant exited', updated_at: new Date().toISOString() })
+      .update({ end_date: exitDate, end_reason: reason || 'Client exited', updated_at: new Date().toISOString() })
       .eq('id', stay.id).eq('program_id', this.program.id);
     if (error) return error;
-    await this.logBedStatus(stay.bed_id, 'vacant_available', { reason: 'Participant exited' });
+    await this.logBedStatus(stay.bed_id, 'vacant_available', { reason: 'Client exited' });
     return null;
   };
 
@@ -18492,7 +18501,7 @@ const App = {
     const stay     = clientId ? this.openStayForClient(clientId) : null;
     const state    = document.getElementById('client-save-state');
     if (exiting && stay && exitDate && exitDate < stay.start_date) {
-      if (state) state.textContent = `The exit date is before this participant's bed stay began (${this.formatDate(stay.start_date)}).`;
+      if (state) state.textContent = `The exit date is before this client's bed stay began (${this.formatDate(stay.start_date)}).`;
       return;
     }
 
@@ -18640,12 +18649,12 @@ const App = {
     const activeIds = new Set(active.map(c => c.id));
     const reviews = (this.data.planReviewDue || []).filter(r => activeIds.has(r.client_id) && r.next_review_due && this.dateOnly(r.next_review_due) <= soon);
     const overdueReviews = reviews.filter(r => this.dateOnly(r.next_review_due) < today);
-    if (reviews.length) add(overdueReviews.length ? 'late' : 'due', `${plural(reviews.length, 'housing plan review')} due${overdueReviews.length ? ` (${overdueReviews.length} overdue)` : ' this week'}`, 'Section 7.1 · every 30 days', 'clients', 'Open participants');
+    if (reviews.length) add(overdueReviews.length ? 'late' : 'due', `${plural(reviews.length, 'housing plan review')} due${overdueReviews.length ? ` (${overdueReviews.length} overdue)` : ' this week'}`, 'Section 7.1 · every 30 days', 'clients', 'Open clients');
 
     // Plans not on file. Section 14 counts completed plans toward 38.
     if (this.programHas('has_case_plan_tracking')) {
       const noPlan = active.filter(c => !(this.plansFor?.(c.id) || []).length);
-      if (noPlan.length) add('due', `${plural(noPlan.length, 'active participant')} without an uploaded housing plan`, 'Section 14 · 38 plans a year', 'services', 'Upload plans');
+      if (noPlan.length) add('due', `${plural(noPlan.length, 'active client')} without an uploaded housing plan`, 'Section 14 · 38 plans a year', 'services', 'Upload plans');
     }
 
     // Follow-ups due within two weeks.
@@ -18943,7 +18952,7 @@ const App = {
     const due = (state, d, late) => c ? this.dueBadge(state, d, late) : '';
     if (step.key === 'ack') return `
       <div class="ref-next-head"><div class="ref-next-title">Next: acknowledge this referral</div>${c ? due(c.ack_state, c.ack_due, c.ack_days_late) : ''}</div>
-      <div class="ref-next-hint">Confirm receipt with the referring party or the participant.</div>
+      <div class="ref-next-hint">Confirm receipt with the referring party or the client.</div>
       <div class="client-form-grid">
         <div class="field-group"><label class="field-label" for="rn-ack-method">How</label>
           <select class="field-select" id="rn-ack-method">${ACK_METHODS.map(m => `<option>${esc(m)}</option>`).join('')}</select></div>
@@ -18968,7 +18977,7 @@ const App = {
       const held = this.heldBedFor(r.id);
       return `
         <div class="ref-next-head"><div class="ref-next-title">Next: admit on ${esc(this.formatDate(this.dateOnly(r.scheduled_admission_date)))}</div></div>
-        <div class="ref-next-hint">${held ? `${esc(held.label)} is held for this participant.` : (r.requested_designation ? esc(DESIG[r.requested_designation]) + ' planned. No bed is held.' : 'No bed is held.')}
+        <div class="ref-next-hint">${held ? `${esc(held.label)} is held for this client.` : (r.requested_designation ? esc(DESIG[r.requested_designation]) + ' planned. No bed is held.' : 'No bed is held.')}
           Intake is pre-filled from the referral.</div>
         <div class="ref-actions"><button type="button" class="btn btn-gold" id="rn-intake">Start intake</button>
           <button type="button" class="btn btn-ghost" id="rn-change">Change decision</button><span class="ref-msg" id="rn-msg"></span></div>
@@ -18978,8 +18987,8 @@ const App = {
     if (step.key === 'admitted') {
       const client = r.client_id && (this.data.clients || []).find(x => x.id === r.client_id);
       return `<div class="ref-next-head"><div class="ref-next-title">Admitted ${esc(this.formatDate(this.dateOnly(r.actual_admission_date)) || '')}</div></div>
-        <div class="ref-actions">${client ? `<button type="button" class="btn btn-ghost" id="rn-open-client">Open participant ${esc(this.clientDisplayId(client))}</button>`
-          : '<span class="field-hint">Not linked to a participant record. Link it under Edit all fields if needed.</span>'}</div>`;
+        <div class="ref-actions">${client ? `<button type="button" class="btn btn-ghost" id="rn-open-client">Open client ${esc(this.clientDisplayId(client))}</button>`
+          : '<span class="field-hint">Not linked to a client record. Link it under Edit all fields if needed.</span>'}</div>`;
     }
 
     return `<div class="ref-next-head"><div class="ref-next-title">${esc(step.label)}</div></div>
@@ -19177,7 +19186,7 @@ const App = {
       set('cf-bed', held.id);
     }
     const title = document.getElementById('client-title');
-    if (title) title.textContent = `New Participant Intake · from referral`;
+    if (title) title.textContent = `New Client Intake · from referral`;
     const body = document.getElementById('client-body');
     body?.insertAdjacentHTML('afterbegin', `<div class="notice navy" id="cf-from-referral"><div>i</div><div>Pre-filled from <strong>${esc(r.community_member_name)}</strong>&rsquo;s referral. Add the HMIS ID${held ? '' : ' and a bed'}, then save.</div></div>`);
   };
@@ -19211,7 +19220,7 @@ const App = {
       eligibility_determined_at: r.eligibility_determined_at || now,
       weho_affiliation: link.affiliation || r.weho_affiliation || null
     });
-    if (error) this.toast('Participant saved, but the referral could not be marked admitted: ' + error.message, { error:true });
+    if (error) this.toast('Client saved, but the referral could not be marked admitted: ' + error.message, { error:true });
     else this.toast(`Admitted. The referral for ${r.community_member_name || clientId} is linked to ${clientId}.`);
     await this.loadAll();
     if (this.view === 'referrals') this.renderReferrals();
@@ -20260,6 +20269,81 @@ const App = {
   App.isoDate = App.isoDate || function(d){ return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 })();
 
+/* ============================================================
+   Case notes count as Case Management contacts (programs with
+   case_notes_as_services). The database keeps a service row with id
+   "cn-<note id>" in step with each note. On the Services tab those rows
+   open and delete through the note, so the two can't drift apart.
+   ============================================================ */
+(function(){
+  const noteIdFor = id => (typeof id === 'string' && id.startsWith('cn-')) ? id.slice(3) : null;
+  const baseOpen = App.openServiceForm;
+  App.openServiceForm = function(id = null, ...rest){
+    const nid = noteIdFor(id);
+    if (!nid) return baseOpen.call(this, id, ...rest);
+    const s = (this.data.services || []).find(x => x.id === id);
+    const n = (this.data.caseNotes || []).find(x => x.id === nid);
+    if (!n) { this.toast('This contact comes from a case note that is no longer on file.', { error:true }); return; }
+    this.openCaseNoteForm(nid, n.client_id || s?.client_id);
+  };
+  const baseDelete = App.deleteService;
+  App.deleteService = async function(id, btn){
+    const nid = noteIdFor(id);
+    if (!nid) return baseDelete.apply(this, arguments);
+    const n = (this.data.caseNotes || []).find(x => x.id === nid);
+    return this.deleteCaseNote(nid, n?.client_id || null, btn);
+  };
+  // Long case-note lists: show the latest five, with a link for the rest.
+  const baseOpenClientForNotes = App.openClientForm;
+  App.openClientForm = function(id = null){
+    const r = baseOpenClientForNotes.apply(this, arguments);
+    const sec = document.getElementById('client-case-notes-section');
+    const rows = sec ? [...sec.querySelectorAll('.case-note-table tbody tr')] : [];
+    if (rows.length > 5) {
+      rows.slice(5).forEach(tr => { tr.style.display = 'none'; });
+      const wrap = sec.querySelector('.case-note-table')?.closest('.client-table-wrap');
+      wrap?.insertAdjacentHTML('afterend', `<button type="button" class="btn btn-ghost btn-sm" id="cn-show-all" style="margin-top:8px">Show all ${rows.length} notes</button>`);
+      sec.querySelector('#cn-show-all')?.addEventListener('click', e => { rows.forEach(tr => { tr.style.display = ''; }); e.target.remove(); });
+    }
+    return r;
+  };
+  // Saving or deleting a note changes the Services list too.
+  const baseSaveNote = App.saveCaseNote;
+  App.saveCaseNote = async function(){
+    const r = await baseSaveNote.apply(this, arguments);
+    if (this.view === 'services') this.renderServices?.();
+    return r;
+  };
+})();
+/* ============================================================
+   Shorter dashboard for bed programs: the to-do list and contract goals
+   stay up top; program-to-date, outcomes, demographics and the
+   operational detail fold into one "More program detail" section.
+   ============================================================ */
+(function(){
+  const base = App.renderDashboard;
+  App.renderDashboard = function(){
+    const r = base.apply(this, arguments);
+    if (!this.programHas?.('has_beds')) return r;
+    const el = document.getElementById('view-dashboard'); if (!el) return r;
+    const goals = [...el.children].find(c => /Annual Contract Goals/.test(c.querySelector('h2,.card-title')?.textContent || ''));
+    if (!goals || el.querySelector('#dash-more')) return r;
+    const rest = []; let n = goals.nextElementSibling;
+    while (n) { rest.push(n); n = n.nextElementSibling; }
+    if (!rest.length) return r;
+    const det = document.createElement('details');
+    det.id = 'dash-more'; det.className = 'card'; det.style.marginTop = '18px';
+    det.open = !!this._dashMoreOpen;
+    det.innerHTML = '<summary style="cursor:pointer;padding:14px 18px;font-weight:700;color:var(--navy)">More program detail <span class="field-hint" style="font-weight:400">· program to date, exits, demographics, operations</span></summary><div class="card-body" id="dash-more-body"></div>';
+    const body = det.querySelector('#dash-more-body');
+    rest.forEach(x => body.appendChild(x));
+    goals.after(det);
+    det.addEventListener('toggle', () => { this._dashMoreOpen = det.open; });
+    // The demographics heading still says participants.
+    body.querySelectorAll('.dashboard-section-head').forEach(h => { h.innerHTML = h.innerHTML.replace('Participant Demographics', 'Client Demographics'); });
+    return r;
+  };
+})();
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 </body>
